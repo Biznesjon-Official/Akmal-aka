@@ -260,8 +260,8 @@ export default function VagonSalePage() {
               <div key={sale._id} className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-xl font-bold">{sale.vagon.vagonCode}</h3>
-                    <p className="text-sm text-gray-600">{sale.lot.dimensions}</p>
+                    <h3 className="text-xl font-bold">{sale.vagon?.vagonCode || 'N/A'}</h3>
+                    <p className="text-sm text-gray-600">{sale.lot?.dimensions || 'N/A'}</p>
                     <p className="text-sm text-gray-500">
                       {new Date(sale.createdAt).toLocaleDateString('ru-RU')}
                     </p>
@@ -273,8 +273,8 @@ export default function VagonSalePage() {
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4 py-2">
-                  <div className="font-semibold">{sale.client.name}</div>
-                  <div className="text-sm text-gray-600">{sale.client.phone}</div>
+                  <div className="font-semibold">{sale.client?.name || 'N/A'}</div>
+                  <div className="text-sm text-gray-600">{sale.client?.phone || 'N/A'}</div>
                   <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                     <div>
                       <span className="text-gray-600">Soni:</span>

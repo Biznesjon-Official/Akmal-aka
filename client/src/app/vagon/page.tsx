@@ -58,7 +58,14 @@ export default function VagonPage() {
   
   // Vagon ma'lumotlari
   const [vagonCode, setVagonCode] = useState('');
-  const [month, setMonth] = useState('');
+  const [month, setMonth] = useState(() => {
+    // Bugungi sanani DD/MM/YYYY formatida olish
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const monthNum = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}/${monthNum}/${year}`;
+  });
   const [sendingPlace, setSendingPlace] = useState('');
   const [receivingPlace, setReceivingPlace] = useState('');
   
