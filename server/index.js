@@ -10,6 +10,9 @@ require('dotenv').config();
 
 const app = express();
 
+// Trust proxy - Nginx orqali kelayotgan so'rovlar uchun
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Next.js uchun
@@ -50,9 +53,11 @@ if (process.env.NODE_ENV === 'production') {
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
       process.env.CLIENT_URL,
-      'https://wood-export-frontend.onrender.com', // Frontend URL
-    ].filter(Boolean) // undefined'larni olib tashlash
-  : ['http://localhost:3000', 'http://192.168.1.7:3000']; // Development URLs
+      'https://wood-export-frontend.onrender.com',
+      'https://export-1-y4tz.onrender.com',
+      'http://akmalaka.biznesjon.uz'
+    ].filter(Boolean)
+  : ['http://localhost:3000', 'http://192.168.1.7:3000'];
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -61,6 +66,7 @@ app.use(cors({
     
     if (allowedOrigins.indexOf(origin) === -1 && process.env.NODE_ENV === 'production') {
       console.log('❌ CORS blocked origin:', origin);
+      console.log('✅ Allowed origins:', allowedOrigins);
       return callback(new Error('CORS policy violation'), false);
     }
     return callback(null, true);
