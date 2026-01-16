@@ -378,10 +378,11 @@ export default function VagonPage() {
                     <div>
                       <label className="block text-sm font-medium mb-1">Oy</label>
                       <input
-                        type="month"
+                        type="text"
                         required
                         value={month}
                         onChange={(e) => setMonth(e.target.value)}
+                        placeholder="DD/MM/YYYY"
                         className="w-full px-3 py-2 border rounded-lg"
                       />
                     </div>
