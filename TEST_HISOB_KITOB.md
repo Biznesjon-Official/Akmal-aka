@@ -290,7 +290,7 @@ Ism: Alisher Karimov
 Telefon: +998901234567
 Manzil: Toshkent, Chilonzor
 ```
-
+        
 ### Vagon 1:
 ```
 Oy: 2026-01
