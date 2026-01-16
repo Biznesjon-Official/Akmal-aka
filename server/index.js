@@ -48,7 +48,10 @@ if (process.env.NODE_ENV === 'production') {
 
 // CORS
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [process.env.CLIENT_URL || 'https://your-app.onrender.com'] // Production URL
+  ? [
+      process.env.CLIENT_URL,
+      'https://wood-export-frontend.onrender.com', // Frontend URL
+    ].filter(Boolean) // undefined'larni olib tashlash
   : ['http://localhost:3000', 'http://192.168.1.7:3000']; // Development URLs
 
 app.use(cors({
@@ -57,6 +60,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) === -1 && process.env.NODE_ENV === 'production') {
+      console.log('❌ CORS blocked origin:', origin);
       return callback(new Error('CORS policy violation'), false);
     }
     return callback(null, true);
@@ -85,31 +89,6 @@ app.use('/api/purchase', require('./routes/purchase'));
 app.use('/api/sale', require('./routes/sale'));
 app.use('/api/expense', require('./routes/expense'));
 app.use('/api/backup', require('./routes/backup'));
-
-// Serve static files from Next.js build (Production only)
-if (process.env.NODE_ENV === 'production') {
-  const clientBuildPath = path.join(__dirname, '../client/.next');
-  const clientPublicPath = path.join(__dirname, '../client/public');
-  
-  // Serve Next.js static files
-  app.use('/_next', express.static(path.join(clientBuildPath, 'static')));
-  app.use('/public', express.static(clientPublicPath));
-  
-  // Serve Next.js pages
-  app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/')) {
-      return next();
-    }
-    
-    // Serve index.html for all other routes (SPA)
-    res.sendFile(path.join(__dirname, '../client/out/index.html'), (err) => {
-      if (err) {
-        res.status(404).json({ message: 'Page not found' });
-      }
-    });
-  });
-}
 
 // Global error handler
 app.use((err, req, res, next) => {
