@@ -1,9 +1,75 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from '@/lib/axios';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { Card } from '@/components/ui/Card';
+import Icon from '@/components/Icon';
+import SalesDynamicsChart from '@/components/dashboard/SalesDynamicsChart';
+import ProfitTrendChart from '@/components/dashboard/ProfitTrendChart';
+import CashFlowWidget from '@/components/dashboard/CashFlowWidget';
+import AlertsWidget from '@/components/dashboard/AlertsWidget';
+
+interface DashboardData {
+  // REAL MA'LUMOTLAR (Haqiqiy) - Asosiy valyutada
+  actual: {
+    today_revenue_base: number;
+    today_expenses_base: number;
+    today_profit_base: number;
+    cash_balance_base: number;
+    active_vagons: number;
+    total_realized_profit_base: number;
+    today_revenue_breakdown: any[];
+    cash_balance_breakdown: any[];
+  };
+  
+  // PROGNOZ MA'LUMOTLAR (Kutilayotgan)
+  projected: {
+    expected_revenue_from_remaining_base: number;
+    break_even_analysis: {
+      total_investment_base: number;
+      min_price_needed_base: number;
+      current_avg_price_base: number;
+    };
+    roi_forecast: number;
+    completion_timeline: string;
+  };
+  
+  // ARALASH MA'LUMOTLAR (Real + Prognoz)
+  combined: {
+    total_investment_base: number;
+    potential_total_revenue_base: number;
+    potential_total_profit_base: number;
+  };
+  
+  // OGOHLANTIRISHLAR
+  alerts: Array<{
+    type: 'warning' | 'error' | 'info';
+    message: string;
+    action_needed: boolean;
+  }>;
+  
+  // ESKI FORMAT (Backward compatibility)
+  todayKassa: any[];
+  dailySales: any[];
+  monthlyProfit: any[];
+  debtClients: any[];
+  lowStockLots: any[];
+  activeTransports: any[];
+  
+  // TIZIM MA'LUMOTLARI
+  system_info: {
+    base_currency: string;
+    exchange_rates: {
+      RUB_USD: number;
+      USD_RUB: number;
+    };
+  };
+  
+  lastUpdated: string;
+}
 
 interface BalanceData {
   _id: string;
@@ -47,10 +113,23 @@ interface StatsData {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
   const { t } = useLanguage();
+  const [viewMode, setViewMode] = useState<'real' | 'projected' | 'combined'>('real');
+  const [refreshInterval, setRefreshInterval] = useState(30000); // 30 sekund
 
-  // Kassa balansini olish
+  // Real-time dashboard ma'lumotlari (YANGI)
+  const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({
+    queryKey: ['dashboard-realtime'],
+    queryFn: async () => {
+      const response = await axios.get('/reports/dashboard-realtime');
+      return response.data;
+    },
+    refetchInterval: refreshInterval,
+    refetchOnWindowFocus: true,
+    staleTime: 10000 // 10 sekund
+  });
+
+  // Kassa balansini olish (ESKI)
   const { data: balanceData } = useQuery<BalanceData[]>({
     queryKey: ['balance'],
     queryFn: async () => {
@@ -59,15 +138,17 @@ export default function Dashboard() {
     }
   });
 
-  // Valyuta kurslarini olish
+  // Valyuta kurslarini olish (ESKI) - faqat kerak bo'lganda ishlatiladi
   const { data: exchangeRates } = useQuery<Array<{currency: string, rate: number}>>({
     queryKey: ['exchange-rates-dashboard'],
     queryFn: async () => {
       const response = await axios.get('/exchange-rate');
       return response.data;
-    }
+    },
+    enabled: false // Faqat kerak bo'lganda yoqiladi
   });
-  // Umumiy statistika
+
+  // Umumiy statistika (ESKI)
   const { data: statsData } = useQuery<StatsData>({
     queryKey: ['general-stats'],
     queryFn: async () => {
@@ -97,15 +178,161 @@ export default function Dashboard() {
     bekor_qilindi: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
   };
 
+  // Ko'rsatish rejimi bo'yicha ma'lumotlarni tanlash
+  const getDisplayData = () => {
+    if (!dashboardData) return null;
+    
+    switch (viewMode) {
+      case 'real':
+        return {
+          title: 'Haqiqiy Ma\'lumotlar',
+          subtitle: 'Bugun sodir bo\'lgan real operatsiyalar',
+          metrics: [
+            {
+              label: 'Bugungi daromad',
+              value: `$${dashboardData.actual.today_revenue_base.toLocaleString()}`,
+              color: 'text-green-600',
+              icon: 'cash'
+            },
+            {
+              label: 'Bugungi xarajat',
+              value: `$${dashboardData.actual.today_expenses_base.toLocaleString()}`,
+              color: 'text-red-600',
+              icon: 'expenses'
+            },
+            {
+              label: 'Bugungi foyda',
+              value: `$${dashboardData.actual.today_profit_base.toLocaleString()}`,
+              color: dashboardData.actual.today_profit_base >= 0 ? 'text-green-600' : 'text-red-600',
+              icon: dashboardData.actual.today_profit_base >= 0 ? 'profit' : 'loss'
+            },
+            {
+              label: 'Kassa balansi',
+              value: `$${dashboardData.actual.cash_balance_base.toLocaleString()}`,
+              color: dashboardData.actual.cash_balance_base >= 0 ? 'text-blue-600' : 'text-red-600',
+              icon: 'bank'
+            }
+          ]
+        };
+      
+      case 'projected':
+        return {
+          title: 'Prognoz Ma\'lumotlar',
+          subtitle: 'Kutilayotgan natijalar va tahlillar',
+          metrics: [
+            {
+              label: 'Kutilayotgan daromad',
+              value: `$${dashboardData.projected.expected_revenue_from_remaining_base.toLocaleString()}`,
+              color: 'text-blue-600',
+              icon: 'target'
+            },
+            {
+              label: 'Minimal narx',
+              value: `$${dashboardData.projected.break_even_analysis.min_price_needed_base.toFixed(2)}/m³`,
+              color: 'text-orange-600',
+              icon: 'balance'
+            },
+            {
+              label: 'ROI prognozi',
+              value: `${dashboardData.projected.roi_forecast.toFixed(1)}%`,
+              color: dashboardData.projected.roi_forecast >= 0 ? 'text-green-600' : 'text-red-600',
+              icon: 'statistics'
+            },
+            {
+              label: 'Tugash muddati',
+              value: dashboardData.projected.completion_timeline,
+              color: 'text-purple-600',
+              icon: 'time'
+            }
+          ]
+        };
+      
+      case 'combined':
+        return {
+          title: 'Umumiy Ko\'rsatkichlar',
+          subtitle: 'Real va prognoz ma\'lumotlar birgalikda',
+          metrics: [
+            {
+              label: 'Jami sarmoya',
+              value: `$${dashboardData.combined.total_investment_base.toLocaleString()}`,
+              color: 'text-gray-600',
+              icon: 'business'
+            },
+            {
+              label: 'Potensial daromad',
+              value: `$${dashboardData.combined.potential_total_revenue_base.toLocaleString()}`,
+              color: 'text-blue-600',
+              icon: 'target'
+            },
+            {
+              label: 'Potensial foyda',
+              value: `$${dashboardData.combined.potential_total_profit_base.toLocaleString()}`,
+              color: dashboardData.combined.potential_total_profit_base >= 0 ? 'text-green-600' : 'text-red-600',
+              icon: dashboardData.combined.potential_total_profit_base >= 0 ? 'success' : 'warning'
+            },
+            {
+              label: 'Faol vagonlar',
+              value: dashboardData.actual.active_vagons.toString(),
+              color: 'text-indigo-600',
+              icon: 'transport'
+            }
+          ]
+        };
+      
+      default:
+        return null;
+    }
+  };
+
+  const displayData = getDisplayData();
+
+  // Ogohlantirishlarni AlertsWidget formatiga o'tkazish
+  const convertAlertsToWidgetFormat = (alerts: Array<{
+    type: 'warning' | 'error' | 'info';
+    message: string;
+    action_needed: boolean;
+  }>) => {
+    return alerts.map(alert => ({
+      type: alert.type === 'error' ? 'debt' as const : 
+            alert.type === 'warning' ? 'low_stock' as const : 
+            'transport_delay' as const,
+      priority: alert.action_needed ? 'high' as const : 
+                alert.type === 'error' ? 'medium' as const : 'low' as const,
+      title: alert.type === 'error' ? 'Xatolik' :
+             alert.type === 'warning' ? 'Ogohlantirish' : 'Ma\'lumot',
+      message: alert.message,
+      data: { message: alert.message, action_needed: alert.action_needed }
+    }));
+  };
+
+  if (dashboardLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="animate-pulse">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg h-32"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="card-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">{t.dashboard.title}</h1>
+            <h1 className="text-3xl font-bold text-white">
+              {displayData?.title || 'Bosh Sahifa'}
+            </h1>
             <p className="text-blue-100 mt-2">
-              {t.dashboard.statistics}
+              {displayData?.subtitle || t.dashboard.statistics} • {t.vagon.lastUpdate}: {dashboardData?.lastUpdated ? 
+                new Date(dashboardData.lastUpdated).toLocaleTimeString('uz-UZ') : 
+                t.vagon.unknown
+              }
             </p>
           </div>
           <div className="hidden md:block">
@@ -119,9 +346,235 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Kassa balansi */}
+      {/* Boshqaruv paneli */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        {/* Ko'rsatish rejimi */}
+        <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+          <button
+            onClick={() => setViewMode('real')}
+            className={`px-3 py-2 text-sm rounded-md transition-colors ${
+              viewMode === 'real' 
+                ? 'bg-green-100 text-green-700 font-medium' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Icon name="statistics" className="mr-1" size="sm" />
+            Real
+          </button>
+          <button
+            onClick={() => setViewMode('projected')}
+            className={`px-3 py-2 text-sm rounded-md transition-colors ${
+              viewMode === 'projected' 
+                ? 'bg-blue-100 text-blue-700 font-medium' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Icon name="forecast" className="mr-1" size="sm" />
+            Prognoz
+          </button>
+          <button
+            onClick={() => setViewMode('combined')}
+            className={`px-3 py-2 text-sm rounded-md transition-colors ${
+              viewMode === 'combined' 
+                ? 'bg-purple-100 text-purple-700 font-medium' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Icon name="combined" className="mr-1" size="sm" />
+            Umumiy
+          </button>
+        </div>
+        
+        {/* Yangilanish sozlamalari */}
+        <div className="flex items-center space-x-4">
+          <select
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+          >
+            <option value={10000}>10 sekund</option>
+            <option value={30000}>30 sekund</option>
+            <option value={60000}>1 daqiqa</option>
+            <option value={300000}>5 daqiqa</option>
+          </select>
+          <div className="flex items-center text-sm text-gray-500">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
+            Live
+          </div>
+        </div>
+      </div>
+
+      {/* Ogohlantirishlar */}
+      {dashboardData?.alerts && dashboardData.alerts.length > 0 && (
+        <div className="mb-8">
+          <AlertsWidget alerts={convertAlertsToWidgetFormat(dashboardData.alerts)} />
+        </div>
+      )}
+
+      {/* Asosiy metrikalar (YANGI) */}
+      {displayData && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {displayData.metrics.map((metric, index) => (
+            <Card key={index} className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{metric.label}</p>
+                  <p className={`text-2xl font-bold ${metric.color}`}>
+                    {metric.value}
+                  </p>
+                </div>
+                <Icon name={metric.icon} size="lg" className="text-gray-400" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Tizim ma'lumotlari */}
+      {dashboardData?.system_info && (
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">💱 Tizim Ma'lumotlari</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Asosiy valyuta</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {dashboardData.system_info.base_currency}
+                  </p>
+                </div>
+                <Icon name="cash" size="lg" className="text-white" />
+              </div>
+            </Card>
+            
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">RUB → USD</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {dashboardData.system_info.exchange_rates.RUB_USD.toFixed(4)}
+                  </p>
+                </div>
+                <Icon name="profit" size="lg" className="text-white" />
+              </div>
+            </Card>
+            
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">USD → RUB</p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {dashboardData.system_info.exchange_rates.USD_RUB.toFixed(2)}
+                  </p>
+                </div>
+                <Icon name="loss" size="lg" className="text-white" />
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Break-even tahlil (faqat prognoz rejimida) */}
+      {viewMode === 'projected' && dashboardData?.projected.break_even_analysis && (
+        <div className="mb-8">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              <Icon name="balance" className="mr-2" />
+              Break-even Tahlil
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Jami sarmoya</p>
+                <p className="text-xl font-bold text-gray-900">
+                  ${dashboardData.projected.break_even_analysis.total_investment_base.toLocaleString()}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Minimal narx</p>
+                <p className="text-xl font-bold text-orange-600">
+                  ${dashboardData.projected.break_even_analysis.min_price_needed_base.toFixed(2)}/m³
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Joriy o'rtacha narx</p>
+                <p className={`text-xl font-bold ${
+                  dashboardData.projected.break_even_analysis.current_avg_price_base >= dashboardData.projected.break_even_analysis.min_price_needed_base
+                    ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  ${dashboardData.projected.break_even_analysis.current_avg_price_base.toFixed(2)}/m³
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Grafiklar */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <Icon name="statistics" className="mr-2" />
+            Kunlik Sotuv Dinamikasi
+          </h3>
+          <SalesDynamicsChart data={dashboardData?.dailySales || []} />
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <Icon name="profit" className="mr-2" />
+            Oylik Foyda Trendi
+          </h3>
+          <ProfitTrendChart data={dashboardData?.monthlyProfit || []} />
+        </Card>
+      </div>
+
+      {/* Qo'shimcha ma'lumotlar */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Kassa oqimi */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            💳 Bugungi Kassa Harakati
+          </h3>
+          <CashFlowWidget data={dashboardData?.todayKassa || []} />
+        </Card>
+
+        {/* Qarzli mijozlar */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            🚨 {t.vagon.debtorClients}
+          </h3>
+          <div className="space-y-3">
+            {dashboardData?.debtClients?.slice(0, 5).map((client: any, index: number) => (
+              <div key={index} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{client.name}</p>
+                </div>
+                <div className="text-right">
+                  {client.usd_current_debt > 0 && (
+                    <p className="font-bold text-red-600">
+                      ${client.usd_current_debt.toLocaleString()}
+                    </p>
+                  )}
+                  {client.rub_current_debt > 0 && (
+                    <p className="font-bold text-red-600">
+                      {client.rub_current_debt.toLocaleString()} ₽
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* ESKI QISMLAR - Backward compatibility */}
+      
+      {/* Kassa balansi (ESKI) */}
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">💰 {t.dashboard.balance}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+          <Icon name="cash" className="mr-2" />
+          {t.dashboard.balance}
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {balanceData?.map((balance) => (
             <div key={balance._id} className="stats-card">
@@ -130,7 +583,7 @@ export default function Dashboard() {
                   {balance._id}
                 </h3>
                 <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                  💰
+                  <Icon name="cash" size="lg" className="text-white" />
                 </div>
               </div>
               <div className="space-y-3">
@@ -158,51 +611,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Valyuta kurslari */}
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">💱 {t.dashboard.currentRates}</h2>
-        <div className="card">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {exchangeRates?.map((rate) => (
-              <div key={rate.currency} className="form-section">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <div className={`w-10 h-10 rounded-xl mr-3 flex items-center justify-center text-white font-bold shadow-md ${
-                      rate.currency === 'USD' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'
-                    }`}>
-                      {rate.currency === 'USD' ? '$' : '₽'}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-gray-900">{rate.currency}</span>
-                      <p className="text-sm text-gray-500">
-                        {rate.currency === 'USD' ? t.dashboard.usd : t.dashboard.rub}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-bold text-blue-600">
-                      {rate.rate.toLocaleString()}
-                    </span>
-                    <p className="text-sm text-gray-500">UZS</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {(!exchangeRates || exchangeRates.length === 0) && (
-              <div className="col-span-2 text-center py-8">
-                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-gray-500">{t.dashboard.noRatesSet}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Admin statistikasi */}
+      {/* Admin statistikasi (ESKI) */}
       {statsData && (
         <>
           {/* Lot Status Breakdown */}
@@ -231,7 +640,10 @@ export default function Dashboard() {
 
           {/* Tizim statistikasi */}
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">📊 {t.dashboard.systemStats}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              <Icon name="statistics" className="mr-2" />
+              {t.dashboard.systemStats}
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Yog'och statistikasi */}
               <div className="card">

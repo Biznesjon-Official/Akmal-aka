@@ -21,7 +21,7 @@ export default function FormattedInput({
   disabled = false,
   required = false,
   type = 'number',
-  currency = 'UZS',
+  currency = 'RUB',
   step
 }: FormattedInputProps) {
   const [displayValue, setDisplayValue] = useState('');
@@ -64,8 +64,7 @@ export default function FormattedInput({
   const getCurrencySymbol = () => {
     const symbols: { [key: string]: string } = {
       'USD': '$',
-      'RUB': '₽',
-      'UZS': 'so\'m'
+      'RUB': '₽'
     };
     return symbols[currency] || currency;
   };

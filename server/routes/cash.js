@@ -118,9 +118,9 @@ router.post('/client-payment', auth, async (req, res) => {
       vagon: sale.vagon,
       vagonSale: vagonSale,
       amount,
-      currency: currency || 'UZS',
+      currency: currency || 'RUB',
       description: description || `To'lov: ${sale.client?.name || 'Mijoz'}`,
-      createdBy: req.user.id
+      createdBy: req.user.userId
     });
     
     await cash.save();
@@ -175,9 +175,9 @@ router.post('/expense', auth, async (req, res) => {
       vagon: expenseDoc.wood, // Hozircha wood field ishlatiladi
       expense: expense,
       amount,
-      currency: currency || 'UZS',
+      currency: currency || 'RUB',
       description: description || `Xarajat: ${expenseDoc.type}`,
-      createdBy: req.user.id
+      createdBy: req.user.userId
     });
     
     await cash.save();
@@ -208,9 +208,9 @@ router.post('/initial-balance', auth, async (req, res) => {
     const cash = new Cash({
       type: 'initial_balance',
       amount,
-      currency: currency || 'UZS',
+      currency: currency || 'RUB',
       description: description || 'Boshlang\'ich balans',
-      createdBy: req.user.id
+      createdBy: req.user.userId
     });
     
     await cash.save();
@@ -241,13 +241,13 @@ router.delete('/:id', auth, async (req, res) => {
     if (cash.type === 'client_payment' && cash.vagonSale) {
       const sale = await VagonSale.findById(cash.vagonSale);
       if (sale) {
-        sale.paid_amount -= cash.amount_uzs;
+        sale.paid_amount -= cash.amount_rub;
         await sale.save();
       }
       
       const client = await Client.findById(cash.client);
       if (client) {
-        client.total_paid -= cash.amount_uzs;
+        client.total_paid -= cash.amount_rub;
         await client.save();
       }
     }
@@ -296,9 +296,9 @@ router.get('/stats/summary', auth, async (req, res) => {
     
     transactions.forEach(t => {
       if (t.type === 'client_payment' || t.type === 'initial_balance') {
-        income += t.amount_uzs;
+        income += t.amount_rub;
       } else if (t.type === 'expense') {
-        expense += t.amount_uzs;
+        expense += t.amount_rub;
       }
     });
     

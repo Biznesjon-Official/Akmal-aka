@@ -25,7 +25,7 @@ interface SoldWood {
     birlikNarxi: number;
     valyuta: string;
     jamiSumma: number;
-    jamiUZS: number;
+    jamiRUB: number;
     sotuvchi: string;
     xaridJoyi: string;
     xaridSanasi: string;
@@ -35,7 +35,7 @@ interface SoldWood {
     birlikNarxi: number;
     valyuta: string;
     jamiSumma: number;
-    jamiUZS: number;
+    jamiRUB: number;
     xaridor: string;
     sotuvJoyi: string;
     sotuvSanasi: string;
@@ -45,7 +45,7 @@ interface SoldWood {
     xarajatTuri: string;
     summa: number;
     valyuta: string;
-    summaUZS: number;
+    summaRUB: number;
     tavsif: string;
     sana: string;
   }>;
@@ -193,7 +193,7 @@ function SalesHistoryContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{t.salesHistory.totalPurchase}</p>
-                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(data.stats.totalCost, 'UZS')}</p>
+                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(data.stats.totalCost, 'RUB')}</p>
                 </div>
                 <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +207,7 @@ function SalesHistoryContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{t.salesHistory.totalSale}</p>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(data.stats.totalRevenue, 'UZS')}</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(data.stats.totalRevenue, 'RUB')}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -221,7 +221,7 @@ function SalesHistoryContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{t.salesHistory.totalExpenses}</p>
-                  <p className="text-2xl font-bold text-purple-600">{formatCurrency(data.stats.totalExpenses, 'UZS')}</p>
+                  <p className="text-2xl font-bold text-purple-600">{formatCurrency(data.stats.totalExpenses, 'RUB')}</p>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,7 +236,7 @@ function SalesHistoryContent() {
                 <div>
                   <p className="text-sm text-gray-600">{t.salesHistory.netProfit}</p>
                   <p className={`text-2xl font-bold ${data.stats.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(data.stats.totalProfit, 'UZS')}
+                    {formatCurrency(data.stats.totalProfit, 'RUB')}
                   </p>
                 </div>
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${data.stats.totalProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
@@ -279,7 +279,7 @@ function SalesHistoryContent() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm font-bold text-orange-600">
-                      {formatCurrency(wood.jami_xarid, 'UZS')}
+                      {formatCurrency(wood.jami_xarid, 'RUB')}
                     </div>
                     {wood.purchase && (
                       <div className="text-xs text-gray-600">{wood.purchase.sotuvchi}</div>
@@ -287,7 +287,7 @@ function SalesHistoryContent() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm font-bold text-green-600">
-                      {formatCurrency(wood.jami_sotuv, 'UZS')}
+                      {formatCurrency(wood.jami_sotuv, 'RUB')}
                     </div>
                     {wood.sale && (
                       <div className="text-xs text-gray-600">{wood.sale.xaridor}</div>
@@ -295,7 +295,7 @@ function SalesHistoryContent() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm font-bold text-purple-600">
-                      {formatCurrency(wood.jami_xarajat, 'UZS')}
+                      {formatCurrency(wood.jami_xarajat, 'RUB')}
                     </div>
                     {wood.expenses && (
                       <div className="text-xs text-gray-600">{wood.expenses.length} {t.salesHistory.expenses.toLowerCase()}</div>
@@ -303,7 +303,7 @@ function SalesHistoryContent() {
                   </TableCell>
                   <TableCell>
                     <div className={`text-sm font-bold ${wood.sof_foyda >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(wood.sof_foyda, 'UZS')}
+                      {formatCurrency(wood.sof_foyda, 'RUB')}
                     </div>
                     <div className={`text-xs ${wood.foyda_foizi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {wood.foyda_foizi.toFixed(2)}%
@@ -356,7 +356,7 @@ function SalesHistoryContent() {
                                 </div>
                                 <div className="flex justify-between border-t pt-2">
                                   <span className="text-gray-600">{t.salesHistory.total}:</span>
-                                  <span className="font-bold text-orange-600">{formatCurrency(wood.purchase.jamiUZS, 'UZS')}</span>
+                                  <span className="font-bold text-orange-600">{formatCurrency(wood.purchase.jamiRUB || wood.purchase.jamiSumma, wood.purchase.valyuta)}</span>
                                 </div>
                               </div>
                             </Card>
@@ -390,7 +390,7 @@ function SalesHistoryContent() {
                                 </div>
                                 <div className="flex justify-between border-t pt-2">
                                   <span className="text-gray-600">{t.salesHistory.total}:</span>
-                                  <span className="font-bold text-green-600">{formatCurrency(wood.sale.jamiUZS, 'UZS')}</span>
+                                  <span className="font-bold text-green-600">{formatCurrency(wood.sale.jamiRUB || wood.sale.jamiSumma, wood.sale.valyuta)}</span>
                                 </div>
                               </div>
                             </Card>
@@ -414,7 +414,7 @@ function SalesHistoryContent() {
                                     <div className="text-xs text-gray-600">{expense.xarajatTuri}</div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="font-bold text-purple-600">{formatCurrency(expense.summaUZS, 'UZS')}</div>
+                                    <div className="font-bold text-purple-600">{formatCurrency(expense.summaRUB || expense.summa, expense.valyuta || 'RUB')}</div>
                                     <div className="text-xs text-gray-600">{new Date(expense.sana).toLocaleDateString('uz-UZ')}</div>
                                   </div>
                                 </div>

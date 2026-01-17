@@ -4,57 +4,129 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import axios from 'axios';
+import { formatCurrency, formatNumber } from '@/utils/formatters';
+import axios from '@/lib/axios';
 
-interface Vagon {
-  _id: string;
-  vagonCode: string;
-}
+// Import komponentlar
+// import ExpenseDetailsModal from '../../../components/expense/ExpenseDetailsModal';
+// import ExpenseStatsWidget from '../../../components/expense/ExpenseStatsWidget';
+// import ExpenseChart from '../../../components/expense/ExpenseChart';
 
-interface VagonLot {
-  _id: string;
-  vagon: {
-    _id: string;
-    vagonCode: string;
-  };
-  dimensions: string;
-  quantity: number;
-  volume_m3: number;
-  currency: string;
-}
+import Icon from '@/components/Icon';
 
-interface VagonExpense {
-  _id: string;
-  vagon: {
-    vagonCode: string;
-  };
-  lot?: {
-    dimensions: string;
-  };
-  expense_type: string;
-  amount: number;
-  currency: string;
+interface ExpenseType {
+  id: string;
+  name: string;
   description: string;
+  icon: string;
+  category: string;
+  subTypes: string[];
+}
+
+interface AdvancedExpense {
+  _id: string;
+  xarajatTuri: string;
+  summa: number;
+  valyuta: string;
+  summaRUB: number;
+  tavsif: string;
   createdAt: string;
+  yaratuvchi: {
+    username: string;
+  };
+  vagon?: {
+    vagonCode: string;
+    sending_place: string;
+    receiving_place: string;
+  };
+  additionalInfo?: {
+    javobgarShaxs?: string;
+    tolovSanasi?: string;
+    hujjatRaqami?: string;
+    qoshimchaMalumot?: string;
+  };
 }
 
 export default function ExpensePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
-  const [expenses, setExpenses] = useState<VagonExpense[]>([]);
-  const [vagons, setVagons] = useState<Vagon[]>([]);
-  const [lots, setLots] = useState<VagonLot[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // State
   const [showModal, setShowModal] = useState(false);
-  const [selectedVagon, setSelectedVagon] = useState('');
-  const [selectedLot, setSelectedLot] = useState('');
-  const [expenseType, setExpenseType] = useState('');
-  const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('USD');
-  const [description, setDescription] = useState('');
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    xarajatTuri: '',
+    valyuta: '',
+    startDate: '',
+    endDate: '',
+    search: ''
+  });
+  const [page, setPage] = useState(1);
+  
+  // Form data
+  const [formData, setFormData] = useState({
+    xarajatTuri: '',
+    summa: '',
+    valyuta: 'USD',
+    tavsif: '',
+    javobgarShaxs: '',
+    xarajatSanasi: new Date().toISOString().split('T')[0],
+    tolovSanasi: '',
+    hujjatRaqami: '',
+    qoshimchaMalumot: '',
+    vagon: ''
+  });
+
+  // Data fetching
+  const { data: expenseTypes } = useQuery<ExpenseType[]>({
+    queryKey: ['expense-types'],
+    queryFn: async () => {
+      const response = await axios.get('/expense-advanced/types/list');
+      return response.data;
+    }
+  });
+
+  const { data: expensesData, isLoading, refetch } = useQuery({
+    queryKey: ['expenses-advanced', filters, page],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.xarajatTuri) params.append('xarajatTuri', filters.xarajatTuri);
+      if (filters.valyuta) params.append('valyuta', filters.valyuta);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.search) params.append('search', filters.search);
+      params.append('page', page.toString());
+      
+      const response = await axios.get(`/expense-advanced?${params}`);
+      return response.data;
+    }
+  });
+
+  const { data: statsData } = useQuery({
+    queryKey: ['expense-stats', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.valyuta) params.append('valyuta', filters.valyuta);
+      
+      const response = await axios.get(`/expense-advanced/stats/advanced?${params}`);
+      return response.data;
+    }
+  });
+
+  const { data: vagons } = useQuery({
+    queryKey: ['vagons'],
+    queryFn: async () => {
+      const response = await axios.get('/vagon');
+      return response.data || []; // vagon array'ini qaytaramiz
+    }
+  });
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -62,130 +134,67 @@ export default function ExpensePage() {
     }
   }, [user, authLoading]);
 
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
-  const fetchData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const [expensesRes, vagonsRes, lotsRes] = await Promise.all([
-        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/vagon-expense`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/vagon`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
-      setExpenses(expensesRes.data);
-      setVagons(vagonsRes.data);
-      setLots(lotsRes.data);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVagonChange = (vagonId: string) => {
-    setSelectedVagon(vagonId);
-    setSelectedLot(''); // Reset lot selection
-  };
-
-  const getVagonLots = () => {
-    return lots.filter(l => l.vagon._id === selectedVagon);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      const data: any = {
-        vagon: selectedVagon,
-        expense_type: expenseType,
-        amount: parseFloat(amount),
-        currency: currency,
-        description: description
+      const submitData = {
+        ...formData,
+        summa: parseFloat(formData.summa),
+        summaRUB: formData.valyuta === 'RUB' ? parseFloat(formData.summa) : parseFloat(formData.summa) * 95.5, // USD -> RUB
+        summaUSD: formData.valyuta === 'USD' ? parseFloat(formData.summa) : parseFloat(formData.summa) * 0.0105 // RUB -> USD
       };
       
-      if (selectedLot) {
-        data.lot = selectedLot;
-      }
+      await axios.post('/expense-advanced', submitData);
       
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-expense`,
-        data,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Backend dan qaytgan xabar
-      const expenseTypeLabel = getExpenseTypeLabel(expenseType);
-      alert(`✅ ${expenseTypeLabel} xarajati muvaffaqiyatli saqlandi!\n\n💡 Agar bu xarajat turi avval qo'shilgan bo'lsa, summa qo'shildi.`);
-      
-      fetchData();
+      refetch();
       setShowModal(false);
       resetForm();
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Xarajatni saqlashda xatolik');
+      alert(error.response?.data?.message || t.messages.errorSavingExpense);
     }
   };
 
   const resetForm = () => {
-    setSelectedVagon('');
-    setSelectedLot('');
-    setExpenseType('');
-    setAmount('');
-    setCurrency('USD');
-    setDescription('');
+    setFormData({
+      xarajatTuri: '',
+      summa: '',
+      valyuta: 'USD',
+      tavsif: '',
+      javobgarShaxs: '',
+      xarajatSanasi: new Date().toISOString().split('T')[0],
+      tolovSanasi: '',
+      hujjatRaqami: '',
+      qoshimchaMalumot: '',
+      vagon: ''
+    });
   };
 
-  const getCurrencySymbol = (curr: string) => {
-    switch(curr) {
-      case 'USD': return '$';
-      case 'RUB': return '₽';
-      default: return '';
-    }
-  };
-
-  const getExpenseTypeLabel = (type: string) => {
-    const types: { [key: string]: string } = {
-      'transport': 'Transport',
-      'customs': 'Bojxona',
-      'loading': 'Yuklash/Tushirish',
-      'storage': 'Ombor',
-      'workers': 'Ishchilar',
-      'processing': 'Qayta ishlash',
-      'other': 'Boshqa'
-    };
-    return types[type] || type;
+  const openDetailsModal = (expenseId: string) => {
+    setSelectedExpenseId(expenseId);
+    setShowDetailsModal(true);
   };
 
   const getExpenseTypeInfo = (type: string) => {
-    const info: { [key: string]: string } = {
-      'transport': 'Rossiyadan O\'zbekistonga yoki aksincha transport xarajatlari',
-      'customs': 'Bojxona to\'lovlari va rasmiylashtirish',
-      'loading': 'Yog\'ochni yuklash va tushirish xizmatlari',
-      'storage': 'Omborda saqlash, qo\'riqlash va boshqa xarajatlar',
-      'workers': 'Ishchilar maoshi va mehnat haqqi',
-      'processing': 'Yog\'ochni qayta ishlash, kesish va tayyorlash',
-      'other': 'Boshqa turli xil xarajatlar'
+    const typeMap: { [key: string]: { label: string; icon: string } } = {
+      'transport_kelish': { label: 'Transport (Kelish)', icon: 'transport' },
+      'transport_ketish': { label: 'Transport (Ketish)', icon: 'transport' },
+      'bojxona_kelish': { label: 'Bojxona (Import)', icon: 'customs' },
+      'bojxona_ketish': { label: 'Bojxona (Export)', icon: 'customs' },
+      'yuklash_tushirish': { label: 'Yuklash/Tushirish', icon: 'loading' },
+      'saqlanish': { label: 'Ombor/Saqlanish', icon: 'storage' },
+      'ishchilar': { label: 'Ishchilar', icon: 'workers' },
+      'maosh': { label: 'Maosh', icon: 'cash' },
+      'qayta_ishlash': { label: 'Qayta ishlash', icon: 'processing' },
+      'boshqa': { label: 'Boshqa', icon: 'details' }
     };
-    return info[type] || '';
+    return typeMap[type] || { label: type, icon: 'details' };
   };
 
-  // Valyuta bo'yicha jami xarajatlarni hisoblash
-  const getTotalByCurrency = (curr: string) => {
-    return expenses
-      .filter(e => e.currency === curr)
-      .reduce((sum, e) => sum + e.amount, 0);
+  const getExpenseTypeLabel = (type: string) => {
+    return getExpenseTypeInfo(type).label;
   };
 
-  if (authLoading || loading) {
+  if (authLoading || isLoading) {
     return <LoadingSpinner />;
   }
 
@@ -193,249 +202,479 @@ export default function ExpensePage() {
     return null;
   }
 
+  const expenses = expensesData?.expenses || [];
+  const totalPages = expensesData?.totalPages || 1;
+
   return (
     <Layout>
       <div className="p-6">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold flex items-center">
-              <svg className="w-8 h-8 mr-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              Xarajatlar
+              <Icon name="expenses" className="mr-3" size="lg" />
+              {t.expense.title}
             </h1>
-            <p className="text-gray-600 mt-1">Transport, bojxona, ishchilar va boshqa xarajatlar</p>
+            <p className="text-gray-600 mt-1">{t.expense.subtitle}</p>
           </div>
           <button
             onClick={() => {
               resetForm();
               setShowModal(true);
             }}
-            className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 flex items-center"
+            className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-3 rounded-lg hover:from-orange-600 hover:to-orange-700 flex items-center shadow-lg"
           >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Yangi xarajat
+            <Icon name="add" className="mr-2" />
+            {t.expense.addExpense}
           </button>
         </div>
 
-        {/* Jami xarajatlar statistikasi */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg">
-            <div className="text-sm opacity-90 mb-2">Jami USD Xarajat</div>
-            <div className="text-3xl font-bold">${getTotalByCurrency('USD').toLocaleString()}</div>
-          </div>
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
-            <div className="text-sm opacity-90 mb-2">Jami RUB Xarajat</div>
-            <div className="text-3xl font-bold">₽{getTotalByCurrency('RUB').toLocaleString()}</div>
-          </div>
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
-            <div className="text-sm opacity-90 mb-2">Jami Xarajatlar</div>
-            <div className="text-3xl font-bold">{expenses.length}</div>
-          </div>
-        </div>
+        {/* Stats Widget */}
+        {statsData && (
+          <div className="mb-8">
+            <div className="space-y-6">
+              {/* Umumiy statistika */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-100 text-sm">{t.expense.totalExpenses}</p>
+                      <p className="text-3xl font-bold">{statsData.summary?.totalExpenses || 0}</p>
+                    </div>
+                    <Icon name="statistics" className="text-4xl opacity-80" size="xl" />
+                  </div>
+                </div>
 
-        {expenses.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">
-            <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="text-lg">Xarajatlar yo'q</p>
-            <p className="text-sm mt-2">Birinchi xarajatni qo'shish uchun yuqoridagi tugmani bosing</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Sana</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Vagon</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Lot</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Turi</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Summa</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Tavsif</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {expenses.map((expense) => (
-                  <tr key={expense._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {new Date(expense.createdAt).toLocaleDateString('ru-RU')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-blue-600">
-                        {expense.vagon.vagonCode}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {expense.lot ? (
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                          {expense.lot.dimensions}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">Umumiy</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-medium">
-                        {getExpenseTypeLabel(expense.expense_type)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-sm font-bold ${expense.currency === 'USD' ? 'text-green-600' : 'text-blue-600'}`}>
-                        {expense.amount.toLocaleString()} {getCurrencySymbol(expense.currency)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-                      {expense.description || '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <div className="p-6 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-green-100 text-sm">{t.common.total} {t.common.amount}</p>
+                      <p className="text-2xl font-bold">{formatNumber(statsData.summary?.totalAmount || 0)}</p>
+                    </div>
+                    <Icon name="cash" className="text-4xl opacity-80" size="xl" />
+                  </div>
+                </div>
+
+                <div className="p-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-orange-100 text-sm">{t.expense.averageExpense}</p>
+                      <p className="text-2xl font-bold">{formatNumber(statsData.summary?.avgExpense || 0)}</p>
+                    </div>
+                    <Icon name="profit" className="text-4xl opacity-80" size="xl" />
+                  </div>
+                </div>
+
+                <div className="p-6 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-purple-100 text-sm">{t.expense.topExpenseType}</p>
+                      <p className="text-lg font-bold">
+                        {statsData.byExpenseType?.length > 0 ? 
+                          getExpenseTypeLabel(statsData.byExpenseType[0]._id) : 
+                          t.common.noData
+                        }
+                      </p>
+                    </div>
+                    <Icon name="success" className="text-4xl opacity-80" size="xl" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <Icon name="filter" className="mr-2" />
+            {t.expense.filters}
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">{t.expense.type}</label>
+              <select
+                value={filters.xarajatTuri}
+                onChange={(e) => setFilters({...filters, xarajatTuri: e.target.value})}
+                className="w-full px-3 py-2 border rounded-lg"
+              >
+                <option value="">{t.vagon.allTypes}</option>
+                {expenseTypes?.map(type => (
+                  <option key={type.id} value={type.id}>
+                    {type.icon} {type.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">{t.common.currency}</label>
+              <select
+                value={filters.valyuta}
+                onChange={(e) => setFilters({...filters, valyuta: e.target.value})}
+                className="w-full px-3 py-2 border rounded-lg"
+              >
+                <option value="">{t.vagon.allCurrencies}</option>
+                <option value="USD">USD ($)</option>
+                <option value="RUB">RUB (₽)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Boshlanish sanasi</label>
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Tugash sanasi</label>
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => setFilters({...filters, endDate: e.target.value})}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Qidiruv</label>
+              <input
+                type="text"
+                placeholder="Tavsif bo'yicha..."
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setFilters({
+                xarajatTuri: '',
+                valyuta: '',
+                startDate: '',
+                endDate: '',
+                search: ''
+              })}
+              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+            >
+              {t.expense.clearFilters}
+            </button>
+          </div>
+        </div>
+
+        {/* Charts */}
+        {statsData && (
+          <div className="mb-8">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <Icon name="statistics" className="mr-2" />
+                {t.expense.expenseStats}
+              </h3>
+              <p className="text-gray-600">Grafiklar tez orada qo'shiladi...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Expenses Table */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold flex items-center">
+              <Icon name="expenses" className="mr-2" />
+              {t.expense.expenseList} ({expensesData?.total || 0})
+            </h3>
+          </div>
+          
+          {expenses.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Icon name="expenses" className="mx-auto mb-4" size="xl" />
+              <p className="text-lg">{t.expense.noData}</p>
+              <p className="text-sm mt-2">Filter sozlamalarini o'zgartiring yoki yangi xarajat qo'shing</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sana</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Turi</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Summa</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tavsif</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vagon</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Yaratuvchi</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {expenses.map((expense: AdvancedExpense) => {
+                      return (
+                        <tr key={expense._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {new Date(expense.createdAt).toLocaleDateString('uz-UZ')}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <Icon name={getExpenseTypeInfo(expense.xarajatTuri).icon} className="mr-2 text-gray-600" />
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {getExpenseTypeInfo(expense.xarajatTuri).label}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {expense.xarajatTuri}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-bold text-gray-900">
+                              {formatCurrency(expense.summa, expense.valyuta)}
+                            </div>
+                            {expense.valyuta !== 'RUB' && (
+                              <div className="text-xs text-gray-500">
+                                ≈ {formatCurrency(expense.summaRUB, 'RUB')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                            {expense.tavsif}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            {expense.vagon ? (
+                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                                {expense.vagon.vagonCode} - {expense.vagon.sending_place} → {expense.vagon.receiving_place}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {expense.yaratuvchi?.username}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <button
+                              onClick={() => openDetailsModal(expense._id)}
+                              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-xs flex items-center"
+                            >
+                              <Icon name="details" className="mr-1" size="sm" />
+                              {t.expense.details}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+                  <div className="text-sm text-gray-600">
+                    Sahifa {page} / {totalPages}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
+                      className="px-3 py-1 bg-gray-300 text-gray-700 rounded disabled:opacity-50"
+                    >
+                      Oldingi
+                    </button>
+                    <button
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page === totalPages}
+                      className="px-3 py-1 bg-gray-300 text-gray-700 rounded disabled:opacity-50"
+                    >
+                      Keyingi
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Add Expense Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-lg p-6 w-full max-w-3xl my-8">
+            <div className="bg-white rounded-lg p-6 w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold mb-6 flex items-center">
-                <svg className="w-7 h-7 mr-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Yangi xarajat qo'shish
+                <Icon name="add" className="mr-3" />
+                {t.expense.addExpense}
               </h2>
+              
               <form onSubmit={handleSubmit}>
-                <div className="space-y-5">
-                  {/* 1. Vagon tanlash */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Xarajat turi */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-3">
+                      1. {t.expense.selectExpenseType}
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {expenseTypes?.map(type => (
+                        <div
+                          key={type.id}
+                          onClick={() => setFormData({...formData, xarajatTuri: type.id})}
+                          className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                            formData.xarajatTuri === type.id
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center mb-2">
+                            <span className="text-2xl mr-2">{type.icon}</span>
+                            <span className="font-semibold">{type.name}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">{type.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Summa va valyuta */}
+                  <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                      1. Vagonni tanlang
+                      2. {t.common.amount}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.summa}
+                      onChange={(e) => setFormData({...formData, summa: e.target.value})}
+                      placeholder="1000"
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      {t.common.currency}
                     </label>
                     <select
                       required
-                      value={selectedVagon}
-                      onChange={(e) => handleVagonChange(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      value={formData.valyuta}
+                      onChange={(e) => setFormData({...formData, valyuta: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
                     >
-                      <option value="">Vagonni tanlang...</option>
-                      {vagons.map(vagon => (
+                      <option value="USD">USD ($)</option>
+                      <option value="RUB">RUB (₽)</option>
+                    </select>
+                  </div>
+
+                  {/* Tavsif */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      3. {t.common.description}
+                    </label>
+                    <textarea
+                      required
+                      value={formData.tavsif}
+                      onChange={(e) => setFormData({...formData, tavsif: e.target.value})}
+                      placeholder={t.expense.enterDescription}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Javobgar shaxs */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      4. {t.expense.responsiblePerson}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.javobgarShaxs}
+                      onChange={(e) => setFormData({...formData, javobgarShaxs: e.target.value})}
+                      placeholder={t.expense.enterResponsiblePerson}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                    />
+                  </div>
+
+                  {/* Xarajat sanasi */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      {t.expense.expenseDate}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.xarajatSanasi}
+                      onChange={(e) => setFormData({...formData, xarajatSanasi: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                    />
+                  </div>
+
+                  {/* To'lov sanasi */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      {t.expense.paymentDate} ({t.expense.optional})
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.tolovSanasi}
+                      onChange={(e) => setFormData({...formData, tolovSanasi: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                    />
+                  </div>
+
+                  {/* Hujjat raqami */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      {t.expense.documentNumber} ({t.expense.optional})
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.hujjatRaqami}
+                      onChange={(e) => setFormData({...formData, hujjatRaqami: e.target.value})}
+                      placeholder="INV-001"
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                    />
+                  </div>
+
+                  {/* Vagon tanlash */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Bog'langan vagon ({t.expense.optional})
+                    </label>
+                    <select
+                      value={formData.vagon}
+                      onChange={(e) => setFormData({...formData, vagon: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                    >
+                      <option value="">Vagon tanlanmagan</option>
+                      {Array.isArray(vagons) && vagons.map((vagon: any) => (
                         <option key={vagon._id} value={vagon._id}>
-                          {vagon.vagonCode}
+                          {vagon.vagonCode} - {vagon.sending_place} → {vagon.receiving_place}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* 2. Lot tanlash (ixtiyoriy) */}
-                  {selectedVagon && getVagonLots().length > 0 && (
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        2. Lot tanlang (ixtiyoriy)
-                      </label>
-                      <select
-                        value={selectedLot}
-                        onChange={(e) => setSelectedLot(e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-purple-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                      >
-                        <option value="">Umumiy xarajat (barcha lotlar uchun)</option>
-                        {getVagonLots().map(lot => (
-                          <option key={lot._id} value={lot._id}>
-                            {lot.dimensions} - {lot.quantity} dona ({lot.volume_m3.toFixed(4)} m³) - {lot.currency}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-purple-600 mt-2">
-                        💡 Agar lot tanlamasangiz, xarajat barcha lotlarga teng taqsimlanadi
-                      </p>
-                    </div>
-                  )}
-
-                  {/* 3. Xarajat turi */}
-                  <div className="bg-orange-50 p-4 rounded-lg">
+                  {/* Qo'shimcha ma'lumot */}
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                      3. Xarajat turini tanlang
-                    </label>
-                    <select
-                      required
-                      value={expenseType}
-                      onChange={(e) => setExpenseType(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-orange-200 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                    >
-                      <option value="">Turni tanlang...</option>
-                      <option value="transport">🚛 Transport</option>
-                      <option value="customs">🛃 Bojxona</option>
-                      <option value="loading">📦 Yuklash/Tushirish</option>
-                      <option value="storage">🏢 Ombor/Saqlanish</option>
-                      <option value="workers">👷 Ishchilar maoshi</option>
-                      <option value="processing">⚙️ Qayta ishlash</option>
-                      <option value="other">📝 Boshqa</option>
-                    </select>
-                    {expenseType && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-xs text-orange-600">
-                          ℹ️ {getExpenseTypeInfo(expenseType)}
-                        </p>
-                        <p className="text-xs text-blue-600 font-semibold">
-                          💡 Agar bu xarajat turi avval qo'shilgan bo'lsa, yangi summa qo'shiladi (yangi yozuv yaratilmaydi)
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 4. Valyuta va summa */}
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <label className="block text-sm font-bold text-gray-700 mb-3">
-                      4. Valyuta va summa
-                    </label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Valyuta</label>
-                        <select
-                          required
-                          value={currency}
-                          onChange={(e) => setCurrency(e.target.value)}
-                          className="w-full px-4 py-3 border-2 border-green-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 font-semibold"
-                        >
-                          <option value="USD">💵 USD (Dollar)</option>
-                          <option value="RUB">💶 RUB (Rubl)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Summa</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder="1000"
-                          className="w-full px-4 py-3 border-2 border-green-200 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 font-bold text-lg"
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-green-600 mt-2">
-                      💡 Har valyuta alohida saqlanadi va hisob-kitob shunga mos bo'ladi
-                    </p>
-                  </div>
-
-                  {/* 5. Tavsif */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      5. Tavsif (ixtiyoriy)
+                      {t.expense.additionalInfo} ({t.expense.optional})
                     </label>
                     <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Xarajat haqida qo'shimcha ma'lumot..."
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      rows={3}
+                      value={formData.qoshimchaMalumot}
+                      onChange={(e) => setFormData({...formData, qoshimchaMalumot: e.target.value})}
+                      placeholder={t.expense.enterAdditionalInfo}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                      rows={2}
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-3 mt-6">
+                <div className="flex gap-3 mt-8">
                   <button
                     type="button"
                     onClick={() => {
@@ -444,16 +683,40 @@ export default function ExpensePage() {
                     }}
                     className="flex-1 bg-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-400 font-semibold"
                   >
-                    Bekor qilish
+                    {t.common.cancel}
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 font-semibold"
+                    disabled={!formData.xarajatTuri || !formData.summa || !formData.tavsif}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white px-4 py-3 rounded-lg hover:from-orange-600 hover:to-orange-700 font-semibold disabled:opacity-50"
                   >
-                    Xarajatni saqlash
+                    {t.expense.saveExpense}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Details Modal */}
+        {showDetailsModal && selectedExpenseId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-2xl">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">{t.expense.details}</h3>
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      setSelectedExpenseId(null);
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <Icon name="close" />
+                  </button>
+                </div>
+                <p className="text-gray-600">Tafsilotlar tez orada qo'shiladi...</p>
+              </div>
             </div>
           </div>
         )}

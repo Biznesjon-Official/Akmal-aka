@@ -224,7 +224,7 @@ describe('🧪 Wood Import/Export System - Integration Tests', () => {
           woodLot: testWoodId,
           xarajatTuri: 'transport_kelish',
           summa: 5000,
-          valyuta: 'UZS',
+          valyuta: 'RUB',
           tavsif: 'Test transport xarajati',
           sana: new Date()
         });

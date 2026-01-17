@@ -17,15 +17,15 @@ async function calculateLotProfit(woodLotId, session = null) {
     
     // Xarid summasi
     const purchase = await Purchase.findOne({ woodLot: woodLotId }).session(session);
-    const jami_xarid = purchase ? purchase.jamiUZS : 0;
+    const jami_xarid = purchase ? purchase.jamiRUB : 0;
     
     // Sotuv summasi
     const sale = await Sale.findOne({ woodLot: woodLotId }).session(session);
-    const jami_sotuv = sale ? sale.jamiUZS : 0;
+    const jami_sotuv = sale ? sale.jamiRUB : 0;
     
     // Xarajatlar summasi
     const expenses = await Expense.find({ woodLot: woodLotId }).session(session);
-    const jami_xarajat = expenses.reduce((sum, exp) => sum + exp.summaUZS, 0);
+    const jami_xarajat = expenses.reduce((sum, exp) => sum + (exp.summaRUB || 0), 0);
     
     // Sof foyda
     const sof_foyda = jami_sotuv - jami_xarid - jami_xarajat;
@@ -109,13 +109,13 @@ router.get('/sold-history', auth, async (req, res) => {
     const woodsWithDetails = await Promise.all(
       woods.map(async (wood) => {
         const purchase = await Purchase.findOne({ woodLot: wood._id })
-          .select('birlikNarxi valyuta jamiSumma jamiUZS sotuvchi xaridJoyi xaridSanasi valyutaKursi');
+          .select('birlikNarxi valyuta jamiSumma jamiRUB sotuvchi xaridJoyi xaridSanasi valyutaKursi');
         
         const sale = await Sale.findOne({ woodLot: wood._id })
-          .select('birlikNarxi valyuta jamiSumma jamiUZS xaridor sotuvJoyi sotuvSanasi valyutaKursi');
+          .select('birlikNarxi valyuta jamiSumma jamiRUB xaridor sotuvJoyi sotuvSanasi valyutaKursi');
         
         const expenses = await Expense.find({ woodLot: wood._id })
-          .select('xarajatTuri summa valyuta summaUZS tavsif sana');
+          .select('xarajatTuri summa valyuta summaRUB summaUSD tavsif sana');
         
         return {
           ...wood.toObject(),

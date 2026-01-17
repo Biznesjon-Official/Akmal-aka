@@ -94,11 +94,59 @@ const vagonSchema = new mongoose.Schema({
     comment: 'RUB da foyda'
   },
   
-  // Holat
+  // Holat (YANGI MEXANIZM)
   status: {
     type: String,
-    enum: ['in_transit', 'warehouse', 'closed'],
-    default: 'in_transit'
+    enum: ['active', 'closing', 'closed', 'archived'],
+    default: 'active',
+    comment: 'active: faol, closing: yopilmoqda, closed: yopilgan, archived: arxivlangan'
+  },
+  
+  // Yopilish qoidalari
+  closure_rules: {
+    auto_close_when_sold_percentage: {
+      type: Number,
+      default: 95,
+      min: 0,
+      max: 100,
+      comment: 'Necha foiz sotilganda avtomatik yopilsin'
+    },
+    manual_closure_allowed: {
+      type: Boolean,
+      default: true,
+      comment: 'Qo\'lda yopish mumkinmi'
+    },
+    min_remaining_volume_for_closure: {
+      type: Number,
+      default: 0.1,
+      comment: 'Yopish uchun minimal qolgan hajm (m³)'
+    }
+  },
+  
+  // Yopilish ma'lumotlari
+  closure_date: {
+    type: Date,
+    comment: 'Yopilgan sana'
+  },
+  closure_reason: {
+    type: String,
+    enum: [
+      'fully_sold',           // To\'liq sotilgan
+      'remaining_too_small',  // Qolgan hajm juda kichik
+      'quality_issues',       // Sifat muammolari
+      'manual_closure',       // Qo\'lda yopilgan
+      'business_decision'     // Biznes qaror
+    ],
+    comment: 'Yopilish sababi'
+  },
+  closed_by: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    comment: 'Kim yopgan'
+  },
+  closure_notes: {
+    type: String,
+    comment: 'Yopilish haqida qo\'shimcha ma\'lumot'
   },
   
   // Qo'shimcha ma'lumotlar
@@ -160,7 +208,93 @@ vagonSchema.methods.canSell = function(volume) {
 
 // Instance method: Yopish mumkinligini tekshirish
 vagonSchema.methods.canClose = function() {
-  return this.remaining_volume_m3 === 0 || this.status === 'closed';
+  if (this.status === 'closed' || this.status === 'archived') {
+    return { canClose: false, reason: 'Vagon allaqachon yopilgan' };
+  }
+  
+  const soldPercentage = this.total_volume_m3 > 0 ? 
+    (this.sold_volume_m3 / this.total_volume_m3) * 100 : 0;
+  
+  // Avtomatik yopilish shartlari
+  if (soldPercentage >= this.closure_rules.auto_close_when_sold_percentage) {
+    return { canClose: true, reason: 'auto_close_percentage', soldPercentage };
+  }
+  
+  if (this.remaining_volume_m3 <= this.closure_rules.min_remaining_volume_for_closure) {
+    return { canClose: true, reason: 'min_remaining_volume', remainingVolume: this.remaining_volume_m3 };
+  }
+  
+  // Qo'lda yopish
+  if (this.closure_rules.manual_closure_allowed) {
+    return { canClose: true, reason: 'manual_allowed' };
+  }
+  
+  return { canClose: false, reason: 'conditions_not_met', soldPercentage, remainingVolume: this.remaining_volume_m3 };
+};
+
+// Instance method: Vagonni yopish
+vagonSchema.methods.closeVagon = async function(closedBy, reason, notes = '') {
+  const canCloseResult = this.canClose();
+  
+  if (!canCloseResult.canClose && reason !== 'business_decision') {
+    throw new Error(`Vagonni yopib bo'lmaydi: ${canCloseResult.reason}`);
+  }
+  
+  this.status = 'closed';
+  this.closure_date = new Date();
+  this.closure_reason = reason;
+  this.closed_by = closedBy;
+  this.closure_notes = notes;
+  
+  await this.save();
+  
+  // Audit log
+  const AuditLog = require('./AuditLog');
+  await AuditLog.createLog({
+    user: closedBy,
+    username: 'System', // Bu yerda username kerak
+    action: 'UPDATE',
+    resource_type: 'Vagon',
+    resource_id: this._id,
+    description: `Vagon yopildi: ${reason}`,
+    context: {
+      closure_reason: reason,
+      closure_notes: notes,
+      sold_percentage: canCloseResult.soldPercentage,
+      remaining_volume: canCloseResult.remainingVolume
+    }
+  });
+  
+  return this;
+};
+
+// Instance method: Vagonni qayta ochish
+vagonSchema.methods.reopenVagon = async function(reopenedBy, reason = '') {
+  if (this.status !== 'closed') {
+    throw new Error('Faqat yopilgan vagonlarni qayta ochish mumkin');
+  }
+  
+  this.status = 'active';
+  this.closure_date = null;
+  this.closure_reason = null;
+  this.closed_by = null;
+  this.closure_notes = null;
+  
+  await this.save();
+  
+  // Audit log
+  const AuditLog = require('./AuditLog');
+  await AuditLog.createLog({
+    user: reopenedBy,
+    username: 'System',
+    action: 'UPDATE',
+    resource_type: 'Vagon',
+    resource_id: this._id,
+    description: `Vagon qayta ochildi: ${reason}`,
+    context: { reopen_reason: reason }
+  });
+  
+  return this;
 };
 
 module.exports = mongoose.model('Vagon', vagonSchema);

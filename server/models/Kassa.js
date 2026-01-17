@@ -36,12 +36,16 @@ const kassaSchema = new mongoose.Schema({
   },
   valyuta: {
     type: String,
-    enum: ['USD', 'RUB', 'UZS'],
+    enum: ['USD', 'RUB'],
     required: true
   },
-  summaUZS: {
+  summaRUB: {
     type: Number,
-    required: true // UZS da qiymati
+    required: true // RUB da qiymati (asosiy valyuta)
+  },
+  summaUSD: {
+    type: Number,
+    default: 0 // USD da qiymati (agar kerak bo'lsa)
   },
   
   // Tavsif
@@ -53,7 +57,11 @@ const kassaSchema = new mongoose.Schema({
   // Bog'langan ma'lumotlar
   woodLot: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Wood'
+    ref: 'VagonLot'  // VagonLot modeliga o'zgartirdik
+  },
+  vagon: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vagon'
   },
   purchase: {
     type: mongoose.Schema.Types.ObjectId,

@@ -87,7 +87,7 @@ router.get('/:id/details', auth, async (req, res) => {
         total_sales: sales.length,
         total_clients: [...new Set(sales.map(s => s.client?._id?.toString()))].length,
         total_expenses: expenses.length,
-        total_expense_amount: expenses.reduce((sum, e) => sum + (e.amount_uzs || 0), 0)
+        total_expense_amount: expenses.reduce((sum, e) => sum + (e.amount_rub || 0), 0)
       }
     };
     
@@ -151,7 +151,7 @@ router.post('/', auth, async (req, res) => {
       sending_place,
       receiving_place,
       notes,
-      status: 'warehouse'
+      status: 'active'
     });
     
     await vagon.save();

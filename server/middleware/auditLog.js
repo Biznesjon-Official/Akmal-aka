@@ -1,110 +1,129 @@
 const AuditLog = require('../models/AuditLog');
 
-// Audit log yaratish
-const createAuditLog = async (action, model, documentId, changes, user, req) => {
+/**
+ * Audit log yaratish funksiyasi
+ * @param {String} userId - Foydalanuvchi ID
+ * @param {String} username - Foydalanuvchi nomi
+ * @param {String} action - Harakat turi (CREATE, UPDATE, DELETE, VIEW)
+ * @param {String} resourceType - Resurs turi (Vagon, VagonLot, etc.)
+ * @param {String} resourceId - Resurs ID
+ * @param {Object} oldData - Eski ma'lumotlar (UPDATE va DELETE uchun)
+ * @param {Object} newData - Yangi ma'lumotlar (CREATE va UPDATE uchun)
+ * @param {String} description - Tavsif
+ * @param {Object} req - Request obyekti (IP, User-Agent uchun)
+ * @param {Object} context - Qo'shimcha kontekst
+ */
+const createAuditLog = async (
+  userId, 
+  username, 
+  action, 
+  resourceType, 
+  resourceId, 
+  oldData = null, 
+  newData = null, 
+  description = '', 
+  req = null,
+  context = {}
+) => {
   try {
-    await AuditLog.create({
-      action,
-      model,
-      documentId,
-      changes,
-      user: user._id || user,
-      ipAddress: req?.ip || req?.connection?.remoteAddress,
-      userAgent: req?.headers?.['user-agent']
-    });
+    const logData = {
+      user: userId,
+      username: username,
+      action: action,
+      resource_type: resourceType,
+      resource_id: resourceId,
+      old_data: oldData,
+      new_data: newData,
+      description: description || `${action} ${resourceType}`,
+      context: context
+    };
+
+    // Request ma'lumotlarini qo'shish
+    if (req) {
+      logData.ip_address = req.ip || req.connection.remoteAddress;
+      logData.user_agent = req.get('User-Agent');
+      logData.session_id = req.sessionID;
+    }
+
+    await AuditLog.createLog(logData);
   } catch (error) {
-    console.error('Audit log xatosi:', error);
-    // Audit log xatosi asosiy operatsiyani to'xtatmasligi kerak
+    console.error('Audit log yaratishda xatolik:', error);
+    // Xatolik asosiy jarayonni to'xtatmasligi kerak
   }
 };
 
-// Middleware - create uchun
-const auditCreate = (modelName) => {
+/**
+ * Express middleware - avtomatik audit log
+ */
+const auditMiddleware = (resourceType) => {
   return async (req, res, next) => {
-    const originalJson = res.json.bind(res);
+    // Response'ni kuzatish uchun
+    const originalSend = res.send;
     
-    res.json = function(data) {
-      if (res.statusCode >= 200 && res.statusCode < 300 && data) {
-        const documentId = data._id || data.id;
-        if (documentId) {
-          createAuditLog(
-            'create',
-            modelName,
-            documentId,
-            { after: data },
-            req.user,
-            req
-          );
-        }
-      }
-      return originalJson(data);
-    };
-    
-    next();
-  };
-};
-
-// Middleware - update uchun
-const auditUpdate = (modelName) => {
-  return async (req, res, next) => {
-    const originalJson = res.json.bind(res);
-    
-    res.json = function(data) {
-      if (res.statusCode >= 200 && res.statusCode < 300 && data) {
-        const documentId = req.params.id || data._id || data.id;
-        if (documentId) {
-          createAuditLog(
-            'update',
-            modelName,
-            documentId,
-            {
-              before: req.originalData, // Route'da set qilinadi
-              after: data
-            },
-            req.user,
-            req
-          );
-        }
-      }
-      return originalJson(data);
-    };
-    
-    next();
-  };
-};
-
-// Middleware - delete uchun
-const auditDelete = (modelName) => {
-  return async (req, res, next) => {
-    const originalJson = res.json.bind(res);
-    
-    res.json = function(data) {
+    res.send = function(data) {
+      // Muvaffaqiyatli operatsiyalarni log qilish
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        const documentId = req.params.id;
-        if (documentId) {
+        const action = getActionFromMethod(req.method);
+        const resourceId = req.params.id || 'unknown';
+        
+        if (req.user) {
           createAuditLog(
-            'delete',
-            modelName,
-            documentId,
-            {
-              before: req.originalData,
-              after: null
-            },
-            req.user,
+            req.user.userId,
+            req.user.username || 'Unknown',
+            action,
+            resourceType,
+            resourceId,
+            req.body.oldData || null,
+            req.body,
+            `${action} ${resourceType} via API`,
             req
           );
         }
       }
-      return originalJson(data);
+      
+      originalSend.call(this, data);
     };
     
     next();
   };
+};
+
+/**
+ * HTTP method'dan action aniqlash
+ */
+const getActionFromMethod = (method) => {
+  switch (method.toUpperCase()) {
+    case 'POST': return 'CREATE';
+    case 'PUT': 
+    case 'PATCH': return 'UPDATE';
+    case 'DELETE': return 'DELETE';
+    case 'GET': return 'VIEW';
+    default: return 'UNKNOWN';
+  }
+};
+
+/**
+ * Manual audit log (route'larda ishlatish uchun)
+ */
+const logUserAction = async (req, action, resourceType, resourceId, oldData, newData, description, context = {}) => {
+  if (req.user) {
+    await createAuditLog(
+      req.user.userId,
+      req.user.username || 'Unknown',
+      action,
+      resourceType,
+      resourceId,
+      oldData,
+      newData,
+      description,
+      req,
+      context
+    );
+  }
 };
 
 module.exports = {
   createAuditLog,
-  auditCreate,
-  auditUpdate,
-  auditDelete
+  auditMiddleware,
+  logUserAction
 };

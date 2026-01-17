@@ -105,14 +105,24 @@ router.post('/', [auth, [
     });
     
     const jamiSumma = req.body.birlikNarxi * wood.kubHajmi;
-    const jamiUZS = jamiSumma * req.body.valyutaKursi; // UZS da qiymati
+    let jamiRUB = 0;
+    let jamiUSD = 0;
     
-    console.log('💰 Hisoblangan:', { jamiSumma, jamiUZS });
+    if (req.body.valyuta === 'USD') {
+      jamiUSD = jamiSumma;
+      jamiRUB = jamiSumma * req.body.valyutaKursi; // USD -> RUB
+    } else {
+      jamiRUB = jamiSumma;
+      jamiUSD = jamiSumma * req.body.valyutaKursi; // RUB -> USD
+    }
+    
+    console.log('💰 Hisoblangan:', { jamiSumma, jamiRUB, jamiUSD });
 
     const saleData = {
       ...req.body,
       jamiSumma,
-      jamiUZS, // UZS da qiymatini qo'shish
+      jamiRUB,
+      jamiUSD,
       yaratuvchi: req.user.userId
     };
 
@@ -128,7 +138,8 @@ router.post('/', [auth, [
       turi: 'prixod',
       summa: jamiSumma,
       valyuta: req.body.valyuta,
-      summaUZS: jamiUZS,
+      summaRUB: jamiRUB,
+      summaUSD: jamiUSD,
       tavsif: `Sotuv: ${wood.lotCode} - ${req.body.xaridor}`,
       woodLot: wood._id,
       sale: sale[0]._id,

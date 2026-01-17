@@ -159,19 +159,17 @@ function ExchangeRatesContent() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {t.exchangeRates.rateLabel}
+                  {formData.currency === 'USD' ? '1 USD = ? RUB' : '1 RUB = ? USD'}
                 </label>
                 <FormattedInput
-                  type="currency"
-                  currency="UZS"
                   value={formData.rate}
                   onChange={(value) => setFormData({...formData, rate: value})}
-                  placeholder={t.exchangeRates.ratePlaceholder}
+                  placeholder={formData.currency === 'USD' ? '95.50' : '0.0105'}
                   required
-                  step="0.01"
+                  step="0.0001"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  1 {formData.currency} = ? so'm
+                  {formData.currency === 'USD' ? 'USD → RUB kursi' : 'RUB → USD kursi'}
                 </p>
               </div>
             </div>
@@ -211,9 +209,9 @@ function ExchangeRatesContent() {
                 const usdRate = exchangeRates?.find(rate => rate.currency === 'USD');
                 return (
                   <StatsCard
-                    title="USD (Dollar)"
-                    value={usdRate ? formatCurrency(usdRate.rate, 'UZS') : t.exchangeRates.notSet}
-                    subtitle={usdRate && usdRate.updatedBy ? `${t.exchangeRates.updatedBy}: ${usdRate.updatedBy.username}` : t.exchangeRates.usdDollar}
+                    title="USD → RUB"
+                    value={usdRate ? `1 USD = ${formatNumber(usdRate.rate)} RUB` : t.exchangeRates.notSet}
+                    subtitle={usdRate && usdRate.updatedBy ? `${t.exchangeRates.updatedBy}: ${usdRate.updatedBy.username}` : 'Dollar → Rubl kursi'}
                     color="green"
                     icon={
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,9 +227,9 @@ function ExchangeRatesContent() {
                 const rubRate = exchangeRates?.find(rate => rate.currency === 'RUB');
                 return (
                   <StatsCard
-                    title="RUB (Rubl)"
-                    value={rubRate ? formatCurrency(rubRate.rate, 'UZS') : t.exchangeRates.notSet}
-                    subtitle={rubRate && rubRate.updatedBy ? `${t.exchangeRates.updatedBy}: ${rubRate.updatedBy.username}` : t.exchangeRates.rubRuble}
+                    title="RUB → USD"
+                    value={rubRate ? `1 RUB = ${formatNumber(rubRate.rate)} USD` : t.exchangeRates.notSet}
+                    subtitle={rubRate && rubRate.updatedBy ? `${t.exchangeRates.updatedBy}: ${rubRate.updatedBy.username}` : 'Rubl → Dollar kursi'}
                     color="blue"
                     icon={
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -251,7 +249,7 @@ function ExchangeRatesContent() {
         >
           <TableHeader>
             <TableHead>{t.exchangeRates.currency}</TableHead>
-            <TableHead>{t.exchangeRates.rate} (UZS)</TableHead>
+            <TableHead>Kurs</TableHead>
             <TableHead>{t.exchangeRates.lastUpdated}</TableHead>
             <TableHead>{t.exchangeRates.updatedBy}</TableHead>
             <TableHead>{t.exchangeRates.actions}</TableHead>
@@ -271,7 +269,7 @@ function ExchangeRatesContent() {
                 </TableCell>
                 <TableCell>
                   <div className="text-sm font-bold text-gray-900">
-                    {formatNumber(rate.rate)}
+                    {rate.currency === 'USD' ? `1 USD = ${formatNumber(rate.rate)} RUB` : `1 RUB = ${formatNumber(rate.rate)} USD`}
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-gray-600 font-medium">
@@ -304,11 +302,11 @@ function ExchangeRatesContent() {
             </div>
             <div className="ml-3">
               <h3 className="text-lg font-bold text-yellow-800">
-                {t.exchangeRates.importantNote}
+                Muhim eslatma
               </h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  {t.exchangeRates.warning}
+                  Tizimda faqat USD ↔ RUB valyuta kurslari ishlatiladi. USD kursi 1 USD = X RUB, RUB kursi esa 1 RUB = X USD ko'rinishida saqlanadi.
                 </p>
               </div>
             </div>

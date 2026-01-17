@@ -47,13 +47,12 @@ export const formatInputNumber = (value: string): string => {
 /**
  * Valyuta formatlash
  */
-export const formatCurrency = (amount: number, currency: string = 'UZS'): string => {
+export const formatCurrency = (amount: number, currency: string = 'RUB'): string => {
   const formatted = formatNumber(amount);
   
   const currencySymbols: { [key: string]: string } = {
     'USD': '$',
-    'RUB': '₽',
-    'UZS': 'so\'m'
+    'RUB': '₽'
   };
   
   const symbol = currencySymbols[currency] || currency;

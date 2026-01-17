@@ -7,15 +7,15 @@ const exchangeRateSchema = new mongoose.Schema({
     enum: ['USD', 'RUB'],
     required: true,
     unique: true,
-    comment: 'Faqat USD va RUB'
+    comment: 'USD: 1 USD = X RUB, RUB: 1 RUB = X USD'
   },
   
-  // USD ga nisbatan kurs (1 USD = X RUB)
+  // Kurs qiymati
   rate: {
     type: Number,
     required: true,
     min: 0,
-    comment: 'Agar currency=RUB bo\'lsa: 1 USD = X RUB'
+    comment: 'USD uchun: 1 USD = X RUB, RUB uchun: 1 RUB = X USD'
   },
   
   // Oxirgi yangilanish sanasi

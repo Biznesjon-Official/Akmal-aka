@@ -7,7 +7,14 @@ const VagonLot = require('./models/VagonLot');
 const VagonExpense = require('./models/VagonExpense');
 const VagonSale = require('./models/VagonSale');
 const Client = require('./models/Client');
-const Cash = require('./models/Cash');
+const Kassa = require('./models/Kassa');
+const Expense = require('./models/Expense');
+const ExpenseAllocation = require('./models/ExpenseAllocation');
+const LossLiability = require('./models/LossLiability');
+const AuditLog = require('./models/AuditLog');
+const ExchangeRate = require('./models/ExchangeRate');
+const ExchangeRateHistory = require('./models/ExchangeRateHistory');
+const SystemSettings = require('./models/SystemSettings');
 
 async function cleanAllTestData() {
   try {
@@ -53,15 +60,72 @@ async function cleanAllTestData() {
       console.log(`✅ ${clientsCount} ta mijoz o'chirildi`);
     }
 
-    // 6. Kassa (ixtiyoriy - faqat test ma'lumotlar)
-    const cashCount = await Cash.countDocuments();
-    if (cashCount > 0) {
-      await Cash.deleteMany({});
-      console.log(`✅ ${cashCount} ta kassa yozuvi o'chirildi`);
+    // 6. Kassa yozuvlari
+    const kassaCount = await Kassa.countDocuments();
+    if (kassaCount > 0) {
+      await Kassa.deleteMany({});
+      console.log(`✅ ${kassaCount} ta kassa yozuvi o'chirildi`);
+    }
+
+    // 7. Xarajatlar (umumiy)
+    const generalExpensesCount = await Expense.countDocuments();
+    if (generalExpensesCount > 0) {
+      await Expense.deleteMany({});
+      console.log(`✅ ${generalExpensesCount} ta umumiy xarajat o'chirildi`);
+    }
+
+    // 8. Xarajat taqsimotlari
+    const allocationsCount = await ExpenseAllocation.countDocuments();
+    if (allocationsCount > 0) {
+      await ExpenseAllocation.deleteMany({});
+      console.log(`✅ ${allocationsCount} ta xarajat taqsimoti o'chirildi`);
+    }
+
+    // 9. Yo'qotish javobgarliklari
+    const liabilitiesCount = await LossLiability.countDocuments();
+    if (liabilitiesCount > 0) {
+      await LossLiability.deleteMany({});
+      console.log(`✅ ${liabilitiesCount} ta yo'qotish javobgarligi o'chirildi`);
+    }
+
+    // 10. Audit loglar
+    const auditCount = await AuditLog.countDocuments();
+    if (auditCount > 0) {
+      await AuditLog.deleteMany({});
+      console.log(`✅ ${auditCount} ta audit log o'chirildi`);
+    }
+
+    // 11. Valyuta kurslari tarixi
+    const rateHistoryCount = await ExchangeRateHistory.countDocuments();
+    if (rateHistoryCount > 0) {
+      await ExchangeRateHistory.deleteMany({});
+      console.log(`✅ ${rateHistoryCount} ta valyuta kursi tarixi o'chirildi`);
+    }
+
+    // 12. Joriy valyuta kurslari
+    const ratesCount = await ExchangeRate.countDocuments();
+    if (ratesCount > 0) {
+      await ExchangeRate.deleteMany({});
+      console.log(`✅ ${ratesCount} ta joriy valyuta kursi o'chirildi`);
+    }
+
+    // 13. Tizim sozlamalari (ixtiyoriy - default qiymatlar qayta yaratiladi)
+    const settingsCount = await SystemSettings.countDocuments();
+    if (settingsCount > 0) {
+      await SystemSettings.deleteMany({});
+      console.log(`✅ ${settingsCount} ta tizim sozlamasi o'chirildi`);
     }
 
     console.log('\n🎉 Barcha test ma\'lumotlar o\'chirildi!');
-    console.log('💡 Endi yangi ma\'lumotlar qo\'shishingiz mumkin.\n');
+    
+    // Default tizim sozlamalarini yaratish
+    console.log('🔧 Default tizim sozlamalarini yaratmoqda...');
+    
+    await SystemSettings.initializeDefaultSettings();
+    
+    console.log('💡 Endi yangi ma\'lumotlar qo\'shishingiz mumkin.');
+    console.log('📝 Eslatma: Admin foydalanuvchi saqlanib qoldi.');
+    console.log('📝 Valyuta kurslarini admin panelidan o\'rnatishingiz mumkin.\n');
 
   } catch (error) {
     console.error('❌ Xatolik:', error.message);
@@ -75,13 +139,19 @@ async function cleanAllTestData() {
 // Tasdiqlash
 console.log('⚠️  OGOHLANTIRISH: Bu script BARCHA ma\'lumotlarni o\'chiradi!');
 console.log('📋 O\'chiriladigan ma\'lumotlar:');
-console.log('   - Vagonlar');
-console.log('   - Lotlar');
-console.log('   - Vagon sotuvlari');
-console.log('   - Vagon xarajatlari');
+console.log('   - Vagonlar va lotlar');
+console.log('   - Vagon sotuvlari va xarajatlari');
 console.log('   - Mijozlar');
 console.log('   - Kassa yozuvlari');
+console.log('   - Umumiy xarajatlar');
+console.log('   - Xarajat taqsimotlari');
+console.log('   - Yo\'qotish javobgarliklari');
+console.log('   - Audit loglar');
+console.log('   - Valyuta kurslari');
+console.log('   - Tizim sozlamalari');
 console.log('');
+console.log('✅ SAQLANADI: Admin foydalanuvchi');
+console.log('⏳ 3 soniyadan keyin boshlanadi...\n');
 console.log('⏳ 3 soniyadan keyin boshlanadi...\n');
 
 setTimeout(() => {

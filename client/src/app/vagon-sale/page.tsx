@@ -8,6 +8,8 @@ import Layout from '@/components/Layout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import axios from 'axios';
 
+import Icon from '@/components/Icon';
+
 interface Client {
   _id: string;
   name: string;
@@ -44,11 +46,14 @@ interface VagonSale {
     name: string;
     phone: string;
   };
-  sold_quantity: number;
-  sold_volume_m3: number;
+  sent_volume_m3: number;
+  accepted_volume_m3: number;
+  client_loss_m3: number;
+  client_loss_responsible_person?: string;
+  client_loss_reason?: string;
   sale_currency: string;
   price_per_m3: number;
-  total_amount: number;
+  total_price: number;
   paid_amount: number;
   debt: number;
   createdAt: string;
@@ -66,7 +71,15 @@ export default function VagonSalePage() {
   const [selectedVagon, setSelectedVagon] = useState('');
   const [selectedLot, setSelectedLot] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
-  const [soldQuantity, setSoldQuantity] = useState('');
+  const [soldVolumeM3, setSoldVolumeM3] = useState(''); // O'zgartirildi: hajm bo'yicha sotuv
+  const [clientLossM3, setClientLossM3] = useState(''); // Yangi: mijoz yo'qotishi
+  const [clientLossResponsible, setClientLossResponsible] = useState(''); // Javobgar shaxs
+  const [clientLossReason, setClientLossReason] = useState(''); // Yo'qotish sababi
+  
+  // BRAK JAVOBGARLIK TAQSIMOTI
+  const [brakVolume, setBrakVolume] = useState(''); // Jami brak hajmi
+  const [sellerLiabilityPercent, setSellerLiabilityPercent] = useState(100); // Sotuvchi javobgarlik %
+  const [buyerLiabilityPercent, setBuyerLiabilityPercent] = useState(0); // Xaridor javobgarlik %
   const [saleCurrency, setSaleCurrency] = useState('USD'); // Yangi: valyuta tanlash
   const [pricePerM3, setPricePerM3] = useState('');
   const [paidAmount, setPaidAmount] = useState('');
@@ -131,61 +144,79 @@ export default function VagonSalePage() {
     
     // Validatsiya
     if (!selectedVagon) {
-      alert('❌ Vagonni tanlang!');
+      alert(`❌ ${t.messages.selectVagon}`);
       return;
     }
     if (!selectedLot) {
-      alert('❌ Lotni tanlang!');
+      alert(`❌ ${t.messages.selectLot}`);
       return;
     }
     if (!selectedClient) {
-      alert('❌ Mijozni tanlang!');
+      alert(`❌ ${t.messages.selectClient}`);
       return;
     }
-    if (!soldQuantity || parseInt(soldQuantity) <= 0) {
-      alert('❌ Sotilgan sonini kiriting!');
+    if (!soldVolumeM3 || parseFloat(soldVolumeM3) <= 0) {
+      alert(`❌ ${t.messages.enterSoldVolume}`);
       return;
     }
     if (!saleCurrency) {
-      alert('❌ Valyutani tanlang!');
+      alert(`❌ ${t.messages.selectCurrency}`);
       return;
     }
     if (!pricePerM3 || parseFloat(pricePerM3) <= 0) {
-      alert('❌ Narxni kiriting!');
+      alert(`❌ ${t.messages.enterPrice}`);
       return;
     }
     
     try {
       const token = localStorage.getItem('token');
       
-      // Lotni topish va hajmni hisoblash
+      // Lotni topish va hajmni tekshirish
       const lotInfo = getSelectedLotInfo();
       if (!lotInfo) {
-        alert('❌ Lot ma\'lumotlari topilmadi!');
+        alert(`❌ ${t.messages.lotInfoNotFound}`);
         return;
       }
       
-      // Hajmni hisoblash: (quantity * volume_m3) / total_quantity
-      const soldVolumeM3 = (parseInt(soldQuantity) * lotInfo.volume_m3) / lotInfo.quantity;
+      // Hajmni tekshirish - qolgan hajmdan ko'p bo'lmasligi kerak
+      const soldVolume = parseFloat(soldVolumeM3);
+      if (soldVolume > lotInfo.remaining_volume_m3) {
+        alert(`❌ ${t.messages.volumeExceedsRemaining}\n${t.messages.remaining}: ${lotInfo.remaining_volume_m3.toFixed(2)} m³`);
+        return;
+      }
       
       console.log('📤 Sending data:', {
         vagon: selectedVagon,
         lot: selectedLot,
         client: selectedClient,
-        sent_volume_m3: soldVolumeM3,
+        sent_volume_m3: soldVolume,
         sale_currency: saleCurrency,
         price_per_m3: parseFloat(pricePerM3),
         paid_amount: parseFloat(paidAmount) || 0,
         notes: notes
       });
       
-      const response = await axios.post(
+      await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-sale`,
         {
           vagon: selectedVagon,
           lot: selectedLot,
           client: selectedClient,
-          sent_volume_m3: soldVolumeM3,
+          sent_volume_m3: soldVolume,
+          client_loss_m3: parseFloat(clientLossM3) || 0,
+          client_loss_responsible_person: clientLossResponsible || null,
+          client_loss_reason: clientLossReason || null,
+          
+          // BRAK JAVOBGARLIK TAQSIMOTI
+          brak_liability_distribution: parseFloat(brakVolume) > 0 ? {
+            seller_percentage: sellerLiabilityPercent,
+            buyer_percentage: buyerLiabilityPercent,
+            total_brak_volume_m3: parseFloat(brakVolume),
+            seller_liable_volume_m3: (parseFloat(brakVolume) * sellerLiabilityPercent) / 100,
+            buyer_liable_volume_m3: (parseFloat(brakVolume) * buyerLiabilityPercent) / 100,
+            buyer_must_pay_for_brak: buyerLiabilityPercent > 0
+          } : null,
+          
           sale_currency: saleCurrency,
           price_per_m3: parseFloat(pricePerM3),
           paid_amount: parseFloat(paidAmount) || 0,
@@ -196,7 +227,7 @@ export default function VagonSalePage() {
       
       // Mijoz nomini olish
       const clientName = clients.find(c => c._id === selectedClient)?.name || 'Mijoz';
-      alert(`✅ ${clientName}ga sotuv muvaffaqiyatli saqlandi!\n\n💡 Agar bu mijozga avval ham sotilgan bo'lsa, qarz va hajm yangilandi.`);
+      alert(`✅ ${clientName}${t.messages.saleSuccessfullySaved}\n\n💡 ${t.messages.ifPreviouslySold}`);
       
       fetchData();
       setShowModal(false);
@@ -211,7 +242,15 @@ export default function VagonSalePage() {
     setSelectedVagon('');
     setSelectedLot('');
     setSelectedClient('');
-    setSoldQuantity('');
+    setSoldVolumeM3(''); // O'zgartirildi
+    setClientLossM3(''); // Yangi
+    setClientLossResponsible(''); // Javobgar shaxs
+    setClientLossReason(''); // Yo'qotish sababi
+    
+    // BRAK JAVOBGARLIK TAQSIMOTI
+    setBrakVolume('');
+    setSellerLiabilityPercent(100);
+    setBuyerLiabilityPercent(0);
     setSaleCurrency('USD');
     setPricePerM3('');
     setPaidAmount('');
@@ -238,14 +277,18 @@ export default function VagonSalePage() {
     <Layout>
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">{t.vagonSale.title}</h1>
+          <h1 className="text-3xl font-bold flex items-center">
+            <Icon name="sales" className="mr-3" size="lg" />
+            {t.vagonSale.title}
+          </h1>
           <button
             onClick={() => {
               resetForm();
               setShowModal(true);
             }}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center"
           >
+            <Icon name="add" className="mr-2" />
             {t.vagonSale.addSale}
           </button>
         </div>
@@ -267,8 +310,11 @@ export default function VagonSalePage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-gray-600">Sotilgan hajm</div>
-                    <div className="text-lg font-bold">{sale.sold_volume_m3?.toFixed(2) || '0.00'} m³</div>
+                    <div className="text-sm text-gray-600">{t.vagonSale.sentVolumeLabel}</div>
+                    <div className="text-lg font-bold">{sale.sent_volume_m3?.toFixed(2) || '0.00'} m³</div>
+                    {sale.client_loss_m3 > 0 && (
+                      <div className="text-xs text-red-500">{t.vagonSale.lossLabel}: {sale.client_loss_m3.toFixed(2)} m³</div>
+                    )}
                   </div>
                 </div>
 
@@ -277,12 +323,12 @@ export default function VagonSalePage() {
                   <div className="text-sm text-gray-600">{sale.client?.phone || 'N/A'}</div>
                   <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                     <div>
-                      <span className="text-gray-600">Soni:</span>
-                      <span className="ml-2 font-semibold">{sale.sold_quantity || 0} dona</span>
+                      <span className="text-gray-600">Jo'natilgan:</span>
+                      <span className="ml-2 font-semibold">{sale.sent_volume_m3?.toFixed(2) || '0.00'} m³</span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Hajm:</span>
-                      <span className="ml-2 font-semibold">{sale.sold_volume_m3?.toFixed(2) || '0.00'} m³</span>
+                      <span className="text-gray-600">Qabul qilingan:</span>
+                      <span className="ml-2 font-semibold text-green-600">{sale.accepted_volume_m3?.toFixed(2) || '0.00'} m³</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Narx (m³):</span>
@@ -290,12 +336,12 @@ export default function VagonSalePage() {
                         {sale.price_per_m3?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-gray-600">Jami:</span>
-                      <span className="ml-2 font-semibold">
-                        {sale.total_amount?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
-                      </span>
-                    </div>
+                    {sale.client_loss_m3 > 0 && (
+                      <div>
+                        <span className="text-gray-600">{t.vagonSale.lossLabel}:</span>
+                        <span className="ml-2 font-semibold text-red-500">{sale.client_loss_m3?.toFixed(2) || '0.00'} m³</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -303,7 +349,7 @@ export default function VagonSalePage() {
                   <div>
                     <div className="text-sm text-gray-600">Jami narx</div>
                     <div className="text-lg font-bold">
-                      {sale.total_amount?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
+                      {sale.total_price?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
                     </div>
                   </div>
                   <div>
@@ -357,7 +403,7 @@ export default function VagonSalePage() {
                         <option value="">Lotni tanlang</option>
                         {getSelectedVagonLots().map(lot => (
                           <option key={lot._id} value={lot._id}>
-                            {lot.dimensions} - {lot.remaining_quantity} dona ({lot.remaining_volume_m3.toFixed(2)} m³) - {lot.purchase_currency}
+                            {lot.dimensions} - {lot.remaining_volume_m3.toFixed(2)} m³ qolgan - {lot.purchase_currency}
                           </option>
                         ))}
                       </select>
@@ -365,24 +411,20 @@ export default function VagonSalePage() {
                         <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <span className="text-gray-600">Qolgan soni:</span>
-                              <span className="ml-2 font-semibold">{getSelectedLotInfo()?.remaining_quantity} dona</span>
+                              <span className="text-gray-600">{t.vagonSale.remainingVolumeLabel}:</span>
+                              <span className="ml-2 font-semibold text-green-600">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">Qolgan hajm:</span>
-                              <span className="ml-2 font-semibold">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Jami soni:</span>
-                              <span className="ml-2 font-semibold">{getSelectedLotInfo()?.quantity} dona</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Jami hajm:</span>
+                              <span className="text-gray-600">{t.vagonSale.totalVolumeLabel}:</span>
                               <span className="ml-2 font-semibold">{getSelectedLotInfo()?.volume_m3.toFixed(2)} m³</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">Sotib olingan valyuta:</span>
+                              <span className="text-gray-600">{t.vagonSale.purchaseCurrency}:</span>
                               <span className="ml-2 font-semibold">{getSelectedLotInfo()?.purchase_currency}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">{t.vagonSale.purchaseAmount}:</span>
+                              <span className="ml-2 font-semibold">{getSelectedLotInfo()?.purchase_amount.toLocaleString()} {getSelectedLotInfo()?.purchase_currency}</span>
                             </div>
                           </div>
                         </div>
@@ -410,15 +452,151 @@ export default function VagonSalePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Sotilgan soni (dona)</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.soldVolumeM3Label}</label>
                     <input
                       type="number"
-                      value={soldQuantity}
-                      onChange={(e) => setSoldQuantity(e.target.value)}
-                      placeholder="100"
+                      step="0.01"
+                      value={soldVolumeM3}
+                      onChange={(e) => setSoldVolumeM3(e.target.value)}
+                      placeholder="2.50"
                       className="w-full px-3 py-2 border rounded-lg"
                     />
+                    {selectedLot && getSelectedLotInfo() && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {t.vagonSale.remainingVolumeColon} <span className="font-semibold text-green-600">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
+                      </p>
+                    )}
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.clientLossM3Label}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={clientLossM3}
+                      onChange={(e) => setClientLossM3(e.target.value)}
+                      placeholder="0.10"
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      💡 Mijoz tomonidan yo'qotilgan hajm (transport, yuklash/tushirish vaqtida)
+                    </p>
+                  </div>
+
+                  {/* BRAK JAVOBGARLIK TAQSIMOTI */}
+                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                    <h4 className="font-semibold text-yellow-800 mb-3">🔄 Brak javobgarlik taqsimoti</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Jami brak hajmi (m³)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={brakVolume}
+                          onChange={(e) => {
+                            setBrakVolume(e.target.value);
+                            // Eski field bilan sinxronlash
+                            setClientLossM3(e.target.value);
+                          }}
+                          placeholder="5.00"
+                          className="w-full px-3 py-2 border rounded-lg"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Sotuvchi javobgarlik (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={sellerLiabilityPercent}
+                          onChange={(e) => {
+                            const sellerPercent = parseInt(e.target.value) || 0;
+                            setSellerLiabilityPercent(sellerPercent);
+                            setBuyerLiabilityPercent(100 - sellerPercent);
+                          }}
+                          className="w-full px-3 py-2 border rounded-lg"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Xaridor javobgarlik (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={buyerLiabilityPercent}
+                          onChange={(e) => {
+                            const buyerPercent = parseInt(e.target.value) || 0;
+                            setBuyerLiabilityPercent(buyerPercent);
+                            setSellerLiabilityPercent(100 - buyerPercent);
+                          }}
+                          className="w-full px-3 py-2 border rounded-lg"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Hisoblash ko'rsatkichlari */}
+                    {parseFloat(brakVolume) > 0 && (
+                      <div className="mt-4 p-3 bg-white rounded border">
+                        <h5 className="font-medium mb-2">📊 Hisoblash natijalari:</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <div className="text-red-600">
+                              <strong>Sotuvchi bo'yniga:</strong> {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100).toFixed(2)} m³
+                            </div>
+                            <div className="text-gray-600">
+                              Zarar: {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} {saleCurrency}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-blue-600">
+                              <strong>Xaridor bo'yniga:</strong> {((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100).toFixed(2)} m³
+                            </div>
+                            <div className="text-gray-600">
+                              {buyerLiabilityPercent > 0 ? 
+                                `To'lashi kerak: ${((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} ${saleCurrency}` :
+                                'To\'lov qilmaydi'
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-3 text-xs text-yellow-700">
+                      💡 <strong>Tushuntirish:</strong> Agar xaridor 0% javobgar bo'lsa, brak uchun to'lov qilmaydi. 
+                      Agar 100% javobgar bo'lsa, brak hajmini ham to'lashi kerak.
+                    </div>
+                  </div>
+
+                  {/* {t.vagonSale.clientLossInfoLabel} */}
+                  {parseFloat(clientLossM3) > 0 && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium mb-1 text-red-600">{t.vagonSale.lossResponsiblePersonLabel}</label>
+                        <input
+                          type="text"
+                          value={clientLossResponsible}
+                          onChange={(e) => setClientLossResponsible(e.target.value)}
+                          placeholder={t.vagonSale.fullNamePlaceholder}
+                          className="w-full px-3 py-2 border border-red-300 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1 text-red-600">{t.vagonSale.lossReasonLabel}</label>
+                        <input
+                          type="text"
+                          value={clientLossReason}
+                          onChange={(e) => setClientLossReason(e.target.value)}
+                          placeholder={t.vagonSale.transportDamagePlaceholder}
+                          className="w-full px-3 py-2 border border-red-300 rounded-lg"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium mb-1">Sotuv valyutasi</label>
@@ -431,7 +609,7 @@ export default function VagonSalePage() {
                       <option value="RUB">RUB (₽)</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
-                      💡 Sotuv valyutasi sotib olingan valyutadan farq qilishi mumkin
+                      💡 {t.vagonSale.saleCurrencyInfoLabel}
                     </p>
                   </div>
 

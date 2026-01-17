@@ -35,7 +35,7 @@ interface Purchase {
   xaridJoyi: string;
   xaridSanasi: string;
   valyutaKursi: number;
-  jamiUZS: number;
+  jamiRUB: number;
   tolovHolati: string;
   shartnoma?: string;
   izoh?: string;
@@ -342,12 +342,12 @@ function PurchaseContent() {
     const valyutaKursi = Number(formData.valyutaKursi) || 0;
     const kubHajmi = Number(calculatedLot.kubHajmi);
     const jamiSumma = birlikNarxi * kubHajmi;
-    const jamiUZS = valyutaKursi > 0 ? jamiSumma * valyutaKursi : 0;
+    const jamiRUB = valyutaKursi > 0 ? (formData.valyuta === 'USD' ? jamiSumma * valyutaKursi : jamiSumma) : 0;
     
     return {
       jamiSumma,
       kubHajmi,
-      jamiUZS,
+      jamiRUB,
       profitPreview: null, // Xaridda foyda yo'q
       wood: null
     };
@@ -576,7 +576,13 @@ function PurchaseContent() {
                   </label>
                   <div className="input-field bg-gray-50 cursor-not-allowed flex items-center justify-between">
                     <span className="text-gray-700 font-semibold">
-                      {formData.valyutaKursi ? `1 ${formData.valyuta} = ${formatNumber(Number(formData.valyutaKursi))} UZS` : t.dashboard.noRatesSet}
+                      {formData.valyutaKursi ? 
+                        (formData.valyuta === 'USD' ? 
+                          `1 USD = ${formatNumber(Number(formData.valyutaKursi))} RUB` : 
+                          `1 RUB = ${formatNumber(Number(formData.valyutaKursi))} USD`
+                        ) : 
+                        t.dashboard.noRatesSet
+                      }
                     </span>
                     <a 
                       href="/exchange-rates" 
@@ -620,10 +626,10 @@ function PurchaseContent() {
                       <span className="text-gray-700">{t.common.total} ({formData.valyuta}):</span>
                       <span className="font-bold text-gray-900">{formatCurrency(total.jamiSumma, formData.valyuta)}</span>
                     </div>
-                    {total.jamiUZS > 0 && (
+                    {total.jamiRUB > 0 && (
                       <div className="flex justify-between text-lg border-t border-green-300 pt-2 mt-2">
-                        <span className="text-green-900 font-semibold">{t.common.total} (UZS):</span>
-                        <span className="font-bold text-green-900">{formatCurrency(total.jamiUZS, 'UZS')}</span>
+                        <span className="text-green-900 font-semibold">{t.common.total} (RUB):</span>
+                        <span className="font-bold text-green-900">{formatCurrency(total.jamiRUB, 'RUB')}</span>
                       </div>
                     )}
                   </div>
@@ -694,7 +700,7 @@ function PurchaseContent() {
                   <div className="text-sm font-bold text-orange-600">
                     {formatCurrency(purchase.jamiSumma, purchase.valyuta)}
                   </div>
-                  <div className="text-xs text-green-600">{formatCurrency(purchase.jamiUZS, 'UZS')}</div>
+                  <div className="text-xs text-green-600">{formatCurrency(purchase.jamiRUB || 0, 'RUB')}</div>
                 </TableCell>
                 <TableCell className="text-sm text-gray-600 font-medium">
                   {new Date(purchase.xaridSanasi).toLocaleDateString('uz-UZ')}

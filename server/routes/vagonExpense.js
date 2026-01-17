@@ -123,7 +123,7 @@ router.post('/', auth, async (req, res) => {
         amount,
         description,
         expense_date: expense_date || Date.now(),
-        createdBy: req.user.id
+        createdBy: req.user.userId
       });
       
       await expense.save();
@@ -251,24 +251,24 @@ async function updateVagonTotals(vagonId) {
   const vagon = await Vagon.findById(vagonId);
   if (!vagon) return;
   
-  // Hajmlar
-  vagon.total_volume_m3 = lots.reduce((sum, lot) => sum + lot.volume_m3, 0);
-  vagon.total_loss_m3 = lots.reduce((sum, lot) => sum + lot.loss_volume_m3, 0);
-  vagon.available_volume_m3 = lots.reduce((sum, lot) => sum + lot.available_volume_m3, 0);
-  vagon.sold_volume_m3 = lots.reduce((sum, lot) => sum + lot.sold_volume_m3, 0);
-  vagon.remaining_volume_m3 = lots.reduce((sum, lot) => sum + lot.remaining_volume_m3, 0);
+  // Hajmlar (yangi terminologiya bilan xavfsiz hisoblash)
+  vagon.total_volume_m3 = lots.reduce((sum, lot) => sum + (lot.volume_m3 || 0), 0);
+  vagon.total_loss_m3 = lots.reduce((sum, lot) => sum + (lot.loss_volume_m3 || 0), 0);
+  vagon.available_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_available_volume_m3 || lot.available_volume_m3 || 0), 0);
+  vagon.sold_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_dispatched_volume_m3 || lot.sold_volume_m3 || 0), 0);
+  vagon.remaining_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0), 0);
   
-  // USD
+  // USD (yangi terminologiya bilan)
   const usdLots = lots.filter(lot => lot.purchase_currency === 'USD');
-  vagon.usd_total_cost = usdLots.reduce((sum, lot) => sum + lot.total_expenses, 0);
-  vagon.usd_total_revenue = usdLots.reduce((sum, lot) => sum + lot.total_revenue, 0);
-  vagon.usd_profit = usdLots.reduce((sum, lot) => sum + lot.profit, 0);
+  vagon.usd_total_cost = usdLots.reduce((sum, lot) => sum + (lot.total_investment || lot.total_expenses || 0), 0);
+  vagon.usd_total_revenue = usdLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
+  vagon.usd_profit = usdLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
   
-  // RUB
+  // RUB (yangi terminologiya bilan)
   const rubLots = lots.filter(lot => lot.purchase_currency === 'RUB');
-  vagon.rub_total_cost = rubLots.reduce((sum, lot) => sum + lot.total_expenses, 0);
-  vagon.rub_total_revenue = rubLots.reduce((sum, lot) => sum + lot.total_revenue, 0);
-  vagon.rub_profit = rubLots.reduce((sum, lot) => sum + lot.profit, 0);
+  vagon.rub_total_cost = rubLots.reduce((sum, lot) => sum + (lot.total_investment || lot.total_expenses || 0), 0);
+  vagon.rub_total_revenue = rubLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
+  vagon.rub_profit = rubLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
   
   await vagon.save();
 }

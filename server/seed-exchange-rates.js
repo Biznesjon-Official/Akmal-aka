@@ -37,7 +37,7 @@ async function seedExchangeRates() {
     for (const rateData of rates) {
       const rate = new ExchangeRate(rateData);
       await rate.save();
-      console.log(`✅ ${rateData.currency}: 1 ${rateData.currency} = ${rateData.rate.toLocaleString()} UZS`);
+      console.log(`✅ ${rateData.currency}: 1 ${rateData.currency} = ${rateData.rate.toLocaleString()} ${rateData.currency === 'USD' ? 'RUB' : 'USD'}`);
     }
 
     console.log('\n✅ Valyuta kurslari qo\'shildi!\n');

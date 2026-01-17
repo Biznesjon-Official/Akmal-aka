@@ -51,13 +51,19 @@ const saleSchema = new mongoose.Schema({
   // Valyuta kursi (o'sha kundagi)
   valyutaKursi: {
     type: Number,
-    required: true // 1 USD/RUB = ? UZS
+    required: true // 1 USD = ? RUB yoki 1 RUB = ? USD
   },
   
-  // UZS da qiymati
-  jamiUZS: {
+  // RUB da qiymati (asosiy valyuta)
+  jamiRUB: {
     type: Number,
-    required: true // jamiSumma * valyutaKursi
+    required: true
+  },
+  
+  // USD da qiymati
+  jamiUSD: {
+    type: Number,
+    default: 0
   },
   
   // To'lov holati
@@ -109,9 +115,15 @@ const saleSchema = new mongoose.Schema({
 //   next();
 // });
 
-// Jami UZS ni avtomatik hisoblash
+// Jami RUB/USD ni avtomatik hisoblash
 saleSchema.pre('save', function(next) {
-  this.jamiUZS = this.jamiSumma * this.valyutaKursi;
+  if (this.valyuta === 'USD') {
+    this.jamiUSD = this.jamiSumma;
+    this.jamiRUB = this.jamiSumma * this.valyutaKursi; // USD -> RUB
+  } else {
+    this.jamiRUB = this.jamiSumma;
+    this.jamiUSD = this.jamiSumma * this.valyutaKursi; // RUB -> USD
+  }
   
   // Qarzni hisoblash
   if (this.tolovHolati === 'qisman') {

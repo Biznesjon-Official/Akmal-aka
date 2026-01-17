@@ -30,7 +30,7 @@ interface Sale {
   sotuvJoyi: string;
   sotuvSanasi: string;
   valyutaKursi: number;
-  jamiUZS: number;
+  jamiRUB: number;
   tolovHolati: string;
   shartnoma?: string;
   izoh?: string;
@@ -248,14 +248,27 @@ function SaleContent() {
     if (!wood) return null;
     
     const birlikNarxi = Number(formData.birlikNarxi);
-    const valyutaKursi = Number(formData.valyutaKursi) || 0;
-    const jamiSumma = birlikNarxi * wood.kubHajmi;
-    const jamiUZS = valyutaKursi > 0 ? jamiSumma * valyutaKursi : 0;
+    const valyutaKursi = Number(formData.valyutaKursi) || 1;
+    let jamiSumma = birlikNarxi * wood.kubHajmi;
+    let jamiRUB = 0;
+    let jamiUSD = 0;
     
-    // Foyda hisoblash
+    if (formData.valyuta === 'USD') {
+      jamiUSD = jamiSumma;
+      jamiRUB = jamiSumma * valyutaKursi; // USD -> RUB
+    } else {
+      jamiRUB = jamiSumma;
+      // RUB -> USD konvertatsiya uchun RUB kursini topish
+      const rubRate = exchangeRates?.find((r: any) => r.currency === 'RUB');
+      if (rubRate && rubRate.rate) {
+        jamiUSD = jamiSumma * rubRate.rate; // RUB -> USD
+      }
+    }
+    
+    // Foyda hisoblash (RUB asosida)
     let profitPreview = null;
-    if (jamiUZS > 0 && (wood.jami_xarid || wood.jami_xarajat)) {
-      const expectedProfit = jamiUZS - (wood.jami_xarid || 0) - (wood.jami_xarajat || 0);
+    if (jamiRUB > 0 && (wood.jami_xarid || wood.jami_xarajat)) {
+      const expectedProfit = jamiRUB - (wood.jami_xarid || 0) - (wood.jami_xarajat || 0);
       const profitPercent = (wood.jami_xarid && wood.jami_xarid > 0) ? (expectedProfit / wood.jami_xarid) * 100 : 0;
       profitPreview = { expectedProfit, profitPercent };
     }
@@ -263,7 +276,8 @@ function SaleContent() {
     return {
       jamiSumma,
       kubHajmi: wood.kubHajmi,
-      jamiUZS,
+      jamiRUB,
+      jamiUSD,
       profitPreview,
       wood // wood obyektini ham qaytaramiz
     };
@@ -436,7 +450,13 @@ function SaleContent() {
                   </label>
                   <div className="input-field bg-gray-50 cursor-not-allowed flex items-center justify-between">
                     <span className="text-gray-700 font-semibold">
-                      {formData.valyutaKursi ? `1 ${formData.valyuta} = ${formatNumber(Number(formData.valyutaKursi))} UZS` : t.dashboard.noRatesSet}
+                      {formData.valyutaKursi ? 
+                        (formData.valyuta === 'USD' ? 
+                          `1 USD = ${formatNumber(Number(formData.valyutaKursi))} RUB` : 
+                          `1 RUB = ${formatNumber(Number(formData.valyutaKursi))} USD`
+                        ) : 
+                        t.dashboard.noRatesSet
+                      }
                     </span>
                     <a 
                       href="/exchange-rates" 
@@ -487,10 +507,16 @@ function SaleContent() {
                         <span className="text-gray-700">{t.common.total} ({formData.valyuta}):</span>
                         <span className="font-bold text-gray-900">{formatCurrency(total.jamiSumma, formData.valyuta)}</span>
                       </div>
-                      {total.jamiUZS > 0 && (
+                      {total.jamiRUB > 0 && (
                         <div className="flex justify-between text-lg border-t border-emerald-300 pt-2 mt-2">
-                          <span className="text-emerald-900 font-semibold">{t.common.total} (UZS):</span>
-                          <span className="font-bold text-emerald-900">{formatCurrency(total.jamiUZS, 'UZS')}</span>
+                          <span className="text-emerald-900 font-semibold">{t.common.total} (RUB):</span>
+                          <span className="font-bold text-emerald-900">{formatCurrency(total.jamiRUB, 'RUB')}</span>
+                        </div>
+                      )}
+                      {total.jamiUSD > 0 && (
+                        <div className="flex justify-between text-sm text-emerald-700">
+                          <span>≈ USD:</span>
+                          <span className="font-semibold">{formatCurrency(total.jamiUSD, 'USD')}</span>
                         </div>
                       )}
                     </div>
@@ -508,15 +534,15 @@ function SaleContent() {
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-700">{t.sale.title}:</span>
-                          <span className="font-bold text-green-600">+{formatCurrency(total.jamiUZS, 'UZS')}</span>
+                          <span className="font-bold text-green-600">+{formatCurrency(total.jamiRUB, 'RUB')}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-700">{t.purchase.title}:</span>
-                          <span className="font-bold text-red-600">-{formatCurrency(total.wood?.jami_xarid || 0, 'UZS')}</span>
+                          <span className="font-bold text-red-600">-{formatCurrency(total.wood?.jami_xarid || 0, 'RUB')}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-700">{t.expense.title}:</span>
-                          <span className="font-bold text-red-600">-{formatCurrency(total.wood?.jami_xarajat || 0, 'UZS')}</span>
+                          <span className="font-bold text-red-600">-{formatCurrency(total.wood?.jami_xarajat || 0, 'RUB')}</span>
                         </div>
                         <div className={`flex justify-between text-lg border-t pt-2 mt-2 ${total.profitPreview.expectedProfit >= 0 ? 'border-green-300' : 'border-red-300'}`}>
                           <span className={`font-semibold ${total.profitPreview.expectedProfit >= 0 ? 'text-green-900' : 'text-red-900'}`}>
@@ -524,7 +550,7 @@ function SaleContent() {
                           </span>
                           <div className="text-right">
                             <div className={`font-bold text-xl ${total.profitPreview.expectedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatCurrency(total.profitPreview.expectedProfit, 'UZS')}
+                              {formatCurrency(total.profitPreview.expectedProfit, 'RUB')}
                             </div>
                             <div className={`text-sm ${total.profitPreview.expectedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               ({total.profitPreview.profitPercent.toFixed(2)}%)
@@ -609,7 +635,7 @@ function SaleContent() {
                   <div className="text-sm font-bold text-emerald-600">
                     {formatCurrency(sale.jamiSumma, sale.valyuta)}
                   </div>
-                  <div className="text-xs text-green-600">{formatCurrency(sale.jamiUZS, 'UZS')}</div>
+                  <div className="text-xs text-green-600">{formatCurrency(sale.jamiRUB || 0, sale.valyuta === 'USD' ? 'RUB' : 'USD')}</div>
                 </TableCell>
                 <TableCell className="text-sm text-gray-600 font-medium">
                   {new Date(sale.sotuvSanasi).toLocaleDateString('uz-UZ')}

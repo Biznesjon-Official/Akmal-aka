@@ -119,14 +119,24 @@ router.post('/', [auth, [
     
     // 2. KEYIN XARID YARATISH
     const jamiSumma = req.body.birlikNarxi * kubHajmi;
-    const jamiUZS = jamiSumma * req.body.valyutaKursi; // UZS da qiymati
+    let jamiRUB = 0;
+    let jamiUSD = 0;
+    
+    if (req.body.valyuta === 'USD') {
+      jamiUSD = jamiSumma;
+      jamiRUB = jamiSumma * req.body.valyutaKursi; // USD -> RUB
+    } else {
+      jamiRUB = jamiSumma;
+      jamiUSD = jamiSumma * req.body.valyutaKursi; // RUB -> USD
+    }
     
     const purchaseData = {
       woodLot: wood[0]._id,
       birlikNarxi: req.body.birlikNarxi,
       valyuta: req.body.valyuta,
       jamiSumma,
-      jamiUZS, // UZS da qiymatini qo'shish
+      jamiRUB,
+      jamiUSD,
       sotuvchi: req.body.sotuvchi,
       sotuvchiTelefon: req.body.sotuvchiTelefon,
       xaridJoyi: req.body.xaridJoyi,
@@ -141,7 +151,7 @@ router.post('/', [auth, [
     
     // 3. Wood modelini yangilash
     wood[0].xarid_kursi = purchase[0].valyutaKursi;
-    wood[0].jami_xarid = jamiUZS; // Xarid summasini qo'shish
+    wood[0].jami_xarid = jamiRUB; // Xarid summasini RUB da saqlash
     await wood[0].save({ session });
     
     // 4. Kassa yozuvi yaratish (avtomatik)
@@ -149,7 +159,8 @@ router.post('/', [auth, [
       turi: 'rasxod',
       summa: jamiSumma,
       valyuta: req.body.valyuta,
-      summaUZS: jamiUZS,
+      summaRUB: jamiRUB,
+      summaUSD: jamiUSD,
       tavsif: `Xarid: ${wood[0].lotCode} - ${req.body.sotuvchi}`,
       woodLot: wood[0]._id,
       purchase: purchase[0]._id,

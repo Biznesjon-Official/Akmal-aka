@@ -57,7 +57,7 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'https://export-1-y4tz.onrender.com',
       'http://akmalaka.biznesjon.uz'
     ].filter(Boolean)
-  : ['http://localhost:3000', 'http://192.168.1.7:3000'];
+  : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://192.168.1.7:3000', 'http://10.253.83.31:3000'];
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -73,7 +73,9 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -86,6 +88,7 @@ app.use('/api/vagon', require('./routes/vagon')); // Vagonlar
 app.use('/api/vagon-lot', require('./routes/vagonLot')); // Vagon lotlari (YANGI)
 app.use('/api/vagon-expense', require('./routes/vagonExpense')); // Vagon xarajatlari (YANGI)
 app.use('/api/vagon-sale', require('./routes/vagonSale')); // Vagon sotuvlari
+app.use('/api/business-logic', require('./routes/businessLogic')); // TO'LIQ BIZNES LOGIKASI
 app.use('/api/cash', require('./routes/cash')); // Pul oqimi
 app.use('/api/wood', require('./routes/wood')); // Eski (keyinroq o'chiramiz)
 app.use('/api/kassa', require('./routes/kassa'));
@@ -94,6 +97,10 @@ app.use('/api/exchange-rate', require('./routes/exchangeRate'));
 app.use('/api/purchase', require('./routes/purchase'));
 app.use('/api/sale', require('./routes/sale'));
 app.use('/api/expense', require('./routes/expense'));
+app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // Kengaytirilgan xarajatlar
+app.use('/api/loss-liability', require('./routes/lossLiability')); // Yo'qotish javobgarligi (YANGI)
+app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // Xarajat taqsimoti (YANGI)
+app.use('/api/system-settings', require('./routes/systemSettings')); // Tizim sozlamalari (YANGI)
 app.use('/api/backup', require('./routes/backup'));
 
 // Global error handler

@@ -4,6 +4,7 @@ const VagonSale = require('../models/VagonSale');
 const Vagon = require('../models/Vagon');
 const Client = require('../models/Client');
 const auth = require('../middleware/auth');
+const { logUserAction } = require('../middleware/auditLog');
 
 // Barcha sotuvlar
 router.get('/', auth, async (req, res) => {
@@ -59,8 +60,17 @@ router.post('/', auth, async (req, res) => {
     const {
       lot,
       client,
+      warehouse_dispatched_volume_m3,
+      transport_loss_m3,
+      transport_loss_responsible_person,
+      transport_loss_reason,
+      // Backward compatibility
       sent_volume_m3,
       client_loss_m3,
+      client_loss_responsible_person,
+      client_loss_reason,
+      // BRAK JAVOBGARLIK TAQSIMOTI
+      brak_liability_distribution,
       sale_currency,
       price_per_m3,
       paid_amount,
@@ -68,7 +78,10 @@ router.post('/', auth, async (req, res) => {
     } = req.body;
     
     // Validatsiya
-    if (!lot || !client || !sent_volume_m3 || !sale_currency || !price_per_m3) {
+    const dispatchedVolume = warehouse_dispatched_volume_m3 || sent_volume_m3;
+    const transportLoss = transport_loss_m3 || client_loss_m3 || 0;
+    
+    if (!lot || !client || !dispatchedVolume || !sale_currency || !price_per_m3) {
       await session.abortTransaction();
       return res.status(400).json({ 
         message: 'Barcha majburiy maydonlar to\'ldirilishi shart' 
@@ -115,18 +128,18 @@ router.post('/', auth, async (req, res) => {
     }
     
     // Hajmni tekshirish
-    if (sent_volume_m3 > lotDoc.remaining_volume_m3) {
+    if (dispatchedVolume > lotDoc.warehouse_remaining_volume_m3) {
       await session.abortTransaction();
       return res.status(400).json({ 
-        message: `Lot da mavjud hajm: ${lotDoc.remaining_volume_m3} m³. Siz ${sent_volume_m3} m³ jo'natmoqchisiz` 
+        message: `Lot da mavjud hajm: ${lotDoc.warehouse_remaining_volume_m3} m³. Siz ${dispatchedVolume} m³ jo'natmoqchisiz` 
       });
     }
     
     // Yo'qotish tekshiruvi
-    if (client_loss_m3 && client_loss_m3 >= sent_volume_m3) {
+    if (transportLoss && transportLoss >= dispatchedVolume) {
       await session.abortTransaction();
       return res.status(400).json({ 
-        message: 'Yo\'qotish hajmi jo\'natilgan hajmdan kichik bo\'lishi kerak' 
+        message: 'Transport yo\'qotishi jo\'natilgan hajmdan kichik bo\'lishi kerak' 
       });
     }
     
@@ -152,12 +165,15 @@ router.post('/', auth, async (req, res) => {
     
     if (existingSale) {
       // Mavjud sotuvni yangilash
-      const oldSentVolume = existingSale.sent_volume_m3;
+      const oldData = existingSale.toObject();
+      const oldDispatchedVolume = existingSale.warehouse_dispatched_volume_m3 || existingSale.sent_volume_m3;
       const oldTotalPrice = existingSale.total_price;
-      const oldAcceptedVolume = existingSale.accepted_volume_m3;
+      const oldReceivedVolume = existingSale.client_received_volume_m3 || existingSale.accepted_volume_m3;
       
-      existingSale.sent_volume_m3 += sent_volume_m3;
-      existingSale.client_loss_m3 += (client_loss_m3 || 0);
+      existingSale.warehouse_dispatched_volume_m3 = (existingSale.warehouse_dispatched_volume_m3 || existingSale.sent_volume_m3) + dispatchedVolume;
+      existingSale.transport_loss_m3 = (existingSale.transport_loss_m3 || existingSale.client_loss_m3) + transportLoss;
+      existingSale.transport_loss_responsible_person = transport_loss_responsible_person || client_loss_responsible_person || existingSale.transport_loss_responsible_person;
+      existingSale.transport_loss_reason = transport_loss_reason || client_loss_reason || existingSale.transport_loss_reason;
       existingSale.sale_currency = sale_currency; // Yangi valyuta
       existingSale.price_per_m3 = price_per_m3; // Yangi narx
       existingSale.paid_amount += (paid_amount || 0);
@@ -167,17 +183,46 @@ router.post('/', auth, async (req, res) => {
       
       await existingSale.save({ session }); // pre-save hook hisoblaydi
       
+      // Audit log
+      await logUserAction(
+        req, 
+        'UPDATE', 
+        'VagonSale', 
+        existingSale._id, 
+        oldData, 
+        existingSale.toObject(), 
+        `Sotuv yangilandi: ${clientDoc.name}`,
+        { 
+          added_volume: dispatchedVolume, 
+          total_volume: existingSale.warehouse_dispatched_volume_m3,
+          transport_loss: transportLoss
+        }
+      );
+      
       sale = existingSale;
       
       // LOTNI YANGILASH (faqat farqni qo'shamiz)
-      lotDoc.sold_volume_m3 += sent_volume_m3;
+      lotDoc.warehouse_dispatched_volume_m3 += dispatchedVolume;
       lotDoc.total_revenue += (sale.total_price - oldTotalPrice);
       await lotDoc.save({ session });
       
-      // MIJOZNI YANGILASH (faqat farqni qo'shamiz)
-      clientDoc.total_received_volume += (sale.accepted_volume_m3 - oldAcceptedVolume);
-      clientDoc.total_debt += (sale.total_price - oldTotalPrice);
-      clientDoc.total_paid += (paid_amount || 0);
+      // MIJOZNI YANGILASH (valyuta bo'yicha)
+      const newReceivedVolume = sale.client_received_volume_m3 || sale.accepted_volume_m3;
+      const volumeDifference = newReceivedVolume - oldReceivedVolume;
+      const priceDifference = sale.total_price - oldTotalPrice;
+      
+      // Valyuta bo'yicha yangilash
+      if (sale.sale_currency === 'USD') {
+        clientDoc.usd_total_received_volume += volumeDifference;
+        clientDoc.usd_total_debt += priceDifference;
+        clientDoc.usd_total_paid += (paid_amount || 0);
+      } else if (sale.sale_currency === 'RUB') {
+        clientDoc.rub_total_received_volume += volumeDifference;
+        clientDoc.rub_total_debt += priceDifference;
+        clientDoc.rub_total_paid += (paid_amount || 0);
+      }
+      
+      // Backward compatibility (pre-save hook avtomatik hisoblaydi)
       await clientDoc.save({ session });
       
       console.log(`✅ Mavjud sotuv yangilandi: ${clientDoc.name} - ${lotDoc.dimensions}`);
@@ -187,8 +232,17 @@ router.post('/', auth, async (req, res) => {
         vagon: lotDoc.vagon,
         lot,
         client,
-        sent_volume_m3,
-        client_loss_m3: client_loss_m3 || 0,
+        warehouse_dispatched_volume_m3: dispatchedVolume,
+        transport_loss_m3: transportLoss,
+        transport_loss_responsible_person: transport_loss_responsible_person || client_loss_responsible_person,
+        transport_loss_reason: transport_loss_reason || client_loss_reason,
+        // BRAK JAVOBGARLIK TAQSIMOTI
+        brak_liability_distribution: brak_liability_distribution || null,
+        // Backward compatibility
+        sent_volume_m3: dispatchedVolume,
+        client_loss_m3: transportLoss,
+        client_loss_responsible_person: transport_loss_responsible_person || client_loss_responsible_person,
+        client_loss_reason: transport_loss_reason || client_loss_reason,
         sale_currency: sale_currency,
         price_per_m3,
         paid_amount: paid_amount || 0,
@@ -197,15 +251,42 @@ router.post('/', auth, async (req, res) => {
       
       await sale.save({ session });
       
+      // Audit log
+      await logUserAction(
+        req, 
+        'CREATE', 
+        'VagonSale', 
+        sale._id, 
+        null, 
+        sale.toObject(), 
+        `Yangi sotuv yaratildi: ${clientDoc.name}`,
+        { 
+          dispatched_volume: dispatchedVolume, 
+          transport_loss: transportLoss,
+          received_volume: sale.client_received_volume_m3
+        }
+      );
+      
       // LOTNI YANGILASH
-      lotDoc.sold_volume_m3 += sent_volume_m3;
+      lotDoc.warehouse_dispatched_volume_m3 += dispatchedVolume;
       lotDoc.total_revenue += sale.total_price;
       await lotDoc.save({ session });
       
-      // MIJOZNI YANGILASH
-      clientDoc.total_received_volume += sale.accepted_volume_m3;
-      clientDoc.total_debt += sale.total_price;
-      clientDoc.total_paid += sale.paid_amount;
+      // MIJOZNI YANGILASH (valyuta bo'yicha)
+      const receivedVolume = sale.client_received_volume_m3 || sale.accepted_volume_m3;
+      
+      // Valyuta bo'yicha yangilash
+      if (sale.sale_currency === 'USD') {
+        clientDoc.usd_total_received_volume += receivedVolume;
+        clientDoc.usd_total_debt += sale.total_price;
+        clientDoc.usd_total_paid += sale.paid_amount;
+      } else if (sale.sale_currency === 'RUB') {
+        clientDoc.rub_total_received_volume += receivedVolume;
+        clientDoc.rub_total_debt += sale.total_price;
+        clientDoc.rub_total_paid += sale.paid_amount;
+      }
+      
+      // Backward compatibility (pre-save hook avtomatik hisoblaydi)
       await clientDoc.save({ session });
       
       console.log(`✅ Yangi sotuv yaratildi: ${clientDoc.name} - ${lotDoc.dimensions}`);
@@ -213,6 +294,18 @@ router.post('/', auth, async (req, res) => {
     
     // VAGONNI YANGILASH (lotlardan)
     await updateVagonTotals(lotDoc.vagon, session);
+    
+    // VAGON YOPILISH TEKSHIRUVI
+    const updatedVagon = await Vagon.findById(lotDoc.vagon).session(session);
+    const canCloseResult = updatedVagon.canClose();
+    
+    if (canCloseResult.canClose && canCloseResult.reason === 'auto_close_percentage') {
+      console.log(`🔒 Vagon avtomatik yopilmoqda: ${updatedVagon.vagonCode} (${canCloseResult.soldPercentage}% sotilgan)`);
+      await updatedVagon.closeVagon(req.user.id, 'fully_sold', `Avtomatik yopildi: ${canCloseResult.soldPercentage}% sotilgan`);
+    } else if (canCloseResult.canClose && canCloseResult.reason === 'min_remaining_volume') {
+      console.log(`🔒 Vagon avtomatik yopilmoqda: ${updatedVagon.vagonCode} (${canCloseResult.remainingVolume} m³ qolgan)`);
+      await updatedVagon.closeVagon(req.user.id, 'remaining_too_small', `Avtomatik yopildi: ${canCloseResult.remainingVolume} m³ qolgan`);
+    }
     
     // Transaction commit
     await session.commitTransaction();
@@ -255,24 +348,24 @@ async function updateVagonTotals(vagonId, session) {
   const vagon = await Vagon.findById(vagonId).session(session);
   if (!vagon) return;
   
-  // Hajmlar
-  vagon.total_volume_m3 = lots.reduce((sum, lot) => sum + lot.volume_m3, 0);
-  vagon.total_loss_m3 = lots.reduce((sum, lot) => sum + lot.loss_volume_m3, 0);
-  vagon.available_volume_m3 = lots.reduce((sum, lot) => sum + lot.available_volume_m3, 0);
-  vagon.sold_volume_m3 = lots.reduce((sum, lot) => sum + lot.sold_volume_m3, 0);
-  vagon.remaining_volume_m3 = lots.reduce((sum, lot) => sum + lot.remaining_volume_m3, 0);
+  // Hajmlar (yangi terminologiya bilan xavfsiz hisoblash)
+  vagon.total_volume_m3 = lots.reduce((sum, lot) => sum + (lot.volume_m3 || 0), 0);
+  vagon.total_loss_m3 = lots.reduce((sum, lot) => sum + (lot.loss_volume_m3 || 0), 0);
+  vagon.available_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_available_volume_m3 || lot.available_volume_m3 || 0), 0);
+  vagon.sold_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_dispatched_volume_m3 || lot.sold_volume_m3 || 0), 0);
+  vagon.remaining_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0), 0);
   
-  // USD
+  // USD (yangi terminologiya bilan)
   const usdLots = lots.filter(lot => lot.purchase_currency === 'USD');
-  vagon.usd_total_cost = usdLots.reduce((sum, lot) => sum + lot.total_expenses, 0);
-  vagon.usd_total_revenue = usdLots.reduce((sum, lot) => sum + lot.total_revenue, 0);
-  vagon.usd_profit = usdLots.reduce((sum, lot) => sum + lot.profit, 0);
+  vagon.usd_total_cost = usdLots.reduce((sum, lot) => sum + (lot.total_investment || lot.total_expenses || 0), 0);
+  vagon.usd_total_revenue = usdLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
+  vagon.usd_profit = usdLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
   
-  // RUB
+  // RUB (yangi terminologiya bilan)
   const rubLots = lots.filter(lot => lot.purchase_currency === 'RUB');
-  vagon.rub_total_cost = rubLots.reduce((sum, lot) => sum + lot.total_expenses, 0);
-  vagon.rub_total_revenue = rubLots.reduce((sum, lot) => sum + lot.total_revenue, 0);
-  vagon.rub_profit = rubLots.reduce((sum, lot) => sum + lot.profit, 0);
+  vagon.rub_total_cost = rubLots.reduce((sum, lot) => sum + (lot.total_investment || lot.total_expenses || 0), 0);
+  vagon.rub_total_revenue = rubLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
+  vagon.rub_profit = rubLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
   
   await vagon.save({ session });
 }
@@ -373,5 +466,74 @@ router.post('/:id/payment', auth, async (req, res) => {
     alternative: 'POST /api/cash/client-payment'
   });
 });
+
+// HELPER FUNCTION: Vagon jami ma'lumotlarini yangilash
+async function updateVagonTotals(vagonId, session = null) {
+  try {
+    const VagonLot = require('../models/VagonLot');
+    
+    // Vagon bo'yicha barcha lotlarni olish
+    const lots = await VagonLot.find({ 
+      vagon: vagonId, 
+      isDeleted: false 
+    }).session(session);
+    
+    if (lots.length === 0) {
+      console.log(`⚠️ Vagon ${vagonId} uchun lotlar topilmadi`);
+      return;
+    }
+    
+    // Jami ma'lumotlarni hisoblash
+    let totals = {
+      total_volume_m3: 0,
+      total_loss_m3: 0,
+      available_volume_m3: 0,
+      sold_volume_m3: 0,
+      remaining_volume_m3: 0,
+      usd_total_cost: 0,
+      usd_total_revenue: 0,
+      usd_profit: 0,
+      rub_total_cost: 0,
+      rub_total_revenue: 0,
+      rub_profit: 0
+    };
+    
+    lots.forEach(lot => {
+      // Hajm ma'lumotlari (xavfsiz hisoblash)
+      totals.total_volume_m3 += lot.volume_m3 || 0;
+      totals.total_loss_m3 += lot.loss_volume_m3 || 0;
+      totals.available_volume_m3 += lot.warehouse_available_volume_m3 || lot.available_volume_m3 || 0;
+      totals.sold_volume_m3 += lot.warehouse_dispatched_volume_m3 || lot.sold_volume_m3 || 0;
+      totals.remaining_volume_m3 += lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0;
+      
+      // Moliyaviy ma'lumotlar (valyuta bo'yicha, yangi terminologiya bilan)
+      if (lot.purchase_currency === 'USD') {
+        totals.usd_total_cost += lot.total_investment || lot.total_expenses || 0;
+        totals.usd_total_revenue += lot.total_revenue || 0;
+        totals.usd_profit += lot.realized_profit || lot.profit || 0;
+      } else if (lot.purchase_currency === 'RUB') {
+        totals.rub_total_cost += lot.total_investment || lot.total_expenses || 0;
+        totals.rub_total_revenue += lot.total_revenue || 0;
+        totals.rub_profit += lot.realized_profit || lot.profit || 0;
+      }
+    });
+    
+    // Vagonni yangilash
+    const updateOptions = session ? { session } : {};
+    await Vagon.findByIdAndUpdate(vagonId, totals, updateOptions);
+    
+    console.log(`✅ Vagon ${vagonId} jami ma'lumotlari yangilandi:`, {
+      total_volume: totals.total_volume_m3,
+      sold_volume: totals.sold_volume_m3,
+      remaining_volume: totals.remaining_volume_m3,
+      usd_profit: totals.usd_profit,
+      rub_profit: totals.rub_profit
+    });
+    
+  } catch (error) {
+    console.error(`❌ Vagon ${vagonId} ma'lumotlarini yangilashda xatolik:`, error);
+    throw error;
+  }
+}
 
 module.exports = router;

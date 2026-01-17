@@ -21,7 +21,7 @@ interface Kassa {
   xarajatTuri?: string;
   summa: number;
   valyuta: string;
-  summaUZS: number;
+  summaRUB: number;
   tavsif: string;
   sana: string;
   yaratuvchi: {
@@ -109,7 +109,7 @@ function KassaContent() {
     turi: 'rasxod',
     xarajatTuri: 'transport_kelish',
     summa: '',
-    valyuta: 'UZS',
+    valyuta: 'RUB',
     valyutaKursi: '',
     tavsif: '',
     woodLot: '',
@@ -159,7 +159,7 @@ function KassaContent() {
         turi: 'rasxod',
         xarajatTuri: 'transport_kelish',
         summa: '',
-        valyuta: 'UZS',
+        valyuta: 'RUB',
         valyutaKursi: '',
         tavsif: '',
         woodLot: '',
@@ -182,22 +182,31 @@ function KassaContent() {
       return;
     }
 
-    // UZS da qiymatini hisoblash
-    let summaUZS = summaValue;
-    if (formData.valyuta !== 'UZS') {
+    // Asosiy valyutada qiymatini hisoblash (RUB)
+    let summaRUB = summaValue;
+    let summaUSD = 0;
+    
+    if (formData.valyuta === 'USD') {
       const kurs = Number(formData.valyutaKursi);
       if (!kurs || kurs <= 0) {
         showToast.error('Iltimos, valyuta kursini kiriting');
         return;
       }
-      summaUZS = summaValue * kurs;
+      summaRUB = summaValue * kurs; // USD -> RUB
+    } else if (formData.valyuta === 'RUB') {
+      // RUB -> USD konvertatsiya uchun
+      const usdRate = exchangeRates?.find((r: any) => r.currency === 'RUB');
+      if (usdRate && usdRate.rate) {
+        summaUSD = summaValue * usdRate.rate; // RUB -> USD
+      }
     }
 
     const submitData: any = {
       turi: formData.turi,
       summa: summaValue,
       valyuta: formData.valyuta,
-      summaUZS,
+      summaRUB,
+      summaUSD,
       tavsif: formData.tavsif,
       sana: formData.sana
     };
@@ -222,7 +231,7 @@ function KassaContent() {
   const handleValyutaChange = (valyuta: string) => {
     setFormData({...formData, valyuta});
     
-    if (valyuta !== 'UZS' && exchangeRates && Array.isArray(exchangeRates)) {
+    if (exchangeRates && Array.isArray(exchangeRates)) {
       const rate = exchangeRates.find((r: any) => r.currency === valyuta);
       if (rate && rate.rate) {
         setFormData(prev => ({...prev, valyuta, valyutaKursi: rate.rate.toString()}));
@@ -230,17 +239,17 @@ function KassaContent() {
     }
   };
 
-  // Balansni hisoblash
+  // Balansni hisoblash (RUB asosida)
   const calculateBalance = () => {
     if (!kassaData?.kassa) return { kirim: 0, chiqim: 0, balans: 0 };
     
     const kirim = kassaData.kassa
       .filter(k => k.turi === 'prixod' || k.turi === 'klent_prixod')
-      .reduce((sum, k) => sum + k.summaUZS, 0);
+      .reduce((sum, k) => sum + (k.summaRUB || 0), 0);
     
     const chiqim = kassaData.kassa
       .filter(k => k.turi === 'rasxod' || k.turi === 'otpr')
-      .reduce((sum, k) => sum + k.summaUZS, 0);
+      .reduce((sum, k) => sum + (k.summaRUB || 0), 0);
     
     return {
       kirim,
@@ -284,7 +293,7 @@ function KassaContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-green-700 font-medium">{t.kassa.totalIncome}</p>
-                <p className="text-2xl font-bold text-green-900 mt-1">{formatCurrency(balance.kirim, 'UZS')}</p>
+                <p className="text-2xl font-bold text-green-900 mt-1">{formatCurrency(balance.kirim, 'RUB')}</p>
               </div>
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -298,7 +307,7 @@ function KassaContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-red-700 font-medium">{t.kassa.totalExpense}</p>
-                <p className="text-2xl font-bold text-red-900 mt-1">{formatCurrency(balance.chiqim, 'UZS')}</p>
+                <p className="text-2xl font-bold text-red-900 mt-1">{formatCurrency(balance.chiqim, 'RUB')}</p>
               </div>
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -313,7 +322,7 @@ function KassaContent() {
               <div>
                 <p className={`text-sm font-medium ${balance.balans >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>Balans</p>
                 <p className={`text-2xl font-bold mt-1 ${balance.balans >= 0 ? 'text-blue-900' : 'text-orange-900'}`}>
-                  {formatCurrency(balance.balans, 'UZS')}
+                  {formatCurrency(balance.balans, 'RUB')}
                 </p>
               </div>
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -419,26 +428,25 @@ function KassaContent() {
                     value={formData.valyuta}
                     onChange={(e) => handleValyutaChange(e.target.value)}
                   >
-                    <option value="UZS">UZS (So'm)</option>
                     <option value="RUB">RUB (Rubl)</option>
                     <option value="USD">USD (Dollar)</option>
                   </select>
                 </div>
               </div>
 
-              {formData.valyuta !== 'UZS' && (
+              {formData.valyuta !== 'RUB' && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">{t.kassa.exchangeRateLabel}</label>
                   <FormattedInput
                     value={formData.valyutaKursi}
                     onChange={(value) => setFormData({...formData, valyutaKursi: value})}
-                    placeholder="130"
+                    placeholder="95.50"
                   />
                   <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    {t.kassa.exchangeRateAuto}: {formData.valyutaKursi || t.kassa.exchangeRateNotFound}
+                    {formData.valyuta === 'USD' ? '1 USD = ? RUB' : '1 RUB = ? USD'}: {formData.valyutaKursi || t.kassa.exchangeRateNotFound}
                   </p>
                 </div>
               )}
@@ -561,7 +569,7 @@ function KassaContent() {
                       {formatCurrency(item.summa, item.valyuta)}
                     </div>
                     <div className="text-xs text-gray-600">
-                      {formatCurrency(item.summaUZS, 'UZS')}
+                      {formatCurrency(item.summaRUB || 0, 'RUB')}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-gray-600">
