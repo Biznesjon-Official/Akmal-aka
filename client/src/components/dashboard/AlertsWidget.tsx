@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
+import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/utils/formatters';
 
 interface Alert {
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function AlertsWidget({ alerts }: Props) {
+  const { t } = useLanguage();
   const [expandedAlert, setExpandedAlert] = useState<number | null>(null);
   const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
 
@@ -157,16 +159,16 @@ export default function AlertsWidget({ alerts }: Props) {
                         
                         {alert.type === 'low_stock' && (
                           <div className="text-sm text-gray-600">
-                            <p><strong>{t.vagon.lotCode}:</strong> {alert.data.lotCode}</p>
+                            <p><strong>{t.vagon.vagonCode}:</strong> {alert.data.lotCode}</p>
                             <p><strong>{t.vagonSale.remainingVolumeColon}</strong> {alert.data.kubHajmi.toFixed(2)} m³</p>
                           </div>
                         )}
                         
                         {alert.type === 'transport_delay' && (
                           <div className="text-sm text-gray-600">
-                            <p><strong>{t.vagon.lotCode}:</strong> {alert.data.lotCode}</p>
+                            <p><strong>{t.vagon.vagonCode}:</strong> {alert.data.lotCode}</p>
                             <p><strong>{t.common.status}:</strong> {alert.data.status}</p>
-                            <p><strong>{t.vagon.lastUpdate}:</strong> {
+                            <p><strong>{t.common.date}:</strong> {
                               new Date(alert.data.updatedAt).toLocaleDateString('uz-UZ')
                             }</p>
                           </div>

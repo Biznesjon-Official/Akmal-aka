@@ -132,6 +132,9 @@ export const uz = {
     woodLots: 'Yog\'och Lotlari',
     trainTransport: 'Poyezd Transport',
     totalTrains: 'Jami Poyezdlar',
+    lastUpdate: 'Oxirgi yangilanish',
+    unknown: 'Noma\'lum',
+    debtorClients: 'Qarzli Mijozlar',
   },
 
   // Purchase
@@ -704,9 +707,6 @@ export const uz = {
     willNotPayForBrak: 'Brak uchun to\'lamaydi',
     acceptedVolume: 'Qabul qilingan hajm',
     pricePerM3: 'Narx (m³ uchun)',
-    clientPayment: 'Mijoz to\'lovi',
-    selectClient: 'Mijozni tanlang',
-    paymentAmount: 'To\'lov summasi',
     paymentMethod: 'To\'lov usuli',
     cash: 'Naqd pul',
     bankTransfer: 'Bank o\'tkazmasi',
@@ -731,7 +731,6 @@ export const uz = {
     deleteSuccess: 'Sotuv muvaffaqiyatli o\'chirildi',
     deleteError: 'Sotuvni o\'chirishda xatolik',
     makePayment: 'To\'lov qilish',
-    paymentAmount: 'To\'lov summasi',
     paymentSuccess: 'To\'lov muvaffaqiyatli qabul qilindi',
     paymentError: 'To\'lovni qabul qilishda xatolik',
     remainingDebt: 'Qolgan qarz',
@@ -740,7 +739,6 @@ export const uz = {
     search: 'Qidirish...',
     details: 'Sotuv ma\'lumotlari',
     vagonInfo: 'Vagon ma\'lumotlari',
-    clientInfo: 'Mijoz ma\'lumotlari',
     volumeInfo: 'Hajm ma\'lumotlari',
     paymentInfo: 'To\'lov ma\'lumotlari',
     lossPercentage: 'Yo\'qotish foizi',
@@ -788,11 +786,8 @@ export const uz = {
     remainingVolumeByStatus: 'Qolgan hajm (Status bo\'yicha)',
     // Vagon form labels
     newVagonAndLots: 'Yangi vagon va lotlar',
-    vagonInfo: 'Vagon ma\'lumotlari',
     brakInfo: 'Brak ma\'lumotlari',
     addLot: '+ Lot qo\'shish',
-    // Boshqa labels
-    lotCode: 'Lot kodi',
     // Reports labels
     costProfitability: 'Tannarx/Rentabellik',
     expenseReports: 'Xarajat hisobotlari',
@@ -812,6 +807,7 @@ export const uz = {
     profitLoss: 'Foyda/Zarar',
     vagonReports: 'Vagon hisobotlari',
     clientReports: 'Mijoz hisobotlari',
+    lotCode: 'Lot kodi',
     // Dashboard labels
     debtorClients: 'Qarzli Mijozlar',
     // Client page labels
@@ -843,7 +839,6 @@ export const uz = {
     currency: 'Valyuta',
     description: 'Tavsif',
     transactionDate: 'Tranzaksiya sanasi',
-    client: 'Mijoz',
     vagon: 'Vagon',
     sale: 'Sotuv',
     saveSuccess: 'Tranzaksiya muvaffaqiyatli saqlandi',
@@ -869,4 +864,4 @@ export const uz = {
     createdBy: 'Yaratgan',
     amountRUB: 'Summa (RUB)',
   },
-};\
+};

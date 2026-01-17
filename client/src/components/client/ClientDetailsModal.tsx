@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from '@/lib/axios';
+import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -66,6 +67,7 @@ interface Props {
 }
 
 export default function ClientDetailsModal({ clientId, onClose }: Props) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'payments' | 'lots'>('overview');
 
   const { data: clientDetails, isLoading, error } = useQuery<ClientDetailsData>({

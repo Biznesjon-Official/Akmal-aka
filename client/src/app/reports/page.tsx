@@ -281,11 +281,11 @@ export default function ReportsPage() {
   }
 
   const tabs = [
-    { id: 'profit-loss', name: t.vagon.profitLoss, icon: 'profit' },
-    { id: 'vagon', name: t.vagon.vagonReports, icon: 'vagons' },
-    { id: 'client', name: t.vagon.clientReports, icon: 'clients' },
-    { id: 'expense', name: t.vagon.expenseReports, icon: 'expenses' },
-    { id: 'cost', name: t.vagon.costProfitability, icon: 'statistics' }
+    { id: 'profit-loss', name: t.vagonSale.profitLoss, icon: 'profit' },
+    { id: 'vagon', name: t.vagonSale.vagonReports, icon: 'vagons' },
+    { id: 'client', name: t.vagonSale.clientReports, icon: 'clients' },
+    { id: 'expense', name: t.vagonSale.expenseReports, icon: 'expenses' },
+    { id: 'cost', name: t.vagonSale.costProfitability, icon: 'statistics' }
   ];
 
   return (
@@ -623,7 +623,7 @@ export default function ReportsPage() {
                               <span className="font-semibold">{formatNumber(stock.totalWeight)} t</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">{t.vagon.avgCostPrice}:</span>
+                              <span className="text-gray-600">{t.vagonSale.avgCostPrice}:</span>
                               <span className="font-semibold">{formatCurrency(stock.avgCostPrice, 'USD')}</span>
                             </div>
                           </div>
@@ -868,7 +868,7 @@ export default function ReportsPage() {
                   <Card className="p-6 bg-gradient-to-r from-red-500 to-red-600 text-white">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-red-100 text-sm">{t.vagon.totalExpenses}</p>
+                        <p className="text-red-100 text-sm">{t.vagonSale.totalExpenses}</p>
                         <p className="text-3xl font-bold">{expenseData.summary.totalExpenses}</p>
                       </div>
                       <div className="text-4xl opacity-80">💸</div>
@@ -906,11 +906,11 @@ export default function ReportsPage() {
                   </Card>
                 </div>
 
-                {/* {t.vagon.expensesByCategory} */}
+                {/* {t.vagonSale.expensesByCategory} */}
                 {expenseData.expenseByCategory && expenseData.expenseByCategory.length > 0 && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="p-6">
-                      <h3 className="text-lg font-semibold mb-4">📊 {t.vagon.expensesByCategory}</h3>
+                      <h3 className="text-lg font-semibold mb-4">📊 {t.vagonSale.expensesByCategory}</h3>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -1017,7 +1017,7 @@ export default function ReportsPage() {
               </div>
             ) : costData ? (
               <>
-                {/* {t.vagon.costStatistics} kartochkalari */}
+                {/* {t.vagonSale.costStatistics} kartochkalari */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <Card className="p-6 bg-gradient-to-r from-green-500 to-green-600 text-white">
                     <div className="flex items-center justify-between">
@@ -1062,17 +1062,17 @@ export default function ReportsPage() {
 
                 {/* Top foydali lotlar */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">🏆 Eng foydali lotlar (Top 10)</h3>
+                  <h3 className="text-lg font-semibold mb-4">Eng foydali lotlar (Top 10)</h3>
                   {costData.lotProfitability && costData.lotProfitability.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.vagon.lotCode}</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagon.costPrice}</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagon.expenses}</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagon.revenue}</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagon.profit}</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.vagonSale.lotCode}</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagonSale.costPrice}</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagonSale.expenses}</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagonSale.revenue}</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.vagonSale.profit}</th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Rentabellik</th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">ROI</th>
                           </tr>
@@ -1155,7 +1155,7 @@ export default function ReportsPage() {
                               <span className="font-semibold">{formatNumber(dimension.totalVolume)} m³</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">{t.vagon.avgCostPrice}:</span>
+                              <span className="text-gray-600">{t.vagonSale.avgCostPrice}:</span>
                               <span className="font-semibold">{formatCurrency(dimension.avgCostPrice, 'USD')}</span>
                             </div>
                             <div className="flex justify-between">
@@ -1198,7 +1198,7 @@ export default function ReportsPage() {
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">{t.vagon.costPrice}:</span>
+                              <span className="text-gray-600">{t.vagonSale.costPrice}:</span>
                               <span className="font-bold text-red-600">
                                 {formatCurrency(currency.totalCost, currency._id)}
                               </span>
@@ -1233,7 +1233,7 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-12 text-gray-500">
                 <div className="text-4xl mb-4">📊</div>
-                <p>{t.vagon.costInfoNotFound}</p>
+                <p>{t.vagonSale.costInfoNotFound}</p>
               </div>
             )}
           </div>

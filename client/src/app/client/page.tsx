@@ -218,9 +218,9 @@ export default function ClientPage() {
               onChange={(e) => setFilterBy(e.target.value as any)}
               className="px-3 py-2 border rounded-lg"
             >
-              <option value="all">{t.vagon.allClients}</option>
-              <option value="debt">{t.vagon.clientsWithDebt}</option>
-              <option value="no-debt">{t.vagon.clientsWithoutDebt}</option>
+              <option value="all">{t.vagonSale.allClients}</option>
+              <option value="debt">{t.vagonSale.clientsWithDebt}</option>
+              <option value="no-debt">{t.vagonSale.clientsWithoutDebt}</option>
             </select>
             
             <select
@@ -246,7 +246,7 @@ export default function ClientPage() {
             <div className="text-2xl font-bold text-red-600">
               {clients.filter(c => (c.usd_current_debt || 0) > 0 || (c.rub_current_debt || 0) > 0).length}
             </div>
-            <div className="text-sm text-red-600">{t.vagon.clientsWithDebt}</div>
+            <div className="text-sm text-red-600">{t.vagonSale.clientsWithDebt}</div>
           </div>
           <div className="bg-green-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-green-600">

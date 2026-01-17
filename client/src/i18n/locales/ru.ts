@@ -132,6 +132,9 @@ export const ru = {
     woodLots: 'Лоты древесины',
     trainTransport: 'Железнодорожный транспорт',
     totalTrains: 'Всего поездов',
+    lastUpdate: 'Последнее обновление',
+    unknown: 'Неизвестно',
+    debtorClients: 'Клиенты-должники',
   },
 
   // Purchase
@@ -720,6 +723,8 @@ export const ru = {
     forceClose: 'Принудительно закрыть',
     closedVagon: 'Закрытый вагон',
     closureReason: 'Причина закрытия',
+    lastUpdate: 'Последнее обновление',
+    unknown: 'Неизвестно',
   },
 
   // VagonSale
@@ -743,9 +748,6 @@ export const ru = {
     willNotPayForBrak: 'Не платит за брак',
     acceptedVolume: 'Принятый объем',
     pricePerM3: 'Цена (за м³)',
-    clientPayment: 'Платеж клиента',
-    selectClient: 'Выберите клиента',
-    paymentAmount: 'Сумма платежа',
     paymentMethod: 'Способ оплаты',
     cash: 'Наличные',
     bankTransfer: 'Банковский перевод',
@@ -770,7 +772,6 @@ export const ru = {
     deleteSuccess: 'Продажа успешно удалена',
     deleteError: 'Ошибка при удалении продажи',
     makePayment: 'Сделать платеж',
-    paymentAmount: 'Сумма платежа',
     paymentSuccess: 'Платеж успешно принят',
     paymentError: 'Ошибка при приеме платежа',
     remainingDebt: 'Остаток долга',
@@ -779,7 +780,6 @@ export const ru = {
     search: 'Поиск...',
     details: 'Информация о продаже',
     vagonInfo: 'Информация о вагоне',
-    clientInfo: 'Информация о клиенте',
     volumeInfo: 'Информация об объеме',
     paymentInfo: 'Информация о платеже',
     lossPercentage: 'Процент потерь',
@@ -827,11 +827,8 @@ export const ru = {
     remainingVolumeByStatus: 'Остаток объема (по статусу)',
     // Vagon form labels
     newVagonAndLots: 'Новый вагон и лоты',
-    vagonInfo: 'Информация о вагоне',
     brakInfo: 'Информация о браке',
     addLot: '+ Добавить лот',
-    // Boshqa labels
-    lotCode: 'Код лота',
     // Reports labels
     costProfitability: 'Себестоимость/Рентабельность',
     expenseReports: 'Отчеты по расходам',
@@ -851,6 +848,7 @@ export const ru = {
     profitLoss: 'Прибыль/Убыток',
     vagonReports: 'Отчеты по вагонам',
     clientReports: 'Отчеты по клиентам',
+    lotCode: 'Код лота',
     // Dashboard labels
     debtorClients: 'Клиенты-должники',
     // Client page labels
@@ -882,7 +880,6 @@ export const ru = {
     currency: 'Валюта',
     description: 'Описание',
     transactionDate: 'Дата транзакции',
-    client: 'Клиент',
     vagon: 'Вагон',
     sale: 'Продажа',
     saveSuccess: 'Транзакция успешно сохранена',

@@ -226,9 +226,9 @@ export default function RealTimeDashboard() {
             {displayData?.title || '📈 Real-time Dashboard'}
           </h1>
           <p className="text-gray-600 mt-1">
-            {displayData?.subtitle} • {t.vagon.lastUpdate}: {dashboardData?.lastUpdated ? 
+            {displayData?.subtitle} • {t.dashboard.lastUpdate}: {dashboardData?.lastUpdated ? 
               new Date(dashboardData.lastUpdated).toLocaleTimeString('uz-UZ') : 
-              t.vagon.unknown
+              t.dashboard.unknown
             }
           </p>
         </div>
@@ -287,10 +287,25 @@ export default function RealTimeDashboard() {
         </div>
       </div>
 
-      {/* Ogohlantirishlar */}
-      {dashboardData?.alerts && dashboardData.alerts.length > 0 && (
+      {/* Ogohlantirishlar - faqat debt, low_stock, transport_delay turlari uchun */}
+      {dashboardData?.debtClients && dashboardData.debtClients.length > 0 && (
         <div className="mb-8">
-          <AlertsWidget alerts={dashboardData.alerts} />
+          <AlertsWidget alerts={[
+            ...dashboardData.debtClients.map((client: any) => ({
+              type: 'debt' as const,
+              priority: client.total_debt > 10000 ? 'high' as const : 'medium' as const,
+              title: 'Qarz',
+              message: `${client.name} - ${client.total_debt.toLocaleString()} USD qarz`,
+              data: client
+            })),
+            ...(dashboardData.lowStockLots || []).map((lot: any) => ({
+              type: 'low_stock' as const,
+              priority: lot.kubHajmi < 10 ? 'high' as const : 'medium' as const,
+              title: 'Kam qoldi',
+              message: `${lot.lotCode} - ${lot.kubHajmi.toFixed(2)} m³ qoldi`,
+              data: lot
+            }))
+          ]} />
         </div>
       )}
 
@@ -375,7 +390,7 @@ export default function RealTimeDashboard() {
         {/* Qarzli mijozlar */}
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            🚨 {t.vagon.debtorClients}
+            🚨 {t.dashboard.debtorClients}
           </h3>
           <div className="space-y-3">
             {dashboardData?.debtClients?.slice(0, 5).map((client: any, index: number) => (

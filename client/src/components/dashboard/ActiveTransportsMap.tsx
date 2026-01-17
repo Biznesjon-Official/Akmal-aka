@@ -1,6 +1,7 @@
 'use client';
 
 import { Card } from '@/components/ui/Card';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface Transport {
   _id: string;
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function ActiveTransportsMap({ data }: Props) {
+  const { t } = useLanguage();
   const transportsByStatus = data.reduce((acc, transport) => {
     if (!acc[transport.status]) {
       acc[transport.status] = [];

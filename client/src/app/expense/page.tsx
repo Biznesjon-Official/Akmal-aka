@@ -299,7 +299,7 @@ export default function ExpensePage() {
                 onChange={(e) => setFilters({...filters, xarajatTuri: e.target.value})}
                 className="w-full px-3 py-2 border rounded-lg"
               >
-                <option value="">{t.vagon.allTypes}</option>
+                <option value="">{t.vagonSale.allTypes}</option>
                 {expenseTypes?.map(type => (
                   <option key={type.id} value={type.id}>
                     {type.icon} {type.name}
@@ -315,7 +315,7 @@ export default function ExpensePage() {
                 onChange={(e) => setFilters({...filters, valyuta: e.target.value})}
                 className="w-full px-3 py-2 border rounded-lg"
               >
-                <option value="">{t.vagon.allCurrencies}</option>
+                <option value="">{t.vagonSale.allCurrencies}</option>
                 <option value="USD">USD ($)</option>
                 <option value="RUB">RUB (₽)</option>
               </select>

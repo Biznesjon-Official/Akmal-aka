@@ -329,9 +329,9 @@ export default function Dashboard() {
               {displayData?.title || 'Bosh Sahifa'}
             </h1>
             <p className="text-blue-100 mt-2">
-              {displayData?.subtitle || t.dashboard.statistics} • {t.vagon.lastUpdate}: {dashboardData?.lastUpdated ? 
+              {displayData?.subtitle || t.dashboard.statistics} • {t.dashboard.lastUpdate}: {dashboardData?.lastUpdated ? 
                 new Date(dashboardData.lastUpdated).toLocaleTimeString('uz-UZ') : 
-                t.vagon.unknown
+                t.dashboard.unknown
               }
             </p>
           </div>
@@ -541,7 +541,7 @@ export default function Dashboard() {
         {/* Qarzli mijozlar */}
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            🚨 {t.vagon.debtorClients}
+            {t.dashboard.debtorClients}
           </h3>
           <div className="space-y-3">
             {dashboardData?.debtClients?.slice(0, 5).map((client: any, index: number) => (
