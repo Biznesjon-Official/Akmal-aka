@@ -18,7 +18,9 @@ interface Client {
   name: string;
   phone: string;
   usd_total_debt: number;
+  usd_current_debt: number;
   rub_total_debt: number;
+  rub_current_debt: number;
   usd_total_paid: number;
   rub_total_paid: number;
 }
@@ -42,7 +44,7 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
     queryFn: async () => {
       const response = await axios.get('/client');
       return response.data.filter((client: Client) => 
-        client.usd_total_debt > 0 || client.rub_total_debt > 0
+        client.usd_current_debt > 0 || client.rub_current_debt > 0
       );
     }
   });
@@ -66,8 +68,8 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
 
     // Qarz tekshiruvi
     const clientDebt = paymentCurrency === 'USD' 
-      ? selectedClientData?.usd_total_debt || 0
-      : selectedClientData?.rub_total_debt || 0;
+      ? selectedClientData?.usd_current_debt || 0
+      : selectedClientData?.rub_current_debt || 0;
 
     if (amount > clientDebt) {
       alert(`${t.messages.clientDebt}: ${formatCurrency(clientDebt, paymentCurrency)}. ${t.messages.youEntered} ${formatCurrency(amount, paymentCurrency)} kiritdingiz.`);
@@ -104,24 +106,24 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
   };
 
   if (clientsLoading) {
-    return <div className="text-center py-4">Mijozlar yuklanmoqda...</div>;
+    return <div className="text-center py-4">{t.kassa.clientsLoading}</div>;
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Mijoz tanlash */}
       <div>
-        <label className="block text-sm font-medium mb-2">Mijozni tanlang</label>
+        <label className="block text-sm font-medium mb-2">{t.kassa.selectClient}</label>
         <select
           value={selectedClient}
           onChange={(e) => setSelectedClient(e.target.value)}
           className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
           required
         >
-          <option value="">Mijozni tanlang...</option>
+          <option value="">{t.kassa.selectClientPlaceholder}</option>
           {clients?.map((client) => (
             <option key={client._id} value={client._id}>
-              {client.name} - USD: {formatCurrency(client.usd_total_debt, 'USD')}, RUB: {formatCurrency(client.rub_total_debt, 'RUB')}
+              {client.name} - USD: {formatCurrency(client.usd_current_debt, 'USD')}, RUB: {formatCurrency(client.rub_current_debt, 'RUB')}
             </option>
           ))}
         </select>
@@ -132,7 +134,7 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
           <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
             <Icon name="details" className="mr-2" size="sm" />
-            Mijoz ma'lumotlari:
+            {t.kassa.clientInfo}
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
@@ -147,10 +149,10 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
             </div>
             <div>
               <div className="text-red-600">
-                <strong>USD qarzi:</strong> {formatCurrency(selectedClientData.usd_total_debt, 'USD')}
+                <strong>{t.kassa.usdDebt}</strong> {formatCurrency(selectedClientData.usd_current_debt, 'USD')}
               </div>
               <div className="text-red-600">
-                <strong>RUB qarzi:</strong> {formatCurrency(selectedClientData.rub_total_debt, 'RUB')}
+                <strong>{t.kassa.rubDebt}</strong> {formatCurrency(selectedClientData.rub_current_debt, 'RUB')}
               </div>
             </div>
           </div>
@@ -160,7 +162,7 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
       {/* To'lov summasi va valyuta */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2">To'lov summasi</label>
+          <label className="block text-sm font-medium mb-2">{t.kassa.paymentAmount}</label>
           <input
             type="number"
             step="0.01"
@@ -173,7 +175,7 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">Valyuta</label>
+          <label className="block text-sm font-medium mb-2">{t.kassa.currencyLabel}</label>
           <select
             value={paymentCurrency}
             onChange={(e) => setPaymentCurrency(e.target.value)}
@@ -187,26 +189,26 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
 
       {/* To'lov usuli */}
       <div>
-        <label className="block text-sm font-medium mb-2">To'lov usuli</label>
+        <label className="block text-sm font-medium mb-2">{t.kassa.paymentMethod}</label>
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
           className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
         >
-          <option value="cash">Naqd pul</option>
-          <option value="bank_transfer">Bank o'tkazmasi</option>
-          <option value="card">Plastik karta</option>
-          <option value="other">Boshqa</option>
+          <option value="cash">{t.kassa.cash}</option>
+          <option value="bank_transfer">{t.kassa.bankTransfer}</option>
+          <option value="card">{t.kassa.card}</option>
+          <option value="other">{t.kassa.other}</option>
         </select>
       </div>
 
       {/* Izoh */}
       <div>
-        <label className="block text-sm font-medium mb-2">Izoh (ixtiyoriy)</label>
+        <label className="block text-sm font-medium mb-2">{t.kassa.notesOptional}</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="To'lov haqida qo'shimcha ma'lumot..."
+          placeholder={t.kassa.notesPlaceholder}
           className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
           rows={2}
         />
@@ -217,31 +219,31 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
         <div className="bg-green-50 p-4 rounded-lg border border-green-200">
           <h4 className="font-semibold text-green-800 mb-2 flex items-center">
             <Icon name="cash" className="mr-2" size="sm" />
-            To'lovdan keyin:
+            {t.kassa.afterPayment}
           </h4>
           <div className="text-sm space-y-1">
             {paymentCurrency === 'USD' ? (
               <>
-                <div>USD qarzi: {formatCurrency(selectedClientData.usd_total_debt, 'USD')} → {formatCurrency(Math.max(0, selectedClientData.usd_total_debt - parseFloat(paymentAmount || '0')), 'USD')}</div>
+                <div>{t.kassa.usdDebt} {formatCurrency(selectedClientData.usd_current_debt, 'USD')} → {formatCurrency(Math.max(0, selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0')), 'USD')}</div>
                 <div className="text-green-600 font-medium flex items-center">
                   <Icon 
-                    name={selectedClientData.usd_total_debt - parseFloat(paymentAmount || '0') <= 0 ? 'success' : 'warning'} 
+                    name={selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 ? 'success' : 'warning'} 
                     className="mr-1" 
                     size="sm" 
                   />
-                  {selectedClientData.usd_total_debt - parseFloat(paymentAmount || '0') <= 0 ? 'USD qarzi to\'liq to\'lanadi!' : 'USD qarzi qoladi'}
+                  {selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 ? `USD ${t.kassa.debtWillBePaid}` : `USD ${t.kassa.debtWillRemain}`}
                 </div>
               </>
             ) : (
               <>
-                <div>RUB qarzi: {formatCurrency(selectedClientData.rub_total_debt, 'RUB')} → {formatCurrency(Math.max(0, selectedClientData.rub_total_debt - parseFloat(paymentAmount || '0')), 'RUB')}</div>
+                <div>{t.kassa.rubDebt} {formatCurrency(selectedClientData.rub_current_debt, 'RUB')} → {formatCurrency(Math.max(0, selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0')), 'RUB')}</div>
                 <div className="text-green-600 font-medium flex items-center">
                   <Icon 
-                    name={selectedClientData.rub_total_debt - parseFloat(paymentAmount || '0') <= 0 ? 'success' : 'warning'} 
+                    name={selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 ? 'success' : 'warning'} 
                     className="mr-1" 
                     size="sm" 
                   />
-                  {selectedClientData.rub_total_debt - parseFloat(paymentAmount || '0') <= 0 ? 'RUB qarzi to\'liq to\'lanadi!' : 'RUB qarzi qoladi'}
+                  {selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 ? `RUB ${t.kassa.debtWillBePaid}` : `RUB ${t.kassa.debtWillRemain}`}
                 </div>
               </>
             )}
@@ -258,12 +260,12 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
         {isSubmitting ? (
           <>
             <Icon name="loading" className="mr-2 animate-spin" size="sm" />
-            Saqlanmoqda...
+            {t.kassa.saving}
           </>
         ) : (
           <>
             <Icon name="save" className="mr-2" size="sm" />
-            To'lovni Saqlash
+            {t.kassa.savePayment}
           </>
         )}
       </button>
@@ -430,10 +432,10 @@ export default function CashPage() {
   }
 
   const tabs = [
-    { id: 'overview', name: 'Umumiy', icon: 'dashboard' },
-    { id: 'income', name: 'Kirim', icon: 'cash' },
-    { id: 'expense', name: 'Chiqim', icon: 'expenses' },
-    { id: 'report', name: 'Hisobot', icon: 'reports' }
+    { id: 'overview', name: t.kassa.overview, icon: 'dashboard' },
+    { id: 'income', name: t.kassa.income, icon: 'cash' },
+    { id: 'expense', name: t.kassa.expense, icon: 'expenses' },
+    { id: 'report', name: t.kassa.report, icon: 'reports' }
   ];
 
   return (
@@ -444,9 +446,9 @@ export default function CashPage() {
           <div>
             <h1 className="text-3xl font-bold flex items-center">
               <Icon name="cash" className="mr-3 text-green-600" size="lg" />
-              Professional Kassa
+              {t.kassa.professionalKassa}
             </h1>
-            <p className="text-gray-600 mt-1">Kirim, chiqim va moliyaviy hisobotlar</p>
+            <p className="text-gray-600 mt-1">{t.kassa.kassaDescription}</p>
           </div>
           <button
             onClick={() => {
@@ -456,7 +458,7 @@ export default function CashPage() {
             className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg hover:from-green-600 hover:to-green-700 flex items-center shadow-lg"
           >
             <Icon name="add" className="mr-2" />
-            Yangi tranzaksiya
+            {t.kassa.newTransaction}
           </button>
         </div>
 
@@ -490,7 +492,7 @@ export default function CashPage() {
                   <Card key={currency} className="p-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-100 text-sm">{currency} Balans</p>
+                        <p className="text-blue-100 text-sm">{currency} {t.kassa.balance}</p>
                         <p className="text-3xl font-bold">
                           {formatCurrency(balance as number, currency)}
                         </p>
@@ -509,7 +511,7 @@ export default function CashPage() {
               <Card className="p-6">
                 <h3 className="text-lg font-semibold mb-4 flex items-center">
                   <Icon name="statistics" className="mr-2" />
-                  Foyda/Zarar Tahlili
+                  {t.kassa.profitLossAnalysis}
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -522,20 +524,20 @@ export default function CashPage() {
                       
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-green-600">Kirim:</span>
+                          <span className="text-green-600">{t.kassa.income}:</span>
                           <span className="font-semibold text-green-600">
                             +{formatCurrency(data.kirim, currency)}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-red-600">Chiqim:</span>
+                          <span className="text-red-600">{t.kassa.expense}:</span>
                           <span className="font-semibold text-red-600">
                             -{formatCurrency(data.chiqim, currency)}
                           </span>
                         </div>
                         <hr />
                         <div className="flex justify-between">
-                          <span className="font-bold">Foyda:</span>
+                          <span className="font-bold">{t.dashboard.profit}:</span>
                           <span className={`font-bold text-lg ${
                             data.foyda >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
@@ -553,9 +555,9 @@ export default function CashPage() {
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <span className="text-2xl mr-2">📋</span>
-                So'nggi Tranzaksiyalar
+                {t.kassa.recentTransactions}
               </h3>
-              <p className="text-gray-600">So'nggi tranzaksiyalar ro'yxati tez orada qo'shiladi...</p>
+              <p className="text-gray-600">{t.kassa.recentTransactionsDescription}</p>
             </Card>
           </div>
         )}
@@ -566,7 +568,7 @@ export default function CashPage() {
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <span className="text-2xl mr-2">👤</span>
-                Mijoz To'lovi
+                {t.kassa.clientPayment}
               </h3>
               
               <ClientPaymentForm onPaymentSuccess={() => refetchReport()} />
@@ -576,9 +578,9 @@ export default function CashPage() {
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <span className="text-2xl mr-2">💰</span>
-                Boshqa Kirimlar
+                {t.kassa.otherIncome}
               </h3>
-              <p className="text-gray-600">Mijozlardan tashqari boshqa kirim manbalari...</p>
+              <p className="text-gray-600">{t.kassa.otherIncomeDescription}</p>
             </Card>
           </div>
         )}
@@ -587,9 +589,9 @@ export default function CashPage() {
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center">
               <span className="text-2xl mr-2">💸</span>
-              Chiqim Tranzaksiyalari
+              {t.kassa.expenseTransactions}
             </h3>
-            <p className="text-gray-600">Chiqim tranzaksiyalari ro'yxati va statistikasi...</p>
+            <p className="text-gray-600">{t.kassa.expenseTransactionsDescription}</p>
           </Card>
         )}
 
@@ -599,12 +601,12 @@ export default function CashPage() {
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <span className="text-2xl mr-2">🔍</span>
-                Hisobot Filterlari
+                {t.kassa.reportFilters}
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Boshlanish sanasi</label>
+                  <label className="block text-sm font-medium mb-1">{t.kassa.startDate}</label>
                   <input
                     type="date"
                     value={filters.startDate}
@@ -614,7 +616,7 @@ export default function CashPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Tugash sanasi</label>
+                  <label className="block text-sm font-medium mb-1">{t.kassa.endDate}</label>
                   <input
                     type="date"
                     value={filters.endDate}
@@ -624,27 +626,27 @@ export default function CashPage() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Valyuta</label>
+                  <label className="block text-sm font-medium mb-1">{t.kassa.currencyLabel}</label>
                   <select
                     value={filters.valyuta}
                     onChange={(e) => setFilters({...filters, valyuta: e.target.value})}
                     className="w-full px-3 py-2 border rounded-lg"
                   >
-                    <option value="">Barchasi</option>
+                    <option value="">{t.kassa.allCurrencies}</option>
                     <option value="USD">💵 USD</option>
                     <option value="RUB">💶 RUB</option>
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Davr</label>
+                  <label className="block text-sm font-medium mb-1">{t.kassa.period}</label>
                   <select
                     value={filters.period}
                     onChange={(e) => setFilters({...filters, period: e.target.value})}
                     className="w-full px-3 py-2 border rounded-lg"
                   >
-                    <option value="day">Kunlik</option>
-                    <option value="month">Oylik</option>
+                    <option value="day">{t.kassa.daily}</option>
+                    <option value="month">{t.kassa.monthly}</option>
                   </select>
                 </div>
               </div>
@@ -654,9 +656,9 @@ export default function CashPage() {
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <span className="text-2xl mr-2">📊</span>
-                Moliyaviy Hisobot
+                {t.kassa.financialReport}
               </h3>
-              <p className="text-gray-600">Grafiklar va batafsil tahlil tez orada qo'shiladi...</p>
+              <p className="text-gray-600">{t.kassa.financialReportDescription}</p>
             </Card>
           </div>
         )}
@@ -669,7 +671,7 @@ export default function CashPage() {
                 <span className="text-3xl mr-3">
                   {formData.turi === 'income' ? '💰' : '💸'}
                 </span>
-                {formData.turi === 'income' ? 'Kirim Qo\'shish' : 'Chiqim Qo\'shish'}
+                {formData.turi === 'income' ? t.kassa.addIncome : t.kassa.addExpense}
               </h2>
               
               <form onSubmit={handleSubmit}>
@@ -677,7 +679,7 @@ export default function CashPage() {
                   {/* Transaction Type */}
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Tranzaksiya turi
+                      {t.kassa.transactionType}
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
@@ -690,8 +692,8 @@ export default function CashPage() {
                         }`}
                       >
                         <div className="text-2xl mb-2">💰</div>
-                        <div className="font-semibold">Kirim</div>
-                        <div className="text-xs text-gray-600">Mijoz to'lovi, boshqa manbalar</div>
+                        <div className="font-semibold">{t.kassa.incomeType}</div>
+                        <div className="text-xs text-gray-600">{t.kassa.incomeDescription}</div>
                       </button>
                       
                       <button
@@ -704,8 +706,8 @@ export default function CashPage() {
                         }`}
                       >
                         <div className="text-2xl mb-2">💸</div>
-                        <div className="font-semibold">Chiqim</div>
-                        <div className="text-xs text-gray-600">Xarajatlar, maosh, boshqa</div>
+                        <div className="font-semibold">{t.kassa.expenseType}</div>
+                        <div className="text-xs text-gray-600">{t.kassa.expenseDescription}</div>
                       </button>
                     </div>
                   </div>
@@ -714,7 +716,7 @@ export default function CashPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
-                        Summa
+                        {t.kassa.amountLabel}
                       </label>
                       <input
                         type="number"
@@ -729,7 +731,7 @@ export default function CashPage() {
 
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
-                        Valyuta
+                        {t.kassa.currencyLabel}
                       </label>
                       <select
                         required
@@ -746,13 +748,13 @@ export default function CashPage() {
                   {/* Description */}
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Tavsif
+                      {t.kassa.descriptionLabel}
                     </label>
                     <textarea
                       required
                       value={formData.tavsif}
                       onChange={(e) => setFormData({...formData, tavsif: e.target.value})}
-                      placeholder="Tranzaksiya haqida batafsil ma'lumot..."
+                      placeholder={t.kassa.transactionDescription}
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
                       rows={3}
                     />
@@ -762,7 +764,7 @@ export default function CashPage() {
                   {formData.turi === 'expense' && (
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
-                        Xarajat turi
+                        {t.kassa.expenseTypeLabel}
                       </label>
                       <select
                         required
@@ -770,16 +772,16 @@ export default function CashPage() {
                         onChange={(e) => setFormData({...formData, xarajatTuri: e.target.value})}
                         className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
                       >
-                        <option value="">Turni tanlang...</option>
-                        <option value="transport_kelish">🚛 Transport (Kelish)</option>
-                        <option value="transport_ketish">🚛 Transport (Ketish)</option>
-                        <option value="bojxona_kelish">🛃 Bojxona (Import)</option>
-                        <option value="bojxona_ketish">🛃 Bojxona (Export)</option>
-                        <option value="yuklash_tushirish">📦 Yuklash/Tushirish</option>
-                        <option value="saqlanish">🏢 Ombor/Saqlanish</option>
-                        <option value="ishchilar">👷 Ishchilar</option>
-                        <option value="maosh">💰 Maosh</option>
-                        <option value="boshqa">📝 Boshqa</option>
+                        <option value="">{t.kassa.selectExpenseType}</option>
+                        <option value="transport_kelish">🚛 {t.kassa.transportIncoming}</option>
+                        <option value="transport_ketish">🚛 {t.kassa.transportOutgoing}</option>
+                        <option value="bojxona_kelish">🛃 {t.kassa.customsImport}</option>
+                        <option value="bojxona_ketish">🛃 {t.kassa.customsExport}</option>
+                        <option value="yuklash_tushirish">📦 {t.kassa.loadingUnloading}</option>
+                        <option value="saqlanish">🏢 {t.kassa.warehouse}</option>
+                        <option value="ishchilar">👷 {t.kassa.workers}</option>
+                        <option value="maosh">💰 {t.kassa.salary}</option>
+                        <option value="boshqa">📝 {t.kassa.other}</option>
                       </select>
                     </div>
                   )}
@@ -790,26 +792,26 @@ export default function CashPage() {
                       <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Manba (ixtiyoriy)
+                            {t.kassa.sourceOptional}
                           </label>
                           <input
                             type="text"
                             value={formData.manba || ''}
                             onChange={(e) => setFormData({...formData, manba: e.target.value})}
-                            placeholder="Kirim manbai"
+                            placeholder={t.kassa.sourcePlaceholder}
                             className="w-full px-3 py-2 border rounded-lg"
                           />
                         </div>
                         
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Mijoz nomi (ixtiyoriy)
+                            {t.kassa.clientNameOptional}
                           </label>
                           <input
                             type="text"
                             value={formData.mijozNomi || ''}
                             onChange={(e) => setFormData({...formData, mijozNomi: e.target.value})}
-                            placeholder="Mijoz ismi"
+                            placeholder={t.kassa.clientNamePlaceholder}
                             className="w-full px-3 py-2 border rounded-lg"
                           />
                         </div>
@@ -818,7 +820,7 @@ export default function CashPage() {
                       <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Javobgar shaxs (ixtiyoriy)
+                            {t.kassa.responsibleOptional}
                           </label>
                           <input
                             type="text"
@@ -831,7 +833,7 @@ export default function CashPage() {
                         
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Hujjat raqami (ixtiyoriy)
+                            {t.kassa.documentOptional}
                           </label>
                           <input
                             type="text"
@@ -848,7 +850,7 @@ export default function CashPage() {
                   {/* Date */}
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Sana
+                      {t.kassa.dateLabel}
                     </label>
                     <input
                       type="date"
@@ -869,7 +871,7 @@ export default function CashPage() {
                     }}
                     className="flex-1 bg-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-400 font-semibold"
                   >
-                    Bekor qilish
+                    {t.kassa.cancel}
                   </button>
                   <button
                     type="submit"
@@ -879,7 +881,7 @@ export default function CashPage() {
                         : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
                     }`}
                   >
-                    {formData.turi === 'income' ? 'Kirimni Saqlash' : 'Chiqimni Saqlash'}
+                    {formData.turi === 'income' ? t.kassa.saveIncome : t.kassa.saveExpense}
                   </button>
                 </div>
               </form>

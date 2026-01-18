@@ -22,9 +22,11 @@ const translations: Record<Language, Translations> = {
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Default til rus
   const [language, setLanguageState] = useState<Language>('ru');
+  const [mounted, setMounted] = useState(false);
 
   // Load language from localStorage on mount
   useEffect(() => {
+    setMounted(true);
     if (typeof window === 'undefined') return;
     
     const savedLanguage = localStorage.getItem('language') as Language;
@@ -46,6 +48,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     setLanguage,
     t: translations[language],
   }), [language, setLanguage]);
+
+  // Prevent hydration mismatch
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <LanguageContext.Provider value={value}>

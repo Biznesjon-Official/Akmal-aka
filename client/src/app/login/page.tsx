@@ -76,7 +76,7 @@ function LoginContent() {
         <div className="card">
           <div className="text-center mb-8">
             <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-blue-700 rounded-3xl flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6 shadow-lg">
-              W
+              A
             </div>
             <h2 className="text-3xl font-bold text-gray-900">
               {t.auth.login}
@@ -152,7 +152,7 @@ function LoginContent() {
           
           <div className="mt-8 text-center">
             <p className="text-xs text-gray-500">
-              Wood Import/Export Management System v1.0
+              Akmalaka Import/Export Management System v1.0
             </p>
           </div>
         </div>

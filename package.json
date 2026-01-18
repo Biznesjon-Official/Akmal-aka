@@ -1,7 +1,7 @@
 {
-  "name": "wood-import-export-system",
+  "name": "akmalaka-import-export-system",
   "version": "1.0.0",
-  "description": "Professional wood import/export management system",
+  "description": "Professional import/export management system",
   "scripts": {
     "install:server": "cd server && npm install",
     "install:client": "cd client && npm install",

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useTranslatedNavigation } from '@/hooks/useTranslatedNavigation';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface NavigationItem {
   name: string;
@@ -22,6 +23,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
   const { navigation, adminNavigation } = useTranslatedNavigation();
+  const { t } = useLanguage();
 
   const allNavigation = user?.role === 'admin' 
     ? [...navigation, ...adminNavigation] 
@@ -51,11 +53,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
             <div className="flex items-center flex-shrink-0 px-4 mb-6">
               <div className="flex items-center">
                 <div className="w-9 h-9 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-lg">
-                  W
+                  A
                 </div>
                 <div className="ml-3">
-                  <h2 className="text-base font-bold text-gray-900">Wood System</h2>
-                  <p className="text-xs text-gray-500">Import/Export</p>
+                  <h2 className="text-base font-bold text-gray-900">{t.common.systemName}</h2>
+                  <p className="text-xs text-gray-500">{t.common.systemSubtitle}</p>
                 </div>
               </div>
             </div>
@@ -122,11 +124,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               <div className="flex items-center flex-shrink-0 px-6 mb-8">
                 <div className="flex items-center">
                   <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                    W
+                    A
                   </div>
                   <div className="ml-4">
-                    <h2 className="text-xl font-bold text-gray-900">Wood System</h2>
-                    <p className="text-sm text-gray-500">Import/Export Management</p>
+                    <h2 className="text-xl font-bold text-gray-900">{t.common.systemName}</h2>
+                    <p className="text-sm text-gray-500">{t.common.systemSubtitleFull}</p>
                   </div>
                 </div>
               </div>

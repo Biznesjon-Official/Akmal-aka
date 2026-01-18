@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useDialog } from '@/context/DialogContext';
 import Layout from '@/components/Layout';
 import VagonSaleTableSkeleton from '@/components/vagonSale/VagonSaleTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -64,6 +65,7 @@ export default function VagonSalePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
+  const { showAlert, showConfirm } = useDialog();
   const [sales, setSales] = useState<VagonSale[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [vagons, setVagons] = useState<Vagon[]>([]);
@@ -145,27 +147,51 @@ export default function VagonSalePage() {
     
     // Validatsiya
     if (!selectedVagon) {
-      alert(`❌ ${t.messages.selectVagon}`);
+      showAlert({
+        title: t.messages.error,
+        message: t.messages.selectVagon,
+        type: 'warning'
+      });
       return;
     }
     if (!selectedLot) {
-      alert(`❌ ${t.messages.selectLot}`);
+      showAlert({
+        title: t.messages.error,
+        message: t.messages.selectLot,
+        type: 'warning'
+      });
       return;
     }
     if (!selectedClient) {
-      alert(`❌ ${t.messages.selectClient}`);
+      showAlert({
+        title: t.messages.error,
+        message: t.messages.selectClient,
+        type: 'warning'
+      });
       return;
     }
     if (!soldVolumeM3 || parseFloat(soldVolumeM3) <= 0) {
-      alert(`❌ ${t.messages.enterSoldVolume}`);
+      showAlert({
+        title: t.messages.error,
+        message: t.messages.enterSoldVolume,
+        type: 'warning'
+      });
       return;
     }
     if (!saleCurrency) {
-      alert(`❌ ${t.messages.selectCurrency}`);
+      showAlert({
+        title: t.messages.error,
+        message: t.messages.selectCurrency,
+        type: 'warning'
+      });
       return;
     }
     if (!pricePerM3 || parseFloat(pricePerM3) <= 0) {
-      alert(`❌ ${t.messages.enterPrice}`);
+      showAlert({
+        title: t.messages.error,
+        message: t.messages.enterPrice,
+        type: 'warning'
+      });
       return;
     }
     
@@ -175,14 +201,22 @@ export default function VagonSalePage() {
       // Lotni topish va hajmni tekshirish
       const lotInfo = getSelectedLotInfo();
       if (!lotInfo) {
-        alert(`❌ ${t.messages.lotInfoNotFound}`);
+        showAlert({
+          title: t.messages.error,
+          message: t.messages.lotInfoNotFound,
+          type: 'error'
+        });
         return;
       }
       
       // Hajmni tekshirish - qolgan hajmdan ko'p bo'lmasligi kerak
       const soldVolume = parseFloat(soldVolumeM3);
       if (soldVolume > lotInfo.remaining_volume_m3) {
-        alert(`❌ ${t.messages.volumeExceedsRemaining}\n${t.messages.remaining}: ${lotInfo.remaining_volume_m3.toFixed(2)} m³`);
+        showAlert({
+          title: t.messages.error,
+          message: `${t.messages.volumeExceedsRemaining}\n${t.messages.remaining}: ${lotInfo.remaining_volume_m3.toFixed(2)} m³`,
+          type: 'error'
+        });
         return;
       }
       
@@ -228,14 +262,32 @@ export default function VagonSalePage() {
       
       // Mijoz nomini olish
       const clientName = clients.find(c => c._id === selectedClient)?.name || 'Mijoz';
-      alert(`✅ ${clientName}${t.messages.saleSuccessfullySaved}\n\n💡 ${t.messages.ifPreviouslySold}`);
+      showAlert({
+        title: t.messages.success,
+        message: `${clientName}${t.messages.saleSuccessfullySaved}\n\n💡 ${t.messages.ifPreviouslySold}`,
+        type: 'success',
+        autoCloseDelay: 4000
+      });
       
       fetchData();
       setShowModal(false);
       resetForm();
     } catch (error: any) {
-      console.error('❌ Error:', error.response?.data);
-      alert(error.response?.data?.message || t.vagonSale.saveError);
+      console.error('❌ Error:', error);
+      
+      let errorMessage = t.vagonSale.saveError;
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showAlert({
+        title: t.messages.error,
+        message: errorMessage,
+        type: 'error'
+      });
     }
   };
 
@@ -347,15 +399,15 @@ export default function VagonSalePage() {
                   <div className="text-sm text-gray-600">{sale.client?.phone || 'N/A'}</div>
                   <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                     <div>
-                      <span className="text-gray-600">Jo'natilgan:</span>
+                      <span className="text-gray-600">{t.vagonSale.sentLabel}:</span>
                       <span className="ml-2 font-semibold">{sale.sent_volume_m3?.toFixed(2) || '0.00'} m³</span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Qabul qilingan:</span>
+                      <span className="text-gray-600">{t.vagonSale.acceptedLabel}:</span>
                       <span className="ml-2 font-semibold text-green-600">{sale.accepted_volume_m3?.toFixed(2) || '0.00'} m³</span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Narx (m³):</span>
+                      <span className="text-gray-600">{t.vagonSale.pricePerM3Label}:</span>
                       <span className="ml-2 font-semibold">
                         {sale.price_per_m3?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
                       </span>
@@ -371,19 +423,19 @@ export default function VagonSalePage() {
 
                 <div className="border-t pt-4 grid grid-cols-3 gap-4 mt-4">
                   <div>
-                    <div className="text-sm text-gray-600">Jami narx</div>
+                    <div className="text-sm text-gray-600">{t.vagonSale.totalPriceLabel}</div>
                     <div className="text-lg font-bold">
                       {sale.total_price?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-600">To'langan</div>
+                    <div className="text-sm text-gray-600">{t.vagonSale.paidLabel}</div>
                     <div className="text-lg font-bold text-green-600">
                       {sale.paid_amount?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-600">Qarz</div>
+                    <div className="text-sm text-gray-600">{t.vagonSale.debtLabel}</div>
                     <div className={`text-lg font-bold ${(sale.debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {sale.debt?.toLocaleString() || '0'} {getCurrencySymbol(sale.sale_currency)}
                     </div>
@@ -414,16 +466,16 @@ export default function VagonSalePage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Vagonni tanlang</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.selectVagonLabel}</label>
                     <select
                       value={selectedVagon}
                       onChange={(e) => handleVagonChange(e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg"
                     >
-                      <option value="">Vagonni tanlang</option>
+                      <option value="">{t.vagonSale.selectVagonLabel}</option>
                       {vagons.map(vagon => (
                         <option key={vagon._id} value={vagon._id}>
-                          {vagon.vagonCode} ({vagon.lots?.length || 0} lot)
+                          {vagon.vagonCode} ({vagon.lots?.length || 0} {t.vagonSale.lotsRemaining})
                         </option>
                       ))}
                     </select>
@@ -431,16 +483,16 @@ export default function VagonSalePage() {
 
                   {selectedVagon && (
                     <div>
-                      <label className="block text-sm font-medium mb-1">Lotni tanlang</label>
+                      <label className="block text-sm font-medium mb-1">{t.vagonSale.selectLotLabel}</label>
                       <select
                         value={selectedLot}
                         onChange={(e) => setSelectedLot(e.target.value)}
                         className="w-full px-3 py-2 border rounded-lg"
                       >
-                        <option value="">Lotni tanlang</option>
+                        <option value="">{t.vagonSale.selectLotLabel}</option>
                         {getSelectedVagonLots().map(lot => (
                           <option key={lot._id} value={lot._id}>
-                            {lot.dimensions} - {lot.remaining_volume_m3.toFixed(2)} m³ qolgan - {lot.purchase_currency}
+                            {lot.dimensions} - {lot.remaining_volume_m3.toFixed(2)} {t.vagonSale.m3Remaining} - {lot.purchase_currency}
                           </option>
                         ))}
                       </select>
@@ -470,13 +522,13 @@ export default function VagonSalePage() {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Mijozni tanlang</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.selectClientLabel}</label>
                     <select
                       value={selectedClient}
                       onChange={(e) => setSelectedClient(e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg"
                     >
-                      <option value="">Mijozni tanlang</option>
+                      <option value="">{t.vagonSale.selectClientLabel}</option>
                       {clients.map(client => (
                         <option key={client._id} value={client._id}>
                           {client.name} - {client.phone}
@@ -484,7 +536,7 @@ export default function VagonSalePage() {
                       ))}
                     </select>
                     <p className="text-xs text-blue-600 mt-2 font-semibold">
-                      💡 Agar bu mijozga avval ham sotilgan bo'lsa, yangi yozuv yaratilmaydi - qarz va hajm yangilanadi
+                      💡 {t.vagonSale.previousSaleNote}
                     </p>
                   </div>
 
@@ -502,7 +554,7 @@ export default function VagonSalePage() {
                     />
                     {selectedLot && getSelectedLotInfo() && (
                       <p className="text-xs text-gray-500 mt-1">
-                        Qolgan hajm: <span className="font-semibold text-green-600">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
+                        {t.vagonSale.remainingVolumeNote}: <span className="font-semibold text-green-600">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
                       </p>
                     )}
                   </div>
@@ -524,18 +576,18 @@ export default function VagonSalePage() {
                       className="w-full px-3 py-2 border rounded-lg"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      💡 Mijoz tomonidan yo'qotilgan hajm (transport, yuklash/tushirish vaqtida)
+                      💡 {t.vagonSale.clientLossNote}
                     </p>
                   </div>
 
                   {/* BRAK JAVOBGARLIK TAQSIMOTI - faqat brak kiritilganda ko'rinadi */}
                   {parseFloat(brakVolume) > 0 && (
                     <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                      <h4 className="font-semibold text-yellow-800 mb-3">🔄 Brak javobgarlik taqsimoti</h4>
+                      <h4 className="font-semibold text-yellow-800 mb-3">🔄 {t.vagonSale.brakLiabilityTitle}</h4>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium mb-1">Sotuvchi javobgarlik (%)</label>
+                          <label className="block text-sm font-medium mb-1">{t.vagonSale.sellerLiability}</label>
                           <input
                             type="number"
                             min="0"
@@ -551,7 +603,7 @@ export default function VagonSalePage() {
                         </div>
                         
                         <div>
-                          <label className="block text-sm font-medium mb-1">Xaridor javobgarlik (%)</label>
+                          <label className="block text-sm font-medium mb-1">{t.vagonSale.buyerLiability}</label>
                           <input
                             type="number"
                             min="0"
@@ -569,24 +621,24 @@ export default function VagonSalePage() {
                       
                       {/* Hisoblash ko'rsatkichlari */}
                       <div className="mt-4 p-3 bg-white rounded border">
-                        <h5 className="font-medium mb-2 text-sm">📊 Hisoblash natijalari:</h5>
+                        <h5 className="font-medium mb-2 text-sm">📊 {t.vagonSale.calculationResults}:</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                           <div>
                             <div className="text-red-600">
-                              <strong>Sotuvchi bo'yniga:</strong> {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100).toFixed(2)} m³
+                              <strong>{t.vagonSale.sellerResponsible}:</strong> {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100).toFixed(2)} m³
                             </div>
                             <div className="text-gray-600 text-xs">
-                              Zarar: {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} {saleCurrency}
+                              {t.vagonSale.loss}: {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} {saleCurrency}
                             </div>
                           </div>
                           <div>
                             <div className="text-blue-600">
-                              <strong>Xaridor bo'yniga:</strong> {((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100).toFixed(2)} m³
+                              <strong>{t.vagonSale.buyerResponsible}:</strong> {((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100).toFixed(2)} m³
                             </div>
                             <div className="text-gray-600 text-xs">
                               {buyerLiabilityPercent > 0 ? 
-                                `To'lashi kerak: ${((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} ${saleCurrency}` :
-                                'To\'lov qilmaydi'
+                                `${t.vagonSale.mustPay}: ${((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} ${saleCurrency}` :
+                                t.vagonSale.noPay
                               }
                             </div>
                           </div>
@@ -594,8 +646,7 @@ export default function VagonSalePage() {
                       </div>
                       
                       <div className="mt-3 text-xs text-yellow-700">
-                        💡 <strong>Tushuntirish:</strong> Agar xaridor 0% javobgar bo'lsa, brak uchun to'lov qilmaydi. 
-                        Agar 100% javobgar bo'lsa, brak hajmini ham to'lashi kerak.
+                        💡 <strong>{t.common.description}:</strong> {t.vagonSale.liabilityExplanation}
                       </div>
                     </div>
                   )}
@@ -632,7 +683,7 @@ export default function VagonSalePage() {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Sotuv valyutasi</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.saleCurrencyLabel}</label>
                     <select
                       value={saleCurrency}
                       onChange={(e) => setSaleCurrency(e.target.value)}
@@ -647,7 +698,7 @@ export default function VagonSalePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Narx (m³ uchun, {saleCurrency})</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.pricePerM3.replace('{currency}', saleCurrency)}</label>
                     <input
                       type="number"
                       step="0.01"
@@ -659,7 +710,7 @@ export default function VagonSalePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">To'langan summa ({saleCurrency})</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.paidAmountLabel.replace('{currency}', saleCurrency)}</label>
                     <input
                       type="number"
                       step="0.01"
@@ -671,11 +722,11 @@ export default function VagonSalePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Izoh</label>
+                    <label className="block text-sm font-medium mb-1">{t.vagonSale.notesLabel}</label>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Qo'shimcha ma'lumot"
+                      placeholder={t.vagonSale.notesPlaceholder}
                       className="w-full px-3 py-2 border rounded-lg"
                       rows={3}
                     />

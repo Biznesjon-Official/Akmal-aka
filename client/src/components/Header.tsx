@@ -42,11 +42,11 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
             <h1 className="text-lg lg:text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent truncate">
               {t.common.appTitle}
             </h1>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 lg:mt-1 truncate">Import/Export Management</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 lg:mt-1 truncate">{t.common.systemSubtitleFull}</p>
           </div>
           {/* Mobile title */}
           <div className="md:hidden">
-            <h1 className="text-sm sm:text-base font-bold text-gray-900 truncate">Wood System</h1>
+            <h1 className="text-sm sm:text-base font-bold text-gray-900 truncate">{t.common.systemName}</h1>
           </div>
         </div>
         

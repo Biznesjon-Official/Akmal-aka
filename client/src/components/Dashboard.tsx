@@ -185,29 +185,29 @@ export default function Dashboard() {
     switch (viewMode) {
       case 'real':
         return {
-          title: 'Haqiqiy Ma\'lumotlar',
-          subtitle: 'Bugun sodir bo\'lgan real operatsiyalar',
+          title: t.dashboard.realData,
+          subtitle: t.dashboard.realDataSubtitle,
           metrics: [
             {
-              label: 'Bugungi daromad',
+              label: t.dashboard.todayRevenue,
               value: `$${dashboardData.actual.today_revenue_base.toLocaleString()}`,
               color: 'text-green-600',
               icon: 'cash'
             },
             {
-              label: 'Bugungi xarajat',
+              label: t.dashboard.todayExpenses,
               value: `$${dashboardData.actual.today_expenses_base.toLocaleString()}`,
               color: 'text-red-600',
               icon: 'expenses'
             },
             {
-              label: 'Bugungi foyda',
+              label: t.dashboard.todayProfit,
               value: `$${dashboardData.actual.today_profit_base.toLocaleString()}`,
               color: dashboardData.actual.today_profit_base >= 0 ? 'text-green-600' : 'text-red-600',
               icon: dashboardData.actual.today_profit_base >= 0 ? 'profit' : 'loss'
             },
             {
-              label: 'Kassa balansi',
+              label: t.dashboard.cashBalance,
               value: `$${dashboardData.actual.cash_balance_base.toLocaleString()}`,
               color: dashboardData.actual.cash_balance_base >= 0 ? 'text-blue-600' : 'text-red-600',
               icon: 'bank'
@@ -217,29 +217,29 @@ export default function Dashboard() {
       
       case 'projected':
         return {
-          title: 'Prognoz Ma\'lumotlar',
-          subtitle: 'Kutilayotgan natijalar va tahlillar',
+          title: t.dashboard.projectedData,
+          subtitle: t.dashboard.projectedDataSubtitle,
           metrics: [
             {
-              label: 'Kutilayotgan daromad',
+              label: t.dashboard.expectedRevenue,
               value: `$${dashboardData.projected.expected_revenue_from_remaining_base.toLocaleString()}`,
               color: 'text-blue-600',
               icon: 'target'
             },
             {
-              label: 'Minimal narx',
+              label: t.dashboard.minPrice,
               value: `$${dashboardData.projected.break_even_analysis.min_price_needed_base.toFixed(2)}/m³`,
               color: 'text-orange-600',
               icon: 'balance'
             },
             {
-              label: 'ROI prognozi',
+              label: t.dashboard.roiForecast,
               value: `${dashboardData.projected.roi_forecast.toFixed(1)}%`,
               color: dashboardData.projected.roi_forecast >= 0 ? 'text-green-600' : 'text-red-600',
               icon: 'statistics'
             },
             {
-              label: 'Tugash muddati',
+              label: t.dashboard.completionTimeline,
               value: dashboardData.projected.completion_timeline,
               color: 'text-purple-600',
               icon: 'time'
@@ -249,29 +249,29 @@ export default function Dashboard() {
       
       case 'combined':
         return {
-          title: 'Umumiy Ko\'rsatkichlar',
-          subtitle: 'Real va prognoz ma\'lumotlar birgalikda',
+          title: t.dashboard.combinedData,
+          subtitle: t.dashboard.combinedDataSubtitle,
           metrics: [
             {
-              label: 'Jami sarmoya',
+              label: t.dashboard.totalInvestment,
               value: `$${dashboardData.combined.total_investment_base.toLocaleString()}`,
               color: 'text-gray-600',
               icon: 'business'
             },
             {
-              label: 'Potensial daromad',
+              label: t.dashboard.potentialRevenue,
               value: `$${dashboardData.combined.potential_total_revenue_base.toLocaleString()}`,
               color: 'text-blue-600',
               icon: 'target'
             },
             {
-              label: 'Potensial foyda',
+              label: t.dashboard.potentialProfit,
               value: `$${dashboardData.combined.potential_total_profit_base.toLocaleString()}`,
               color: dashboardData.combined.potential_total_profit_base >= 0 ? 'text-green-600' : 'text-red-600',
               icon: dashboardData.combined.potential_total_profit_base >= 0 ? 'success' : 'warning'
             },
             {
-              label: 'Faol vagonlar',
+              label: t.dashboard.activeVagons,
               value: dashboardData.actual.active_vagons.toString(),
               color: 'text-indigo-600',
               icon: 'transport'
@@ -298,8 +298,8 @@ export default function Dashboard() {
             'transport_delay' as const,
       priority: alert.action_needed ? 'high' as const : 
                 alert.type === 'error' ? 'medium' as const : 'low' as const,
-      title: alert.type === 'error' ? 'Xatolik' :
-             alert.type === 'warning' ? 'Ogohlantirish' : 'Ma\'lumot',
+      title: alert.type === 'error' ? t.dashboard.error :
+             alert.type === 'warning' ? t.dashboard.warning : t.dashboard.info,
       message: alert.message,
       data: { message: alert.message, action_needed: alert.action_needed }
     }));
@@ -359,7 +359,7 @@ export default function Dashboard() {
             }`}
           >
             <Icon name="statistics" className="mr-1" size="sm" />
-            Real
+            {t.dashboard.real}
           </button>
           <button
             onClick={() => setViewMode('projected')}
@@ -370,7 +370,7 @@ export default function Dashboard() {
             }`}
           >
             <Icon name="forecast" className="mr-1" size="sm" />
-            Prognoz
+            {t.dashboard.projected}
           </button>
           <button
             onClick={() => setViewMode('combined')}
@@ -381,7 +381,7 @@ export default function Dashboard() {
             }`}
           >
             <Icon name="combined" className="mr-1" size="sm" />
-            Umumiy
+            {t.dashboard.combined}
           </button>
         </div>
         
@@ -392,14 +392,14 @@ export default function Dashboard() {
             onChange={(e) => setRefreshInterval(Number(e.target.value))}
             className="px-3 py-2 border border-gray-300 rounded-md text-sm"
           >
-            <option value={10000}>10 sekund</option>
-            <option value={30000}>30 sekund</option>
-            <option value={60000}>1 daqiqa</option>
-            <option value={300000}>5 daqiqa</option>
+            <option value={10000}>{t.dashboard.seconds10}</option>
+            <option value={30000}>{t.dashboard.seconds30}</option>
+            <option value={60000}>{t.dashboard.minute1}</option>
+            <option value={300000}>{t.dashboard.minutes5}</option>
           </select>
           <div className="flex items-center text-sm text-gray-500">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
-            Live
+            {t.dashboard.live}
           </div>
         </div>
       </div>
@@ -433,12 +433,12 @@ export default function Dashboard() {
       {/* Tizim ma'lumotlari */}
       {dashboardData?.system_info && (
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">💱 Tizim Ma'lumotlari</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">💱 {t.dashboard.systemInfo}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Asosiy valyuta</p>
+                  <p className="text-sm font-medium text-gray-600">{t.dashboard.baseCurrency}</p>
                   <p className="text-2xl font-bold text-blue-600">
                     {dashboardData.system_info.base_currency}
                   </p>
@@ -480,23 +480,23 @@ export default function Dashboard() {
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               <Icon name="balance" className="mr-2" />
-              Break-even Tahlil
+              {t.dashboard.breakEvenAnalysis}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Jami sarmoya</p>
+                <p className="text-sm text-gray-600">{t.dashboard.totalInvestment}</p>
                 <p className="text-xl font-bold text-gray-900">
                   ${dashboardData.projected.break_even_analysis.total_investment_base.toLocaleString()}
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-sm text-gray-600">Minimal narx</p>
+                <p className="text-sm text-gray-600">{t.dashboard.minPrice}</p>
                 <p className="text-xl font-bold text-orange-600">
                   ${dashboardData.projected.break_even_analysis.min_price_needed_base.toFixed(2)}/m³
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-sm text-gray-600">Joriy o'rtacha narx</p>
+                <p className="text-sm text-gray-600">{t.dashboard.currentAvgPrice}</p>
                 <p className={`text-xl font-bold ${
                   dashboardData.projected.break_even_analysis.current_avg_price_base >= dashboardData.projected.break_even_analysis.min_price_needed_base
                     ? 'text-green-600' : 'text-red-600'
@@ -514,7 +514,7 @@ export default function Dashboard() {
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             <Icon name="statistics" className="mr-2" />
-            Kunlik Sotuv Dinamikasi
+            {t.dashboard.dailySalesDynamics}
           </h3>
           <SalesDynamicsChart data={dashboardData?.dailySales || []} />
         </Card>
@@ -522,7 +522,7 @@ export default function Dashboard() {
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             <Icon name="profit" className="mr-2" />
-            Oylik Foyda Trendi
+            {t.dashboard.monthlyProfitTrend}
           </h3>
           <ProfitTrendChart data={dashboardData?.monthlyProfit || []} />
         </Card>
@@ -533,7 +533,7 @@ export default function Dashboard() {
         {/* Kassa oqimi */}
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            💳 Bugungi Kassa Harakati
+            💳 {t.dashboard.todayCashFlow}
           </h3>
           <CashFlowWidget data={dashboardData?.todayKassa || []} />
         </Card>
@@ -616,7 +616,7 @@ export default function Dashboard() {
         <>
           {/* Lot Status Breakdown */}
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">📦 Lotlar Holati</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">📦 {t.dashboard.lotsStatus}</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {statsData.woodStatusStats?.map((stat) => (
                 <div key={stat.status} className="card hover:shadow-lg transition-shadow">
@@ -624,7 +624,7 @@ export default function Dashboard() {
                     <div className="text-blue-600">{statusIcons[stat.status] || <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}</div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-blue-600">{stat.count}</div>
-                      <div className="text-xs text-gray-500">lot</div>
+                      <div className="text-xs text-gray-500">{t.dashboard.lot}</div>
                     </div>
                   </div>
                   <div className="text-sm font-medium text-gray-900 mb-1">

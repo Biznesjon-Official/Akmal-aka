@@ -106,23 +106,52 @@ systemSettingsSchema.statics.getCurrentExchangeRate = async function(fromCurrenc
 
 // Static method: Summani asosiy valyutaga konvertatsiya qilish
 systemSettingsSchema.statics.convertToBaseCurrency = async function(amount, fromCurrency) {
-  const baseCurrency = await this.getBaseCurrency();
-  
-  if (fromCurrency === baseCurrency) {
-    return { amount, currency: baseCurrency };
+  try {
+    const baseCurrency = await this.getBaseCurrency();
+    
+    if (fromCurrency === baseCurrency) {
+      return { amount, currency: baseCurrency };
+    }
+    
+    const rate = await this.getCurrentExchangeRate(fromCurrency, baseCurrency);
+    
+    // Agar kurs topilmasa yoki 0 bo'lsa, xatolik
+    if (!rate || rate === 0) {
+      console.warn(`⚠️ Exchange rate not found for ${fromCurrency} to ${baseCurrency}, using 1:1`);
+      return {
+        amount,
+        currency: baseCurrency,
+        original_amount: amount,
+        original_currency: fromCurrency,
+        exchange_rate: 1,
+        converted_at: new Date(),
+        fallback: true
+      };
+    }
+    
+    const convertedAmount = amount * rate;
+    
+    return {
+      amount: convertedAmount,
+      currency: baseCurrency,
+      original_amount: amount,
+      original_currency: fromCurrency,
+      exchange_rate: rate,
+      converted_at: new Date()
+    };
+  } catch (error) {
+    console.error('❌ Currency conversion error:', error);
+    // Xatolik bo'lsa, asl summani qaytarish
+    return {
+      amount,
+      currency: fromCurrency,
+      original_amount: amount,
+      original_currency: fromCurrency,
+      exchange_rate: 1,
+      converted_at: new Date(),
+      error: true
+    };
   }
-  
-  const rate = await this.getCurrentExchangeRate(fromCurrency, baseCurrency);
-  const convertedAmount = amount * rate;
-  
-  return {
-    amount: convertedAmount,
-    currency: baseCurrency,
-    original_amount: amount,
-    original_currency: fromCurrency,
-    exchange_rate: rate,
-    converted_at: new Date()
-  };
 };
 
 // Static method: Default sozlamalarni yaratish

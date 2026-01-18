@@ -49,17 +49,17 @@ export default function AlertsWidget({ alerts }: Props) {
 
   const typeConfig = {
     debt: {
-      title: 'Qarz',
+      title: t.dashboard.debt,
       icon: '💳',
       color: 'text-red-600'
     },
     low_stock: {
-      title: 'Kam qoldi',
+      title: t.dashboard.lowStock,
       icon: '📦',
       color: 'text-orange-600'
     },
     transport_delay: {
-      title: 'Transport kechikmoqda',
+      title: t.dashboard.transportDelay,
       icon: '🚛',
       color: 'text-blue-600'
     }
@@ -69,13 +69,13 @@ export default function AlertsWidget({ alerts }: Props) {
     return (
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">🔔 Ogohlantirishlar</h3>
+          <h3 className="text-lg font-semibold text-gray-900">🔔 {t.dashboard.alerts}</h3>
           <div className="text-green-500 text-2xl">✅</div>
         </div>
         <div className="text-center text-gray-500 py-8">
           <div className="text-4xl mb-2">🎉</div>
-          <p>Hech qanday ogohlantirish yo'q!</p>
-          <p className="text-sm mt-1">Barcha jarayonlar normal holatda</p>
+          <p>{t.dashboard.noAlerts}</p>
+          <p className="text-sm mt-1">{t.dashboard.allProcessesNormal}</p>
         </div>
       </Card>
     );
@@ -85,7 +85,7 @@ export default function AlertsWidget({ alerts }: Props) {
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">
-          🔔 Ogohlantirishlar ({alerts.length})
+          🔔 {t.dashboard.alerts} ({alerts.length})
         </h3>
         
         {/* Filter */}
@@ -100,9 +100,9 @@ export default function AlertsWidget({ alerts }: Props) {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {priority === 'all' ? 'Barchasi' : 
-               priority === 'high' ? 'Yuqori' :
-               priority === 'medium' ? 'O\'rta' : 'Past'}
+              {priority === 'all' ? t.dashboard.all : 
+               priority === 'high' ? t.dashboard.high :
+               priority === 'medium' ? t.dashboard.medium : t.dashboard.low}
             </button>
           ))}
         </div>
@@ -138,8 +138,8 @@ export default function AlertsWidget({ alerts }: Props) {
                         alert.priority === 'medium' ? 'bg-orange-100 text-orange-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
-                        {alert.priority === 'high' ? 'Yuqori' :
-                         alert.priority === 'medium' ? 'O\'rta' : 'Past'}
+                        {alert.priority === 'high' ? t.dashboard.high :
+                         alert.priority === 'medium' ? t.dashboard.medium : t.dashboard.low}
                       </span>
                     </div>
                     
@@ -152,8 +152,8 @@ export default function AlertsWidget({ alerts }: Props) {
                       <div className="mt-3 pt-3 border-t border-gray-200">
                         {alert.type === 'debt' && (
                           <div className="text-sm text-gray-600">
-                            <p><strong>Mijoz:</strong> {alert.data.name}</p>
-                            <p><strong>Qarz miqdori:</strong> {formatCurrency(alert.data.total_debt, 'USD')}</p>
+                            <p><strong>{t.client.name}:</strong> {alert.data.name}</p>
+                            <p><strong>{t.dashboard.debtAmount}:</strong> {formatCurrency(alert.data.total_debt, 'USD')}</p>
                           </div>
                         )}
                         
@@ -189,7 +189,7 @@ export default function AlertsWidget({ alerts }: Props) {
       
       {filteredAlerts.length === 0 && filter !== 'all' && (
         <div className="text-center text-gray-500 py-4">
-          <p>Bu darajada ogohlantirishlar yo'q</p>
+          <p>{t.dashboard.noAlertsAtThisLevel}</p>
         </div>
       )}
     </Card>

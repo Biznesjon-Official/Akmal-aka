@@ -302,11 +302,11 @@ function ExchangeRatesContent() {
             </div>
             <div className="ml-3">
               <h3 className="text-lg font-bold text-yellow-800">
-                Muhim eslatma
+                {t.exchangeRates.importantNote}
               </h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  Tizimda faqat USD ↔ RUB valyuta kurslari ishlatiladi. USD kursi 1 USD = X RUB, RUB kursi esa 1 RUB = X USD ko'rinishida saqlanadi.
+                  {t.exchangeRates.systemNote}
                 </p>
               </div>
             </div>

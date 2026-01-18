@@ -2,6 +2,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/utils/formatters';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface KassaData {
   _id: {
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function CashFlowWidget({ data }: Props) {
+  const { t } = useLanguage();
   // Ma'lumotlarni guruhlash
   const summary = data.reduce((acc, item) => {
     const { valyuta, turi } = item._id;
@@ -46,11 +48,11 @@ export default function CashFlowWidget({ data }: Props) {
     return (
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">💰 Bugungi Kassa</h3>
+          <h3 className="text-lg font-semibold text-gray-900">💰 {t.dashboard.todayCash}</h3>
           <div className="text-gray-400 text-2xl">💸</div>
         </div>
         <div className="text-center text-gray-500 py-4">
-          <p>Bugun hali tranzaksiya yo'q</p>
+          <p>{t.dashboard.noTransactionsToday}</p>
         </div>
       </Card>
     );
@@ -66,7 +68,7 @@ export default function CashFlowWidget({ data }: Props) {
           <Card key={currency} className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                💰 Bugungi Kassa ({currency})
+                💰 {t.dashboard.todayCash} ({currency})
               </h3>
               <div className={`text-2xl ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
                 {isPositive ? '📈' : '📉'}
@@ -78,7 +80,7 @@ export default function CashFlowWidget({ data }: Props) {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600 flex items-center">
                   <span className="text-green-500 mr-2">⬆️</span>
-                  Kirim
+                  {t.dashboard.income}
                 </span>
                 <span className="font-semibold text-green-600">
                   +{formatCurrency(data.kirim, currency)}
@@ -89,7 +91,7 @@ export default function CashFlowWidget({ data }: Props) {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600 flex items-center">
                   <span className="text-red-500 mr-2">⬇️</span>
-                  Chiqim
+                  {t.dashboard.expense}
                 </span>
                 <span className="font-semibold text-red-600">
                   -{formatCurrency(data.chiqim, currency)}
@@ -102,7 +104,7 @@ export default function CashFlowWidget({ data }: Props) {
               {/* Net */}
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-gray-900">
-                  Sof harakat
+                  {t.dashboard.netMovement}
                 </span>
                 <span className={`font-bold text-lg ${
                   isPositive ? 'text-green-600' : 'text-red-600'
@@ -115,7 +117,7 @@ export default function CashFlowWidget({ data }: Props) {
             {/* Progress bar */}
             <div className="mt-4">
               <div className="flex justify-between text-xs text-gray-500 mb-1">
-                <span>Kirim/Chiqim nisbati</span>
+                <span>{t.dashboard.incomeExpenseRatio}</span>
                 <span>
                   {data.chiqim > 0 ? 
                     `${((data.kirim / data.chiqim) * 100).toFixed(0)}%` : 

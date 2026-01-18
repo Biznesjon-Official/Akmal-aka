@@ -101,6 +101,12 @@ const vagonLotSchema = new mongoose.Schema({
   },
   
   // Moliyaviy ma'lumotlar (YANGI TERMINOLOGIYA)
+  allocated_expenses: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Taqsimlangan xarajatlar (ExpenseAllocation dan)'
+  },
   total_investment: {
     type: Number,
     default: 0,
@@ -222,17 +228,42 @@ vagonLotSchema.pre('save', async function(next) {
   
   // 5. YANGI MOLIYAVIY HISOBLASHLAR (UNIFIED CURRENCY)
   
+  // Jami sarmoya = Xarid + Taqsimlangan xarajatlar
+  const purchaseAmount = Number(this.purchase_amount) || 0;
+  const allocatedExpenses = Number(this.allocated_expenses) || 0;
+  const totalRevenue = Number(this.total_revenue) || 0;
+  
+  this.total_investment = purchaseAmount + allocatedExpenses;
+  
+  // Tannarx = Jami sarmoya / Umumiy hajm
+  if (volume > 0) {
+    this.cost_per_m3 = this.total_investment / volume;
+    this.break_even_price_per_m3 = this.cost_per_m3;
+  } else {
+    this.cost_per_m3 = 0;
+    this.break_even_price_per_m3 = 0;
+  }
+  
+  // Haqiqiy foyda = Daromad - (Sarmoya * Sotilgan foiz)
+  if (volume > 0) {
+    const sold_percentage = dispatchedVolume / volume;
+    const proportional_investment = this.total_investment * sold_percentage;
+    this.realized_profit = totalRevenue - proportional_investment;
+  } else {
+    this.realized_profit = 0;
+  }
+  
+  // Sotilmagan qiymat = Qolgan hajm * Tannarx
+  this.unrealized_value = this.warehouse_remaining_volume_m3 * this.cost_per_m3;
+  
+  // Backward compatibility
+  this.total_expenses = this.total_investment;
+  this.profit = this.realized_profit;
+  
+  // Asosiy valyutaga konvertatsiya (xatolik bo'lsa ham davom etadi)
   try {
     const SystemSettings = require('./SystemSettings');
     
-    // Jami sarmoya = Xarid + Taqsimlangan xarajatlar
-    const purchaseAmount = Number(this.purchase_amount) || 0;
-    const allocatedExpenses = Number(this.allocated_expenses) || 0;
-    const totalRevenue = Number(this.total_revenue) || 0;
-    
-    this.total_investment = purchaseAmount + allocatedExpenses;
-    
-    // Asosiy valyutaga konvertatsiya
     const investmentInBase = await SystemSettings.convertToBaseCurrency(
       this.total_investment, 
       this.purchase_currency
@@ -243,75 +274,30 @@ vagonLotSchema.pre('save', async function(next) {
       this.purchase_currency
     );
     
-    // Tannarx = Jami sarmoya / Umumiy hajm (asosiy valyutada)
+    // Asosiy valyutada tannarx
     if (volume > 0) {
-      this.cost_per_m3 = this.total_investment / volume;
-      this.break_even_price_per_m3 = this.cost_per_m3;
-      
-      // Asosiy valyutada tannarx
       this.base_currency_cost_per_m3 = investmentInBase.amount / volume;
     } else {
-      this.cost_per_m3 = 0;
-      this.break_even_price_per_m3 = 0;
       this.base_currency_cost_per_m3 = 0;
     }
     
-    // Haqiqiy foyda = Daromad - (Sarmoya * Sotilgan foiz)
+    // Asosiy valyutada foyda
     if (volume > 0) {
       const sold_percentage = dispatchedVolume / volume;
-      const proportional_investment = this.total_investment * sold_percentage;
-      this.realized_profit = totalRevenue - proportional_investment;
-      
-      // Asosiy valyutada foyda
       const proportional_investment_base = investmentInBase.amount * sold_percentage;
       this.base_currency_realized_profit = revenueInBase.amount - proportional_investment_base;
     } else {
-      this.realized_profit = 0;
       this.base_currency_realized_profit = 0;
     }
     
-    // Sotilmagan qiymat = Qolgan hajm * Tannarx
-    this.unrealized_value = this.warehouse_remaining_volume_m3 * this.cost_per_m3;
+    // Asosiy valyutada qiymatlar
     this.base_currency_unrealized_value = this.warehouse_remaining_volume_m3 * (this.base_currency_cost_per_m3 || 0);
-    
-    // Asosiy valyutada jami qiymatlar
     this.base_currency_total_investment = investmentInBase.amount;
     this.base_currency_total_revenue = revenueInBase.amount;
     
-    // 6. Backward compatibility
-    this.total_expenses = this.total_investment;
-    this.profit = this.realized_profit;
-    
   } catch (error) {
-    console.error('Currency conversion error in VagonLot:', error);
-    // Xatolik bo'lsa, eski usul bilan hisoblash
-    const purchaseAmount = Number(this.purchase_amount) || 0;
-    const allocatedExpenses = Number(this.allocated_expenses) || 0;
-    const totalRevenue = Number(this.total_revenue) || 0;
-    
-    this.total_investment = purchaseAmount + allocatedExpenses;
-    
-    if (volume > 0) {
-      this.cost_per_m3 = this.total_investment / volume;
-      this.break_even_price_per_m3 = this.cost_per_m3;
-    } else {
-      this.cost_per_m3 = 0;
-      this.break_even_price_per_m3 = 0;
-    }
-    
-    if (volume > 0) {
-      const sold_percentage = dispatchedVolume / volume;
-      const proportional_investment = this.total_investment * sold_percentage;
-      this.realized_profit = totalRevenue - proportional_investment;
-    } else {
-      this.realized_profit = 0;
-    }
-    
-    this.unrealized_value = this.warehouse_remaining_volume_m3 * this.cost_per_m3;
-    this.total_expenses = this.total_investment;
-    this.profit = this.realized_profit;
-    
-    // Asosiy valyutada default qiymatlar
+    console.error('⚠️ Currency conversion error in VagonLot (using fallback):', error.message);
+    // Xatolik bo'lsa, asl valyutadagi qiymatlarni ishlatish
     this.base_currency_cost_per_m3 = this.cost_per_m3;
     this.base_currency_realized_profit = this.realized_profit;
     this.base_currency_unrealized_value = this.unrealized_value;
@@ -435,4 +421,25 @@ vagonLotSchema.methods.createLossLiability = async function(
   return liability;
 };
 
-module.exports = mongoose.model('VagonLot', vagonLotSchema);
+// Post-save hook: Vagon jami ma'lumotlarini yangilash
+vagonLotSchema.post('save', async function(doc) {
+  try {
+    const { updateVagonTotals } = require('../utils/vagonHelpers');
+    await updateVagonTotals(doc.vagon);
+  } catch (error) {
+    console.error('❌ Vagon totals yangilashda xatolik:', error);
+    // Xatolik asosiy jarayonni to'xtatmasligi kerak
+  }
+});
+
+// Post-remove hook: Vagon jami ma'lumotlarini yangilash
+vagonLotSchema.post('remove', async function(doc) {
+  try {
+    const { updateVagonTotals } = require('../utils/vagonHelpers');
+    await updateVagonTotals(doc.vagon);
+  } catch (error) {
+    console.error('❌ Vagon totals yangilashda xatolik:', error);
+  }
+});
+
+module.exports = mongoose.model('VagonLot', vagonLotSchema);module.exports = mongoose.model('VagonLot', vagonLotSchema);

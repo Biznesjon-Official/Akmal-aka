@@ -228,7 +228,9 @@ vagonSaleSchema.pre('save', function(next) {
   }
   
   // 3. Mijoz qabul qilgan hajm = Ombordan jo'natilgan - Transport yo'qotishi
-  this.client_received_volume_m3 = this.warehouse_dispatched_volume_m3 - this.transport_loss_m3;
+  const validDispatchedVolume = isNaN(this.warehouse_dispatched_volume_m3) || !isFinite(this.warehouse_dispatched_volume_m3) ? 0 : this.warehouse_dispatched_volume_m3;
+  const validTransportLoss = isNaN(this.transport_loss_m3) || !isFinite(this.transport_loss_m3) ? 0 : this.transport_loss_m3;
+  this.client_received_volume_m3 = validDispatchedVolume - validTransportLoss;
   
   // 4. Backward compatibility uchun eski field'larni yangilash
   this.sent_volume_m3 = this.warehouse_dispatched_volume_m3;
@@ -244,10 +246,14 @@ vagonSaleSchema.pre('save', function(next) {
   }
   
   // 6. Jami narx = To'lanishi kerak bo'lgan hajm × Narx
-  this.total_price = billableVolume * this.price_per_m3;
+  // NaN ni oldini olish
+  const validBillableVolume = isNaN(billableVolume) || !isFinite(billableVolume) ? 0 : billableVolume;
+  const validPricePerM3 = isNaN(this.price_per_m3) || !isFinite(this.price_per_m3) ? 0 : this.price_per_m3;
+  this.total_price = validBillableVolume * validPricePerM3;
   
   // 7. Qarz = Jami narx - To'langan
-  this.debt = this.total_price - this.paid_amount;
+  const validPaidAmount = isNaN(this.paid_amount) || !isFinite(this.paid_amount) ? 0 : this.paid_amount;
+  this.debt = this.total_price - validPaidAmount;
   
   // 8. Holat
   if (this.debt === 0 && this.total_price > 0) {

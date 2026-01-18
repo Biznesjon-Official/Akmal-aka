@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useDialog } from '@/context/DialogContext';
 import Layout from '@/components/Layout';
 import ClientDetailsModal from '@/components/client/ClientDetailsModal';
 import ClientTableSkeleton from '@/components/client/ClientTableSkeleton';
@@ -42,6 +43,7 @@ export default function ClientPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
+  const { showAlert, showConfirm } = useDialog();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,12 +109,23 @@ export default function ClientPage() {
       setShowModal(false);
       resetForm();
     } catch (error: any) {
-      alert(error.response?.data?.message || t.client.saveError);
+      showAlert({
+        title: t.messages.error,
+        message: error.response?.data?.message || t.client.saveError,
+        type: 'error'
+      });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t.client.deleteConfirm)) return;
+    const confirmed = await showConfirm({
+      title: t.client.deleteClient,
+      message: t.client.deleteConfirm,
+      type: 'danger',
+      confirmText: t.common.delete
+    });
+    
+    if (!confirmed) return;
     
     try {
       const token = localStorage.getItem('token');
@@ -121,7 +134,11 @@ export default function ClientPage() {
       });
       fetchClients();
     } catch (error: any) {
-      alert(error.response?.data?.message || t.client.deleteError);
+      showAlert({
+        title: t.messages.error,
+        message: error.response?.data?.message || t.client.deleteError,
+        type: 'error'
+      });
     }
   };
 
@@ -242,10 +259,10 @@ export default function ClientPage() {
               onChange={(e) => setSortBy(e.target.value as any)}
               className="px-3 py-2 border rounded-lg"
             >
-              <option value="name">Ism bo'yicha</option>
-              <option value="debt">Qarz bo'yicha</option>
-              <option value="volume">Hajm bo'yicha</option>
-              <option value="date">Sana bo'yicha</option>
+              <option value="name">{t.client.sortByName}</option>
+              <option value="debt">{t.client.sortByDebt}</option>
+              <option value="volume">{t.client.sortByVolume}</option>
+              <option value="date">{t.client.sortByDate}</option>
             </select>
           </div>
         </div>
@@ -254,7 +271,7 @@ export default function ClientPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-blue-600">{clients.length}</div>
-            <div className="text-sm text-blue-600">Jami mijozlar</div>
+            <div className="text-sm text-blue-600">{t.client.totalClients}</div>
           </div>
           <div className="bg-red-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-red-600">
@@ -266,13 +283,13 @@ export default function ClientPage() {
             <div className="text-2xl font-bold text-green-600">
               ${clients.reduce((sum, c) => sum + (c.usd_current_debt || 0), 0).toLocaleString()}
             </div>
-            <div className="text-sm text-green-600">USD qarz</div>
+            <div className="text-sm text-green-600">{t.client.usdDebt}</div>
           </div>
           <div className="bg-orange-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-orange-600">
               {clients.reduce((sum, c) => sum + (c.rub_current_debt || 0), 0).toLocaleString()} ₽
             </div>
-            <div className="text-sm text-orange-600">RUB qarz</div>
+            <div className="text-sm text-orange-600">{t.client.rubDebt}</div>
           </div>
         </div>
       </div>
@@ -310,15 +327,15 @@ export default function ClientPage() {
                 {(client.usd_total_debt || 0) > 0 && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">USD qarz:</span>
+                      <span className="text-gray-600">{t.client.usdDebt}:</span>
                       <span className="font-semibold">${(client.usd_total_debt || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">USD to'langan:</span>
+                      <span className="text-gray-600">{t.client.usdPaid}:</span>
                       <span className="font-semibold text-green-600">${(client.usd_total_paid || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 font-semibold">USD qolgan:</span>
+                      <span className="text-gray-600 font-semibold">{t.client.usdRemaining}:</span>
                       <span className={`font-bold ${(client.usd_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                         ${(client.usd_current_debt || 0).toLocaleString()}
                       </span>
@@ -330,15 +347,15 @@ export default function ClientPage() {
                 {(client.rub_total_debt || 0) > 0 && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">RUB qarz:</span>
+                      <span className="text-gray-600">{t.client.rubDebt}:</span>
                       <span className="font-semibold">{(client.rub_total_debt || 0).toLocaleString()} ₽</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">RUB to'langan:</span>
+                      <span className="text-gray-600">{t.client.rubPaid}:</span>
                       <span className="font-semibold text-green-600">{(client.rub_total_paid || 0).toLocaleString()} ₽</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 font-semibold">RUB qolgan:</span>
+                      <span className="text-gray-600 font-semibold">{t.client.rubRemaining}:</span>
                       <span className={`font-bold ${(client.rub_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {(client.rub_current_debt || 0).toLocaleString()} ₽
                       </span>
@@ -349,8 +366,8 @@ export default function ClientPage() {
                 {/* Agar hech qanday qarz bo'lmasa */}
                 {(client.usd_total_debt || 0) === 0 && (client.rub_total_debt || 0) === 0 && (
                   <div className="flex justify-between border-t pt-2">
-                    <span className="text-gray-600 font-semibold">Holat:</span>
-                    <span className="font-bold text-green-600">Qarz yo'q</span>
+                    <span className="text-gray-600 font-semibold">{t.client.statusLabel}:</span>
+                    <span className="font-bold text-green-600">{t.client.noDebt}</span>
                   </div>
                 )}
               </div>
@@ -361,7 +378,7 @@ export default function ClientPage() {
                   className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-xl hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium"
                 >
                   <Icon name="details" size="sm" />
-                  Tafsilot
+                  {t.client.details}
                 </button>
                 <button
                   onClick={() => openEditModal(client)}

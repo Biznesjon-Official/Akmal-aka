@@ -5,6 +5,7 @@ const Vagon = require('../models/Vagon');
 const Client = require('../models/Client');
 const auth = require('../middleware/auth');
 const { logUserAction } = require('../middleware/auditLog');
+const { updateVagonTotals } = require('../utils/vagonHelpers');
 
 // Barcha sotuvlar
 router.get('/', auth, async (req, res) => {
@@ -203,7 +204,9 @@ router.post('/', auth, async (req, res) => {
       
       // LOTNI YANGILASH (faqat farqni qo'shamiz)
       lotDoc.warehouse_dispatched_volume_m3 += dispatchedVolume;
-      lotDoc.total_revenue += (sale.total_price - oldTotalPrice);
+      // NaN ni oldini olish
+      const priceDiff = isNaN(sale.total_price) || isNaN(oldTotalPrice) ? 0 : (sale.total_price - oldTotalPrice);
+      lotDoc.total_revenue = (lotDoc.total_revenue || 0) + priceDiff;
       await lotDoc.save({ session });
       
       // MIJOZNI YANGILASH (valyuta bo'yicha)
@@ -269,7 +272,9 @@ router.post('/', auth, async (req, res) => {
       
       // LOTNI YANGILASH
       lotDoc.warehouse_dispatched_volume_m3 += dispatchedVolume;
-      lotDoc.total_revenue += sale.total_price;
+      // NaN ni oldini olish
+      const revenueToAdd = isNaN(sale.total_price) ? 0 : sale.total_price;
+      lotDoc.total_revenue = (lotDoc.total_revenue || 0) + revenueToAdd;
       await lotDoc.save({ session });
       
       // MIJOZNI YANGILASH (valyuta bo'yicha)
@@ -336,39 +341,6 @@ router.post('/', auth, async (req, res) => {
     session.endSession();
   }
 });
-
-// Helper function: Vagon jami ma'lumotlarini yangilash
-async function updateVagonTotals(vagonId, session) {
-  const VagonLot = require('../models/VagonLot');
-  const lots = await VagonLot.find({ 
-    vagon: vagonId, 
-    isDeleted: false 
-  }).session(session);
-  
-  const vagon = await Vagon.findById(vagonId).session(session);
-  if (!vagon) return;
-  
-  // Hajmlar (yangi terminologiya bilan xavfsiz hisoblash)
-  vagon.total_volume_m3 = lots.reduce((sum, lot) => sum + (lot.volume_m3 || 0), 0);
-  vagon.total_loss_m3 = lots.reduce((sum, lot) => sum + (lot.loss_volume_m3 || 0), 0);
-  vagon.available_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_available_volume_m3 || lot.available_volume_m3 || 0), 0);
-  vagon.sold_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_dispatched_volume_m3 || lot.sold_volume_m3 || 0), 0);
-  vagon.remaining_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0), 0);
-  
-  // USD (yangi terminologiya bilan)
-  const usdLots = lots.filter(lot => lot.purchase_currency === 'USD');
-  vagon.usd_total_cost = usdLots.reduce((sum, lot) => sum + (lot.total_investment || lot.total_expenses || 0), 0);
-  vagon.usd_total_revenue = usdLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
-  vagon.usd_profit = usdLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
-  
-  // RUB (yangi terminologiya bilan)
-  const rubLots = lots.filter(lot => lot.purchase_currency === 'RUB');
-  vagon.rub_total_cost = rubLots.reduce((sum, lot) => sum + (lot.total_investment || lot.total_expenses || 0), 0);
-  vagon.rub_total_revenue = rubLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
-  vagon.rub_profit = rubLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
-  
-  await vagon.save({ session });
-}
 
 // Sotuvni yangilash (faqat to'lov va izoh)
 router.put('/:id', auth, async (req, res) => {
@@ -466,74 +438,5 @@ router.post('/:id/payment', auth, async (req, res) => {
     alternative: 'POST /api/cash/client-payment'
   });
 });
-
-// HELPER FUNCTION: Vagon jami ma'lumotlarini yangilash
-async function updateVagonTotals(vagonId, session = null) {
-  try {
-    const VagonLot = require('../models/VagonLot');
-    
-    // Vagon bo'yicha barcha lotlarni olish
-    const lots = await VagonLot.find({ 
-      vagon: vagonId, 
-      isDeleted: false 
-    }).session(session);
-    
-    if (lots.length === 0) {
-      console.log(`⚠️ Vagon ${vagonId} uchun lotlar topilmadi`);
-      return;
-    }
-    
-    // Jami ma'lumotlarni hisoblash
-    let totals = {
-      total_volume_m3: 0,
-      total_loss_m3: 0,
-      available_volume_m3: 0,
-      sold_volume_m3: 0,
-      remaining_volume_m3: 0,
-      usd_total_cost: 0,
-      usd_total_revenue: 0,
-      usd_profit: 0,
-      rub_total_cost: 0,
-      rub_total_revenue: 0,
-      rub_profit: 0
-    };
-    
-    lots.forEach(lot => {
-      // Hajm ma'lumotlari (xavfsiz hisoblash)
-      totals.total_volume_m3 += lot.volume_m3 || 0;
-      totals.total_loss_m3 += lot.loss_volume_m3 || 0;
-      totals.available_volume_m3 += lot.warehouse_available_volume_m3 || lot.available_volume_m3 || 0;
-      totals.sold_volume_m3 += lot.warehouse_dispatched_volume_m3 || lot.sold_volume_m3 || 0;
-      totals.remaining_volume_m3 += lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0;
-      
-      // Moliyaviy ma'lumotlar (valyuta bo'yicha, yangi terminologiya bilan)
-      if (lot.purchase_currency === 'USD') {
-        totals.usd_total_cost += lot.total_investment || lot.total_expenses || 0;
-        totals.usd_total_revenue += lot.total_revenue || 0;
-        totals.usd_profit += lot.realized_profit || lot.profit || 0;
-      } else if (lot.purchase_currency === 'RUB') {
-        totals.rub_total_cost += lot.total_investment || lot.total_expenses || 0;
-        totals.rub_total_revenue += lot.total_revenue || 0;
-        totals.rub_profit += lot.realized_profit || lot.profit || 0;
-      }
-    });
-    
-    // Vagonni yangilash
-    const updateOptions = session ? { session } : {};
-    await Vagon.findByIdAndUpdate(vagonId, totals, updateOptions);
-    
-    console.log(`✅ Vagon ${vagonId} jami ma'lumotlari yangilandi:`, {
-      total_volume: totals.total_volume_m3,
-      sold_volume: totals.sold_volume_m3,
-      remaining_volume: totals.remaining_volume_m3,
-      usd_profit: totals.usd_profit,
-      rub_profit: totals.rub_profit
-    });
-    
-  } catch (error) {
-    console.error(`❌ Vagon ${vagonId} ma'lumotlarini yangilashda xatolik:`, error);
-    throw error;
-  }
-}
 
 module.exports = router;

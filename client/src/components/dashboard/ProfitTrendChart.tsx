@@ -2,6 +2,7 @@
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '@/utils/formatters';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface ProfitData {
   _id: {
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function ProfitTrendChart({ data }: Props) {
+  const { t } = useLanguage();
   // Ma'lumotlarni grafik uchun tayyorlash
   const chartData = data.reduce((acc: any[], item) => {
     const monthKey = `${item._id.year}-${item._id.month.toString().padStart(2, '0')}`;
@@ -52,9 +54,9 @@ export default function ProfitTrendChart({ data }: Props) {
           {payload.map((entry: any, index: number) => {
             const [type, currency] = entry.dataKey.split('_');
             const typeNames = {
-              profit: 'Foyda',
-              income: 'Daromad',
-              expense: 'Xarajat'
+              profit: t.dashboard.profit,
+              income: t.dashboard.income,
+              expense: t.dashboard.expense
             };
             
             return (
@@ -74,7 +76,7 @@ export default function ProfitTrendChart({ data }: Props) {
       <div className="h-64 flex items-center justify-center text-gray-500">
         <div className="text-center">
           <div className="text-4xl mb-2">📈</div>
-          <p>Foyda ma'lumotlari mavjud emas</p>
+          <p>{t.dashboard.noProfitData}</p>
         </div>
       </div>
     );
@@ -116,7 +118,7 @@ export default function ProfitTrendChart({ data }: Props) {
             stroke="#10b981"
             fillOpacity={1}
             fill="url(#profitUSD)"
-            name="USD Foyda"
+            name={`USD ${t.dashboard.profit}`}
           />
           
           {/* RUB foyda maydoni */}
@@ -126,7 +128,7 @@ export default function ProfitTrendChart({ data }: Props) {
             stroke="#3b82f6"
             fillOpacity={1}
             fill="url(#profitRUB)"
-            name="RUB Foyda"
+            name={`RUB ${t.dashboard.profit}`}
           />
         </AreaChart>
       </ResponsiveContainer>

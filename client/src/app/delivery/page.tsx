@@ -107,7 +107,7 @@ export default function DeliveryPage() {
               </div>
               {t.delivery.title}
             </h1>
-          <p className="text-gray-500 mt-1">Afg'onistondan yuk yetkazib berish xizmati</p>
+          <p className="text-gray-500 mt-1">{t.delivery.serviceDescription}</p>
         </div>
         
         <button

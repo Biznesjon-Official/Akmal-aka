@@ -99,10 +99,10 @@ export default function RealTimeDashboard() {
         <Card className="p-8 text-center">
           <div className="text-red-500 text-xl mb-4">⚠️</div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Ma'lumotlarni yuklashda xatolik
+            {t.dashboard.errorLoadingData}
           </h3>
           <p className="text-gray-600">
-            Iltimos, sahifani yangilang yoki keyinroq qayta urinib ko'ring
+            {t.dashboard.pleaseRefreshOrTryLater}
           </p>
         </Card>
       </div>
@@ -116,29 +116,29 @@ export default function RealTimeDashboard() {
     switch (viewMode) {
       case 'real':
         return {
-          title: '📊 Haqiqiy Ma\'lumotlar',
-          subtitle: 'Bugun sodir bo\'lgan real operatsiyalar',
+          title: `📊 ${t.dashboard.realData}`,
+          subtitle: t.dashboard.realDataSubtitle,
           metrics: [
             {
-              label: 'Bugungi daromad',
+              label: t.dashboard.todayRevenue,
               value: `$${dashboardData.actual.today_revenue.toLocaleString()}`,
               color: 'text-green-600',
               icon: '💰'
             },
             {
-              label: 'Bugungi xarajat',
+              label: t.dashboard.todayExpenses,
               value: `$${dashboardData.actual.today_expenses.toLocaleString()}`,
               color: 'text-red-600',
               icon: '💸'
             },
             {
-              label: 'Bugungi foyda',
+              label: t.dashboard.todayProfit,
               value: `$${dashboardData.actual.today_profit.toLocaleString()}`,
               color: dashboardData.actual.today_profit >= 0 ? 'text-green-600' : 'text-red-600',
               icon: dashboardData.actual.today_profit >= 0 ? '📈' : '📉'
             },
             {
-              label: 'Kassa balansi',
+              label: t.dashboard.cashBalance,
               value: `$${dashboardData.actual.cash_balance.toLocaleString()}`,
               color: dashboardData.actual.cash_balance >= 0 ? 'text-blue-600' : 'text-red-600',
               icon: '🏦'
@@ -148,23 +148,23 @@ export default function RealTimeDashboard() {
       
       case 'projected':
         return {
-          title: '🔮 Prognoz Ma\'lumotlar',
-          subtitle: 'Kutilayotgan natijalar va tahlillar',
+          title: `🔮 ${t.dashboard.projectedData}`,
+          subtitle: t.dashboard.projectedDataSubtitle,
           metrics: [
             {
-              label: 'Kutilayotgan daromad',
+              label: t.dashboard.expectedRevenue,
               value: `$${dashboardData.projected.expected_revenue_from_remaining.toLocaleString()}`,
               color: 'text-blue-600',
               icon: '🎯'
             },
             {
-              label: 'Minimal narx',
+              label: t.dashboard.minPrice,
               value: `$${dashboardData.projected.break_even_analysis.min_price_needed.toFixed(2)}/m³`,
               color: 'text-orange-600',
               icon: '⚖️'
             },
             {
-              label: 'ROI prognozi',
+              label: t.dashboard.roiForecast,
               value: `${dashboardData.projected.roi_forecast.toFixed(1)}%`,
               color: dashboardData.projected.roi_forecast >= 0 ? 'text-green-600' : 'text-red-600',
               icon: '📊'
@@ -180,29 +180,29 @@ export default function RealTimeDashboard() {
       
       case 'combined':
         return {
-          title: '🔄 Umumiy Ko\'rsatkichlar',
-          subtitle: 'Real va prognoz ma\'lumotlar birgalikda',
+          title: `🔄 ${t.dashboard.combinedData}`,
+          subtitle: t.dashboard.combinedDataSubtitle,
           metrics: [
             {
-              label: 'Jami sarmoya',
+              label: t.dashboard.totalInvestment,
               value: `$${dashboardData.combined.total_investment.toLocaleString()}`,
               color: 'text-gray-600',
               icon: '💼'
             },
             {
-              label: 'Potensial daromad',
+              label: t.dashboard.potentialRevenue,
               value: `$${dashboardData.combined.potential_total_revenue.toLocaleString()}`,
               color: 'text-blue-600',
               icon: '🎯'
             },
             {
-              label: 'Potensial foyda',
+              label: t.dashboard.potentialProfit,
               value: `$${dashboardData.combined.potential_total_profit.toLocaleString()}`,
               color: dashboardData.combined.potential_total_profit >= 0 ? 'text-green-600' : 'text-red-600',
               icon: dashboardData.combined.potential_total_profit >= 0 ? '🚀' : '⚠️'
             },
             {
-              label: 'Faol vagonlar',
+              label: t.dashboard.activeVagons,
               value: dashboardData.actual.active_vagons.toString(),
               color: 'text-indigo-600',
               icon: '🚛'
@@ -233,9 +233,9 @@ export default function RealTimeDashboard() {
           </p>
         </div>
         
-        {/* Boshqaruv paneli */}
+        {/* Control panel */}
         <div className="flex items-center space-x-4">
-          {/* Ko'rsatish rejimi */}
+          {/* Display mode */}
           <div className="flex bg-white rounded-lg border border-gray-200 p-1">
             <button
               onClick={() => setViewMode('real')}
@@ -255,7 +255,7 @@ export default function RealTimeDashboard() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              🔮 Prognoz
+              🔮 {t.dashboard.projected}
             </button>
             <button
               onClick={() => setViewMode('combined')}
@@ -265,7 +265,7 @@ export default function RealTimeDashboard() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              🔄 Umumiy
+              🔄 {t.dashboard.combined}
             </button>
           </div>
           
@@ -335,13 +335,13 @@ export default function RealTimeDashboard() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Jami sarmoya</p>
+                <p className="text-sm text-gray-600">{t.dashboard.totalInvestment}</p>
                 <p className="text-xl font-bold text-gray-900">
                   ${dashboardData.projected.break_even_analysis.total_investment.toLocaleString()}
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-sm text-gray-600">Minimal narx</p>
+                <p className="text-sm text-gray-600">{t.dashboard.minPrice}</p>
                 <p className="text-xl font-bold text-orange-600">
                   ${dashboardData.projected.break_even_analysis.min_price_needed.toFixed(2)}/m³
                 </p>
@@ -382,7 +382,7 @@ export default function RealTimeDashboard() {
         {/* Kassa oqimi */}
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            💳 Bugungi Kassa Harakati
+            💳 {t.dashboard.todayCashFlow}
           </h3>
           <CashFlowWidget data={dashboardData?.todayKassa || []} />
         </Card>
@@ -411,7 +411,7 @@ export default function RealTimeDashboard() {
       {/* Faol vagonlar xaritasi */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          🗺️ Faol Vagonlar Holati
+          🗺️ {t.dashboard.activeVagonsStatus}
         </h3>
         <ActiveTransportsMap data={dashboardData?.activeTransports || []} />
       </Card>

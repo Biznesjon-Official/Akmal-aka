@@ -51,22 +51,22 @@ export default function ActiveTransportsMap({ data }: Props) {
     return (
       <div className="text-center text-gray-500 py-8">
         <div className="text-4xl mb-2">🚛</div>
-        <p>Hozirda faol vagonlar yo'q</p>
-        <p className="text-sm mt-1">Barcha lotlar o'z joyida</p>
+        <p>{t.dashboard.noActiveVagons}</p>
+        <p className="text-sm mt-1">{t.dashboard.allLotsInPlace}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Umumiy statistika */}
+      {/* Overall statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">
               {data.length}
             </div>
-            <div className="text-sm text-gray-600">Jami faol vagonlar</div>
+            <div className="text-sm text-gray-600">{t.dashboard.totalActiveVagons}</div>
           </div>
         </Card>
         
@@ -84,7 +84,7 @@ export default function ActiveTransportsMap({ data }: Props) {
             <div className="text-2xl font-bold text-orange-600">
               {Math.round(data.reduce((sum, t) => sum + calculateDaysInTransit(t.createdAt), 0) / data.length)}
             </div>
-            <div className="text-sm text-gray-600">O'rtacha kun</div>
+            <div className="text-sm text-gray-600">{t.dashboard.averageDays}</div>
           </div>
         </Card>
       </div>
@@ -102,7 +102,7 @@ export default function ActiveTransportsMap({ data }: Props) {
                   {config.title}
                 </h4>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bgColor} ${config.color}`}>
-                  {transports.length} vagon
+                  {transports.length} {t.vagon.title.toLowerCase()}
                 </span>
               </div>
 
@@ -123,7 +123,7 @@ export default function ActiveTransportsMap({ data }: Props) {
                           <div className="font-medium text-gray-900 flex items-center">
                             {transport.lotCode}
                             {isDelayed && (
-                              <span className="ml-2 text-red-500 text-sm">⚠️ Kechikmoqda</span>
+                              <span className="ml-2 text-red-500 text-sm">⚠️ {t.dashboard.delayed}</span>
                             )}
                           </div>
                           <div className="text-sm text-gray-600">
@@ -135,7 +135,7 @@ export default function ActiveTransportsMap({ data }: Props) {
                           <div className={`text-sm font-medium ${
                             isDelayed ? 'text-red-600' : 'text-gray-600'
                           }`}>
-                            {daysInTransit} kun
+                            {daysInTransit} {t.dashboard.days}
                           </div>
                           <div className="text-xs text-gray-500">
                             {new Date(transport.createdAt).toLocaleDateString('uz-UZ')}
@@ -158,8 +158,8 @@ export default function ActiveTransportsMap({ data }: Props) {
                           ></div>
                         </div>
                         <div className="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>Boshlandi</span>
-                          <span>14+ kun (kechikish)</span>
+                          <span>{t.dashboard.started}</span>
+                          <span>{t.dashboard.delayedDays}</span>
                         </div>
                       </div>
                     </div>

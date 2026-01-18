@@ -1,7 +1,7 @@
 {
-  "name": "wood-system-server",
+  "name": "akmalaka-system-server",
   "version": "1.0.0",
-  "description": "Backend server for wood import/export system",
+  "description": "Backend server for import/export system",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",

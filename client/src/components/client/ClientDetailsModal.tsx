@@ -168,7 +168,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             <div className="text-center">
               <div className="text-2xl font-bold">{summary.totalSales}</div>
-              <div className="text-blue-100 text-sm">Jami sotuvlar</div>
+              <div className="text-blue-100 text-sm">{t.dashboard.totalSales}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">{formatNumber(summary.totalVolume)} m³</div>
@@ -178,16 +178,16 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
               <div className="text-2xl font-bold">
                 {salesStats.reduce((sum, stat) => sum + stat.totalSales, 0).toLocaleString()}
               </div>
-              <div className="text-blue-100 text-sm">Jami qiymat</div>
+              <div className="text-blue-100 text-sm">{t.dashboard.totalValue}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">
                 {summary.lastSaleDate ? 
                   new Date(summary.lastSaleDate).toLocaleDateString('uz-UZ') : 
-                  'Yo\'q'
+                  t.dashboard.none
                 }
               </div>
-              <div className="text-blue-100 text-sm">Oxirgi sotuv</div>
+              <div className="text-blue-100 text-sm">{t.dashboard.lastSale}</div>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '@/utils/formatters';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface SalesData {
   _id: {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function SalesDynamicsChart({ data }: Props) {
+  const { t } = useLanguage();
   // Ma'lumotlarni grafik uchun tayyorlash
   const chartData = data.reduce((acc: any[], item) => {
     const date = item._id.date;
@@ -53,8 +55,8 @@ export default function SalesDynamicsChart({ data }: Props) {
             return (
               <p key={index} style={{ color: entry.color }} className="text-sm">
                 {isCount ? 
-                  `${currency} sotuvlar soni: ${entry.value}` :
-                  `${currency} sotuv: ${formatCurrency(entry.value, currency)}`
+                  `${currency} ${t.dashboard.salesCount}: ${entry.value}` :
+                  `${currency} ${t.dashboard.sales}: ${formatCurrency(entry.value, currency)}`
                 }
               </p>
             );
@@ -70,7 +72,7 @@ export default function SalesDynamicsChart({ data }: Props) {
       <div className="h-64 flex items-center justify-center text-gray-500">
         <div className="text-center">
           <div className="text-4xl mb-2">📊</div>
-          <p>Ma'lumotlar mavjud emas</p>
+          <p>{t.dashboard.noDataAvailable}</p>
         </div>
       </div>
     );
@@ -101,7 +103,7 @@ export default function SalesDynamicsChart({ data }: Props) {
             stroke="#10b981"
             strokeWidth={2}
             dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-            name="USD Sotuv"
+            name={`USD ${t.dashboard.sales}`}
             connectNulls={false}
           />
           
@@ -112,7 +114,7 @@ export default function SalesDynamicsChart({ data }: Props) {
             stroke="#3b82f6"
             strokeWidth={2}
             dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-            name="RUB Sotuv"
+            name={`RUB ${t.dashboard.sales}`}
             connectNulls={false}
           />
         </LineChart>

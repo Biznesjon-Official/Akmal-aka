@@ -8,10 +8,16 @@ router.get('/', auth, async (req, res) => {
   try {
     const clients = await Client.find({ isDeleted: false })
       .select('-__v') // __v ni chiqarib tashlash
-      .sort({ createdAt: -1 })
-      .lean(); // Plain JS object (tezroq)
+      .sort({ createdAt: -1 });
+      // .lean() ni olib tashladik - virtual field'lar kerak
     
-    res.json(clients);
+    // Virtual field'larni qo'shish
+    const clientsWithVirtuals = clients.map(client => {
+      const obj = client.toObject({ virtuals: true });
+      return obj;
+    });
+    
+    res.json(clientsWithVirtuals);
   } catch (error) {
     console.error('Client list error:', error);
     res.status(500).json({ message: 'Mijozlar ro\'yxatini olishda xatolik' });
