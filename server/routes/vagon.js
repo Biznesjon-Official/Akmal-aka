@@ -13,17 +13,29 @@ router.get('/', auth, async (req, res) => {
     if (month) filter.month = month;
     
     const vagons = await Vagon.find(filter)
-      .sort({ createdAt: -1 });
+      .select('-__v')
+      .sort({ createdAt: -1 })
+      .lean(); // OPTIMIZATSIYA
     
-    // Har bir vagon uchun lotlarni olish
+    // Har bir vagon uchun lotlarni olish - OPTIMIZATSIYA
     const VagonLot = require('../models/VagonLot');
-    for (let vagon of vagons) {
-      const lots = await VagonLot.find({ 
-        vagon: vagon._id, 
-        isDeleted: false 
-      });
-      vagon._doc.lots = lots; // lots ni qo'shish
-    }
+    const vagonIds = vagons.map(v => v._id);
+    const allLots = await VagonLot.find({ 
+      vagon: { $in: vagonIds }, 
+      isDeleted: false 
+    }).lean();
+    
+    // Lotlarni vagonlarga biriktirish
+    const lotsMap = {};
+    allLots.forEach(lot => {
+      const vagonId = lot.vagon.toString();
+      if (!lotsMap[vagonId]) lotsMap[vagonId] = [];
+      lotsMap[vagonId].push(lot);
+    });
+    
+    vagons.forEach(vagon => {
+      vagon.lots = lotsMap[vagon._id.toString()] || [];
+    });
     
     res.json(vagons);
   } catch (error) {

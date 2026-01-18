@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import axios from '@/lib/axios';
 import { formatCurrency } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
+import Icon from '@/components/Icon';
 
 interface Props {
   expenseId: string;
@@ -123,9 +124,10 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:text-gray-200 text-2xl"
+              className="text-white hover:text-gray-200 transition-all duration-200 p-2 rounded-xl hover:bg-white/20 backdrop-blur-sm group"
+              aria-label="Yopish"
             >
-              ✕
+              <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
           </div>
         </div>

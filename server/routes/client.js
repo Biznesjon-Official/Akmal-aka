@@ -3,11 +3,13 @@ const router = express.Router();
 const Client = require('../models/Client');
 const auth = require('../middleware/auth');
 
-// Barcha mijozlar ro'yxati
+// Barcha mijozlar ro'yxati - OPTIMIZATSIYA
 router.get('/', auth, async (req, res) => {
   try {
     const clients = await Client.find({ isDeleted: false })
-      .sort({ createdAt: -1 });
+      .select('-__v') // __v ni chiqarib tashlash
+      .sort({ createdAt: -1 })
+      .lean(); // Plain JS object (tezroq)
     
     res.json(clients);
   } catch (error) {

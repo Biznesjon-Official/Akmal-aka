@@ -31,6 +31,12 @@ export function useTranslatedNavigation() {
       gradient: 'from-emerald-500 to-emerald-600' 
     },
     { 
+      name: t.sidebar.delivery, 
+      href: '/delivery', 
+      icon: <Icon name="transport" size="sm" />,
+      gradient: 'from-purple-500 to-purple-600' 
+    },
+    { 
       name: t.sidebar.expenses, 
       href: '/expense', 
       icon: <Icon name="expenses" size="sm" />,
@@ -47,6 +53,12 @@ export function useTranslatedNavigation() {
       href: '/reports', 
       icon: <Icon name="reports" size="sm" />,
       gradient: 'from-pink-500 to-pink-600' 
+    },
+    { 
+      name: t.sidebar.calculator, 
+      href: '/calculator', 
+      icon: <Icon name="calculator" size="sm" />,
+      gradient: 'from-indigo-500 to-indigo-600' 
     },
   ], [t]);
 

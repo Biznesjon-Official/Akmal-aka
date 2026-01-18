@@ -101,6 +101,7 @@ app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // Kengay
 app.use('/api/loss-liability', require('./routes/lossLiability')); // Yo'qotish javobgarligi (YANGI)
 app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // Xarajat taqsimoti (YANGI)
 app.use('/api/system-settings', require('./routes/systemSettings')); // Tizim sozlamalari (YANGI)
+app.use('/api/delivery', require('./routes/delivery')); // Olib kelib berish logistika (YANGI)
 app.use('/api/backup', require('./routes/backup'));
 
 // Global error handler

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from '@/lib/axios';
 import Layout from '@/components/Layout';
+import SaleTableSkeleton from '@/components/sale/SaleTableSkeleton';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Modal, { ModalBody, ModalFooter } from '@/components/ui/Modal';
@@ -455,19 +456,19 @@ function SaleContent() {
                           `1 USD = ${formatNumber(Number(formData.valyutaKursi))} RUB` : 
                           `1 RUB = ${formatNumber(Number(formData.valyutaKursi))} USD`
                         ) : 
-                        t.dashboard.noRatesSet
+                        'Kurs belgilanmagan'
                       }
                     </span>
                     <a 
                       href="/exchange-rates" 
                       target="_blank"
                       className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
-                      title={t.dashboard.setRates}
+                      title="Kurs belgilash"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                      {t.dashboard.setRates}
+                      Kurs belgilash
                     </a>
                   </div>
                   <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
@@ -529,7 +530,7 @@ function SaleContent() {
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                         </svg>
-                        💰 {t.wood.netProfit}
+                        💰 Sof foyda
                       </h4>
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
@@ -546,7 +547,7 @@ function SaleContent() {
                         </div>
                         <div className={`flex justify-between text-lg border-t pt-2 mt-2 ${total.profitPreview.expectedProfit >= 0 ? 'border-green-300' : 'border-red-300'}`}>
                           <span className={`font-semibold ${total.profitPreview.expectedProfit >= 0 ? 'text-green-900' : 'text-red-900'}`}>
-                            {t.wood.netProfit}:
+                            Sof foyda:
                           </span>
                           <div className="text-right">
                             <div className={`font-bold text-xl ${total.profitPreview.expectedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -563,7 +564,7 @@ function SaleContent() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
-                          {t.common.warning}
+                          Ogohlantirish
                         </div>
                       )}
                     </Card>
@@ -615,7 +616,14 @@ function SaleContent() {
             <TableHead>{t.common.actions}</TableHead>
           </TableHeader>
           <TableBody loading={isLoading} empty={!saleData?.sales?.length}>
-            {saleData?.sales?.map((sale) => (
+            {isLoading ? (
+              <tr>
+                <td colSpan={7}>
+                  <SaleTableSkeleton />
+                </td>
+              </tr>
+            ) : (
+              saleData?.sales?.map((sale) => (
               <TableRow key={sale._id}>
                 <TableCell>
                   <div className="text-sm font-bold text-gray-900">{sale.woodLot?.lotCode}</div>
@@ -629,7 +637,7 @@ function SaleContent() {
                   <div className="text-sm font-bold text-gray-900">
                     {formatCurrency(sale.birlikNarxi, sale.valyuta)}/m³
                   </div>
-                  <div className="text-xs text-gray-600">{t.exchangeRates.rate}: {formatNumber(sale.valyutaKursi)}</div>
+                  <div className="text-xs text-gray-600">Kurs: {formatNumber(sale.valyutaKursi)}</div>
                 </TableCell>
                 <TableCell>
                   <div className="text-sm font-bold text-emerald-600">
@@ -664,7 +672,8 @@ function SaleContent() {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+            ))
+            )}
           </TableBody>
         </Table>
       </div>

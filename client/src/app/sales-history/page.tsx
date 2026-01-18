@@ -252,7 +252,7 @@ function SalesHistoryContent() {
         {/* Jadval */}
         <Table
           title={t.salesHistory.soldLots}
-          subtitle={`${t.common.total}: ${data?.total || 0} ${t.dashboard.lot}`}
+          subtitle={`${t.common.total}: ${data?.total || 0} ta`}
         >
           <TableHeader>
             <TableHead>{t.salesHistory.lotCode}</TableHead>

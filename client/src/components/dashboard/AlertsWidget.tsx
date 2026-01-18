@@ -160,7 +160,7 @@ export default function AlertsWidget({ alerts }: Props) {
                         {alert.type === 'low_stock' && (
                           <div className="text-sm text-gray-600">
                             <p><strong>{t.vagon.vagonCode}:</strong> {alert.data.lotCode}</p>
-                            <p><strong>{t.vagonSale.remainingVolumeColon}</strong> {alert.data.kubHajmi.toFixed(2)} m³</p>
+                            <p><strong>{t.vagonSale.remainingVolumeLabel}:</strong> {alert.data.kubHajmi.toFixed(2)} m³</p>
                           </div>
                         )}
                         

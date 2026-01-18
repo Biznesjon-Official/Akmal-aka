@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import Layout from '@/components/Layout';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import VagonTableSkeleton from '@/components/vagon/VagonTableSkeleton';
+import { Skeleton } from '@/components/ui/Skeleton';
+import Icon from '@/components/Icon';
 import axios from 'axios';
 
 interface VagonLot {
@@ -240,7 +242,7 @@ export default function VagonPage() {
       setShowModal(false);
       resetForm();
     } catch (error: any) {
-      alert(error.response?.data?.message || t.messages.errorOccurredGeneral);
+      alert(error.response?.data?.message || t.messages.errorOccurred);
     }
   };
 
@@ -276,7 +278,7 @@ export default function VagonPage() {
       alert(`✅ ${t.messages.vagonSuccessfullyClosed}\n${t.messages.reason}: ${reasonText}`);
       fetchVagons();
     } catch (error: any) {
-      alert(error.response?.data?.message || t.messages.errorOccurredGeneral);
+      alert(error.response?.data?.message || t.messages.errorOccurred);
     }
   };
 
@@ -289,7 +291,20 @@ export default function VagonPage() {
   };
 
   if (authLoading || loading) {
-    return <LoadingSpinner />;
+    return (
+      <Layout>
+        <div className="p-6 space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <VagonTableSkeleton />
+        </div>
+      </Layout>
+    );
   }
 
   if (!user) {
@@ -329,13 +344,13 @@ export default function VagonPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-3xl font-bold">{vagon.total_volume_m3.toFixed(4)} m³</div>
-                      <div className="text-sm opacity-90">{t.vagon.totalVolumeLabel}</div>
+                      <div className="text-sm opacity-90">{t.vagon.totalVolume}</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="p-6">
-                  <h4 className="font-semibold text-lg mb-4">{t.vagon.lots} ({vagon.lots?.length || 0})</h4>
+                  <h4 className="font-semibold text-lg mb-4">Lotlar ({vagon.lots?.length || 0})</h4>
                   
                   {vagon.lots && vagon.lots.length > 0 ? (
                     <div className="space-y-3">
@@ -344,33 +359,37 @@ export default function VagonPage() {
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
                               <div className="font-semibold text-lg text-blue-600">
-                                {index + 1}. {lot.dimensions} mm × {lot.quantity} {t.vagon.pieces}
+                                {index + 1}. {lot.dimensions} mm × {lot.quantity} dona
                               </div>
                               <div className="text-sm text-gray-600 mt-1">
-                                {t.vagon.totalVolumeLabel}: {lot.volume_m3.toFixed(4)} m³ | 
-                                {t.vagon.warehouseAvailable}: {(lot.warehouse_available_volume_m3 || lot.volume_m3 - lot.loss_volume_m3).toFixed(4)} m³ |
-                                <span className="text-green-600 font-semibold">{t.vagon.soldLabel}: {(lot.warehouse_dispatched_volume_m3 || 0).toFixed(4)} m³</span> |
-                                {t.vagon.remainingLabel}: {(lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3).toFixed(4)} m³
+                                Jami hajm: {lot.volume_m3.toFixed(4)} m³ | 
+                                Omborda mavjud: {(lot.warehouse_available_volume_m3 || lot.volume_m3 - lot.loss_volume_m3).toFixed(4)} m³ |
+                                <span className="text-green-600 font-semibold">Sotilgan: {(lot.warehouse_dispatched_volume_m3 || 0).toFixed(4)} m³</span> |
+                                Qolgan: {(lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3).toFixed(4)} m³
                               </div>
                               {/* Brak ma'lumotlari */}
                               {lot.loss_volume_m3 > 0 && (
-                                <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
-                                  <div className="font-semibold text-red-700">
-                                    🚨 {t.vagon.brakLabel}: {lot.loss_volume_m3.toFixed(4)} m³
+                                <div className="mt-2 p-3 bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-200 rounded-xl text-sm shadow-sm">
+                                  <div className="flex items-center gap-2 font-semibold text-red-700 mb-2">
+                                    <Icon name="warning" size="sm" />
+                                    Brak: {lot.loss_volume_m3.toFixed(4)} m³
                                   </div>
                                   {lot.loss_responsible_person && (
-                                    <div className="text-red-600">
-                                      👤 {t.vagon.responsible}: {lot.loss_responsible_person}
+                                    <div className="flex items-center gap-2 text-red-600">
+                                      <Icon name="clients" size="sm" />
+                                      {t.vagon.responsible}: {lot.loss_responsible_person}
                                     </div>
                                   )}
                                   {lot.loss_reason && (
-                                    <div className="text-red-600">
-                                      📝 {t.vagon.reason}: {lot.loss_reason}
+                                    <div className="flex items-center gap-2 text-red-600">
+                                      <Icon name="details" size="sm" />
+                                      Sabab: {lot.loss_reason}
                                     </div>
                                   )}
                                   {lot.loss_date && (
-                                    <div className="text-red-600">
-                                      📅 {t.vagon.date}: {new Date(lot.loss_date).toLocaleDateString('uz-UZ')}
+                                    <div className="flex items-center gap-2 text-red-600">
+                                      <Icon name="calendar" size="sm" />
+                                      Sana: {new Date(lot.loss_date).toLocaleDateString('uz-UZ')}
                                     </div>
                                   )}
                                 </div>
@@ -389,33 +408,33 @@ export default function VagonPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-4 text-gray-500">{t.vagon.lots} {t.common.noData}</div>
+                    <div className="text-center py-4 text-gray-500">Lotlar {t.common.noData}</div>
                   )}
 
                   <div className="mt-6 pt-6 border-t">
                     {/* Hajm statistikasi */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                       <div className="text-center">
-                        <div className="text-sm text-gray-600">{t.vagon.totalVolumeLabel}</div>
+                        <div className="text-sm text-gray-600">Jami hajm</div>
                         <div className="text-lg font-bold text-blue-600">{vagon.total_volume_m3.toFixed(4)} m³</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-sm text-gray-600">{t.vagon.brakLabel}</div>
+                        <div className="text-sm text-gray-600">Brak</div>
                         <div className="text-lg font-bold text-red-600">{vagon.total_loss_m3.toFixed(4)} m³</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-sm text-gray-600">{t.vagon.availableLabel}</div>
+                        <div className="text-sm text-gray-600">Mavjud</div>
                         <div className="text-lg font-bold text-orange-600">{vagon.available_volume_m3.toFixed(4)} m³</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-sm text-gray-600">{t.vagon.soldLabel}</div>
+                        <div className="text-sm text-gray-600">Sotilgan</div>
                         <div className="text-lg font-bold text-green-600">{vagon.sold_volume_m3.toFixed(4)} m³</div>
                         <div className="text-xs text-gray-500">
                           {vagon.total_volume_m3 > 0 ? `${((vagon.sold_volume_m3 / vagon.total_volume_m3) * 100).toFixed(1)}%` : '0%'}
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-sm text-gray-600">{t.vagon.remainingLabel}</div>
+                        <div className="text-sm text-gray-600">Qolgan</div>
                         <div className="text-lg font-bold text-purple-600">{vagon.remaining_volume_m3.toFixed(4)} m³</div>
                       </div>
                     </div>
@@ -423,28 +442,28 @@ export default function VagonPage() {
                     {/* Moliyaviy ma'lumotlar */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <div className="text-sm text-gray-600">{t.vagon.usdInvestment}</div>
+                        <div className="text-sm text-gray-600">USD investitsiya</div>
                         <div className="text-lg font-bold">${(vagon.total_investment_usd || vagon.total_purchase_usd || 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-500">{t.vagon.purchaseAndExpenses}</div>
+                        <div className="text-xs text-gray-500">Xarid va xarajatlar</div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600">{t.vagon.rubInvestment}</div>
+                        <div className="text-sm text-gray-600">RUB investitsiya</div>
                         <div className="text-lg font-bold">₽{(vagon.total_investment_rub || vagon.total_purchase_rub || 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-500">{t.vagon.purchaseAndExpenses}</div>
+                        <div className="text-xs text-gray-500">Xarid va xarajatlar</div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600">{t.vagon.usdRealizedProfit}</div>
+                        <div className="text-sm text-gray-600">USD real foyda</div>
                         <div className={`text-lg font-bold ${(vagon.realized_profit_usd || vagon.profit_usd || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           ${(vagon.realized_profit_usd || vagon.profit_usd || 0).toLocaleString()}
                         </div>
-                        <div className="text-xs text-gray-500">{t.vagon.onlySoldPart}</div>
+                        <div className="text-xs text-gray-500">Faqat sotilgan qism</div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600">{t.vagon.usdUnrealizedValue}</div>
+                        <div className="text-sm text-gray-600">USD real qiymat</div>
                         <div className="text-lg font-bold text-blue-600">
                           ${(vagon.unrealized_value_usd || 0).toLocaleString()}
                         </div>
-                        <div className="text-xs text-gray-500">{t.vagon.remainingVolumeValue}</div>
+                        <div className="text-xs text-gray-500">Qolgan hajm qiymati</div>
                       </div>
                     </div>
                   </div>
@@ -505,7 +524,17 @@ export default function VagonPage() {
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
             <div className="bg-white rounded-lg p-6 w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-4">{t.vagonSale.newVagonAndLots}</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">{t.vagonSale.newVagonAndLots}</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100 group"
+                  aria-label="Yopish"
+                >
+                  <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
               <form onSubmit={handleSubmit}>
                 {/* Vagon ma'lumotlari */}
                 <div className="bg-blue-50 p-4 rounded-lg mb-6">
@@ -566,7 +595,7 @@ export default function VagonPage() {
                       <div className="text-2xl font-bold text-orange-600">
                         {calculateTotalVolume().toFixed(4)} m³
                       </div>
-                      <div className="text-sm text-gray-600">{t.vagon.totalVolumeLabel}</div>
+                      <div className="text-sm text-gray-600">Jami hajm</div>
                     </div>
                   </div>
 

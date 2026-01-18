@@ -1,2 +1,5 @@
-export { uz } from './locales/uz';
-export { ru } from './locales/ru';
+import uzTranslations from './locales/uz.json';
+import ruTranslations from './locales/ru.json';
+
+export const uz = uzTranslations;
+export const ru = ruTranslations;

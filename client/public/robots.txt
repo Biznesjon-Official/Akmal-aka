@@ -1,0 +1,10 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Disallow admin pages
+Disallow: /login
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://akmalaka.biznejon.uz/sitemap.xml

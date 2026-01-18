@@ -185,7 +185,7 @@ function WoodContent() {
       // Yangi lot yaratilganda xarid sahifasiga yo'naltirish
       if (!selectedWood && response.data) {
         const shouldRedirect = await confirm({
-          title: t.wood.saveSuccess,
+          title: t.messages.saveSuccess,
           message: t.purchase.purchaseInfo,
           confirmText: t.common.yes,
           cancelText: t.common.no,
@@ -198,7 +198,7 @@ function WoodContent() {
       }
     } catch (error) {
       console.error('Xato:', error);
-      showToast.error(t.messages.tryAgain);
+      showToast.error(t.messages.errorOccurred);
     }
   };
 

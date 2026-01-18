@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import CashSkeleton from '@/components/cash/CashSkeleton';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
 import Icon from '@/components/Icon';
@@ -416,7 +416,13 @@ export default function CashPage() {
   };
 
   if (authLoading) {
-    return <LoadingSpinner />;
+    return (
+      <Layout>
+        <div className="p-6">
+          <CashSkeleton />
+        </div>
+      </Layout>
+    );
   }
 
   if (!user) {

@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import Layout from '@/components/Layout';
-import LoadingSpinner from '@/components/LoadingSpinner';
 import ClientDetailsModal from '@/components/client/ClientDetailsModal';
-import { formatCurrency } from '@/utils/formatters';
+import ClientTableSkeleton from '@/components/client/ClientTableSkeleton';
+import { Skeleton } from '@/components/ui/Skeleton';
+import Icon from '@/components/Icon';
 import axios from 'axios';
 
 interface Client {
@@ -176,7 +177,20 @@ export default function ClientPage() {
     });
 
   if (authLoading || loading) {
-    return <LoadingSpinner />;
+    return (
+      <Layout>
+        <div className="p-6 space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <ClientTableSkeleton />
+        </div>
+      </Layout>
+    );
   }
 
   if (!user) {
@@ -344,21 +358,23 @@ export default function ClientPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => openDetailsModal(client._id)}
-                  className="flex-1 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-xl hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium"
                 >
-                  📊 Tafsilot
+                  <Icon name="details" size="sm" />
+                  Tafsilot
                 </button>
                 <button
                   onClick={() => openEditModal(client)}
-                  className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium"
                 >
+                  <Icon name="edit" size="sm" />
                   {t.common.edit}
                 </button>
                 <button
                   onClick={() => handleDelete(client._id)}
-                  className="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 text-sm"
+                  className="flex items-center justify-center bg-gradient-to-r from-red-500 to-rose-600 text-white px-3 py-2.5 rounded-xl hover:from-red-600 hover:to-rose-700 shadow-lg hover:shadow-xl transition-all duration-200"
                 >
-                  🗑️
+                  <Icon name="delete" size="sm" />
                 </button>
               </div>
             </div>
@@ -369,9 +385,23 @@ export default function ClientPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">
-              {editingClient ? t.client.editClient : t.client.addClient}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold">
+                {editingClient ? t.client.editClient : t.client.addClient}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingClient(null);
+                  setFormData({ name: '', phone: '', address: '', notes: '' });
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100 group"
+                aria-label="Yopish"
+              >
+                <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+              </button>
+            </div>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>

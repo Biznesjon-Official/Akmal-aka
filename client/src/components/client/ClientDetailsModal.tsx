@@ -6,6 +6,7 @@ import axios from '@/lib/axios';
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
+import Icon from '@/components/Icon';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 interface Client {
@@ -156,9 +157,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:text-gray-200 text-2xl"
+              className="text-white hover:text-gray-200 transition-all duration-200 p-2 rounded-xl hover:bg-white/20 backdrop-blur-sm group"
+              aria-label="Yopish"
             >
-              ✕
+              <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
           </div>
           
@@ -170,7 +172,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">{formatNumber(summary.totalVolume)} m³</div>
-              <div className="text-blue-100 text-sm">{t.vagon.totalVolumeLabel}</div>
+              <div className="text-blue-100 text-sm">{t.vagonSale.totalVolumeLabel}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">

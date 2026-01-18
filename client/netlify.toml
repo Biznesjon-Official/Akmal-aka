@@ -4,11 +4,17 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Next.js uchun Netlify plugin
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from = "/api/*"
+  to = "https://export-backend-latest.onrender.com/api/:splat"
   status = 200
+  force = true
 
 [[headers]]
   for = "/*"

@@ -566,7 +566,7 @@ export default function ReportsPage() {
                   <Card className="p-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-blue-100 text-sm">{t.vagon.totalVolumeLabel}</p>
+                        <p className="text-blue-100 text-sm">{t.vagon.totalVolume}</p>
                         <p className="text-3xl font-bold">{formatNumber(vagonData.summary.totalVolume)} m³</p>
                       </div>
                       <div className="text-4xl opacity-80">📦</div>
@@ -586,7 +586,7 @@ export default function ReportsPage() {
                   <Card className="p-6 bg-gradient-to-r from-purple-500 to-purple-600 text-white">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-purple-100 text-sm">{t.vagon.remainingLabel}</p>
+                        <p className="text-purple-100 text-sm">{t.vagon.remainingVolume}</p>
                         <p className="text-3xl font-bold">{formatNumber(vagonData.summary.remainingVolume)} m³</p>
                       </div>
                       <div className="text-4xl opacity-80">📊</div>

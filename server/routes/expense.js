@@ -39,13 +39,15 @@ router.get('/', auth, async (req, res) => {
     }
     
     const expenses = await Expense.find(filter)
+      .select('-__v')
       .populate('woodLot', 'lotCode kubHajmi qalinlik eni uzunlik')
       .populate('vagon', 'vagonCode')
       .populate('yaratuvchi', 'username')
       .populate('tasdiqlovchi', 'username')
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .sort({ xarajatSanasi: -1 });
+      .sort({ xarajatSanasi: -1 })
+      .lean(); // OPTIMIZATSIYA
     
     const total = await Expense.countDocuments(filter);
     

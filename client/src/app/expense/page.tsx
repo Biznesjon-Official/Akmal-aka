@@ -6,7 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import ExpenseTableSkeleton from '@/components/expense/ExpenseTableSkeleton';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import axios from '@/lib/axios';
 
@@ -195,7 +196,19 @@ export default function ExpensePage() {
   };
 
   if (authLoading || isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <Layout>
+        <div className="p-6 space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <ExpenseTableSkeleton />
+        </div>
+      </Layout>
+    );
   }
 
   if (!user) {
@@ -207,24 +220,24 @@ export default function ExpensePage() {
 
   return (
     <Layout>
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center">
-              <Icon name="expenses" className="mr-3" size="lg" />
-              {t.expense.title}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold flex items-center">
+              <Icon name="expenses" className="mr-2 sm:mr-3 flex-shrink-0" size="md" />
+              <span className="truncate">{t.expense.title}</span>
             </h1>
-            <p className="text-gray-600 mt-1">{t.expense.subtitle}</p>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">{t.expense.subtitle}</p>
           </div>
           <button
             onClick={() => {
               resetForm();
               setShowModal(true);
             }}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-3 rounded-lg hover:from-orange-600 hover:to-orange-700 flex items-center shadow-lg"
+            className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-orange-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:from-orange-600 hover:to-orange-700 flex items-center justify-center shadow-lg text-sm sm:text-base whitespace-nowrap"
           >
-            <Icon name="add" className="mr-2" />
+            <Icon name="add" className="mr-2 flex-shrink-0" size="sm" />
             {t.expense.addExpense}
           </button>
         </div>
@@ -505,10 +518,20 @@ export default function ExpensePage() {
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
             <div className="bg-white rounded-lg p-6 w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-6 flex items-center">
-                <Icon name="add" className="mr-3" />
-                {t.expense.addExpense}
-              </h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold flex items-center">
+                  <Icon name="add" className="mr-3" />
+                  {t.expense.addExpense}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100 group"
+                  aria-label="Yopish"
+                >
+                  <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
               
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

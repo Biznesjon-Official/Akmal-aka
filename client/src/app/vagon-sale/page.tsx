@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import Layout from '@/components/Layout';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import VagonSaleTableSkeleton from '@/components/vagonSale/VagonSaleTableSkeleton';
+import { Skeleton } from '@/components/ui/Skeleton';
 import axios from 'axios';
 
 import Icon from '@/components/Icon';
@@ -266,7 +267,30 @@ export default function VagonSalePage() {
   };
 
   if (authLoading || loading) {
-    return <LoadingSpinner />;
+    return (
+      <Layout>
+        <div className="p-6 space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <Skeleton className="h-10 w-32 rounded" />
+          </div>
+          
+          {/* Filters Skeleton */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Skeleton className="h-10 w-full rounded" />
+              <Skeleton className="h-10 w-full rounded" />
+              <Skeleton className="h-10 w-full rounded" />
+            </div>
+          </div>
+          
+          <VagonSaleTableSkeleton />
+        </div>
+      </Layout>
+    );
   }
 
   if (!user) {
@@ -371,10 +395,23 @@ export default function VagonSalePage() {
         )}
 
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
-              <h2 className="text-2xl font-bold mb-4">{t.vagonSale.addSale}</h2>
-              <form onSubmit={handleSubmit}>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+            <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl my-8 max-h-[95vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4 sticky top-0 bg-white pb-3 border-b">
+                <h2 className="text-xl sm:text-2xl font-bold">{t.vagonSale.addSale}</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModal(false);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100 group"
+                  aria-label="Yopish"
+                >
+                  <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Vagonni tanlang</label>
@@ -452,7 +489,9 @@ export default function VagonSalePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">{t.vagonSale.soldVolumeM3Label}</label>
+                    <label className="block text-sm font-medium mb-1">
+                      {t.vagonSale.soldVolumeM3Label || 'Sotilgan hajm (m³)'}
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -463,18 +502,24 @@ export default function VagonSalePage() {
                     />
                     {selectedLot && getSelectedLotInfo() && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {t.vagonSale.remainingVolumeColon} <span className="font-semibold text-green-600">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
+                        Qolgan hajm: <span className="font-semibold text-green-600">{getSelectedLotInfo()?.remaining_volume_m3.toFixed(2)} m³</span>
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">{t.vagonSale.clientLossM3Label}</label>
+                    <label className="block text-sm font-medium mb-1">
+                      {t.vagonSale.clientLossM3Label || 'Mijoz yo\'qotishi (m³)'}
+                    </label>
                     <input
                       type="number"
                       step="0.01"
                       value={clientLossM3}
-                      onChange={(e) => setClientLossM3(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setClientLossM3(value);
+                        setBrakVolume(value); // Brak bilan sinxronlash
+                      }}
                       placeholder="0.10"
                       className="w-full px-3 py-2 border rounded-lg"
                     />
@@ -483,70 +528,54 @@ export default function VagonSalePage() {
                     </p>
                   </div>
 
-                  {/* BRAK JAVOBGARLIK TAQSIMOTI */}
-                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                    <h4 className="font-semibold text-yellow-800 mb-3">🔄 Brak javobgarlik taqsimoti</h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Jami brak hajmi (m³)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={brakVolume}
-                          onChange={(e) => {
-                            setBrakVolume(e.target.value);
-                            // Eski field bilan sinxronlash
-                            setClientLossM3(e.target.value);
-                          }}
-                          placeholder="5.00"
-                          className="w-full px-3 py-2 border rounded-lg"
-                        />
+                  {/* BRAK JAVOBGARLIK TAQSIMOTI - faqat brak kiritilganda ko'rinadi */}
+                  {parseFloat(brakVolume) > 0 && (
+                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                      <h4 className="font-semibold text-yellow-800 mb-3">🔄 Brak javobgarlik taqsimoti</h4>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Sotuvchi javobgarlik (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={sellerLiabilityPercent}
+                            onChange={(e) => {
+                              const sellerPercent = parseInt(e.target.value) || 0;
+                              setSellerLiabilityPercent(sellerPercent);
+                              setBuyerLiabilityPercent(100 - sellerPercent);
+                            }}
+                            className="w-full px-3 py-2 border rounded-lg"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Xaridor javobgarlik (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={buyerLiabilityPercent}
+                            onChange={(e) => {
+                              const buyerPercent = parseInt(e.target.value) || 0;
+                              setBuyerLiabilityPercent(buyerPercent);
+                              setSellerLiabilityPercent(100 - buyerPercent);
+                            }}
+                            className="w-full px-3 py-2 border rounded-lg"
+                          />
+                        </div>
                       </div>
                       
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Sotuvchi javobgarlik (%)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={sellerLiabilityPercent}
-                          onChange={(e) => {
-                            const sellerPercent = parseInt(e.target.value) || 0;
-                            setSellerLiabilityPercent(sellerPercent);
-                            setBuyerLiabilityPercent(100 - sellerPercent);
-                          }}
-                          className="w-full px-3 py-2 border rounded-lg"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Xaridor javobgarlik (%)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={buyerLiabilityPercent}
-                          onChange={(e) => {
-                            const buyerPercent = parseInt(e.target.value) || 0;
-                            setBuyerLiabilityPercent(buyerPercent);
-                            setSellerLiabilityPercent(100 - buyerPercent);
-                          }}
-                          className="w-full px-3 py-2 border rounded-lg"
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Hisoblash ko'rsatkichlari */}
-                    {parseFloat(brakVolume) > 0 && (
+                      {/* Hisoblash ko'rsatkichlari */}
                       <div className="mt-4 p-3 bg-white rounded border">
-                        <h5 className="font-medium mb-2">📊 Hisoblash natijalari:</h5>
+                        <h5 className="font-medium mb-2 text-sm">📊 Hisoblash natijalari:</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                           <div>
                             <div className="text-red-600">
                               <strong>Sotuvchi bo'yniga:</strong> {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100).toFixed(2)} m³
                             </div>
-                            <div className="text-gray-600">
+                            <div className="text-gray-600 text-xs">
                               Zarar: {((parseFloat(brakVolume) || 0) * sellerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} {saleCurrency}
                             </div>
                           </div>
@@ -554,7 +583,7 @@ export default function VagonSalePage() {
                             <div className="text-blue-600">
                               <strong>Xaridor bo'yniga:</strong> {((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100).toFixed(2)} m³
                             </div>
-                            <div className="text-gray-600">
+                            <div className="text-gray-600 text-xs">
                               {buyerLiabilityPercent > 0 ? 
                                 `To'lashi kerak: ${((parseFloat(brakVolume) || 0) * buyerLiabilityPercent / 100 * (parseFloat(pricePerM3) || 0)).toFixed(2)} ${saleCurrency}` :
                                 'To\'lov qilmaydi'
@@ -563,35 +592,39 @@ export default function VagonSalePage() {
                           </div>
                         </div>
                       </div>
-                    )}
-                    
-                    <div className="mt-3 text-xs text-yellow-700">
-                      💡 <strong>Tushuntirish:</strong> Agar xaridor 0% javobgar bo'lsa, brak uchun to'lov qilmaydi. 
-                      Agar 100% javobgar bo'lsa, brak hajmini ham to'lashi kerak.
+                      
+                      <div className="mt-3 text-xs text-yellow-700">
+                        💡 <strong>Tushuntirish:</strong> Agar xaridor 0% javobgar bo'lsa, brak uchun to'lov qilmaydi. 
+                        Agar 100% javobgar bo'lsa, brak hajmini ham to'lashi kerak.
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* {t.vagonSale.clientLossInfoLabel} */}
+                  {/* Javobgarlik ma'lumotlari - faqat yo'qotish kiritilganda */}
                   {parseFloat(clientLossM3) > 0 && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium mb-1 text-red-600">{t.vagonSale.lossResponsiblePersonLabel}</label>
+                        <label className="block text-sm font-medium mb-1 text-red-600">
+                          {t.vagonSale.lossResponsiblePersonLabel || 'Javobgar shaxs'}
+                        </label>
                         <input
                           type="text"
                           value={clientLossResponsible}
                           onChange={(e) => setClientLossResponsible(e.target.value)}
-                          placeholder={t.vagonSale.fullNamePlaceholder}
+                          placeholder="F.I.O"
                           className="w-full px-3 py-2 border border-red-300 rounded-lg"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium mb-1 text-red-600">{t.vagonSale.lossReasonLabel}</label>
+                        <label className="block text-sm font-medium mb-1 text-red-600">
+                          {t.vagonSale.lossReasonLabel || 'Yo\'qotish sababi'}
+                        </label>
                         <input
                           type="text"
                           value={clientLossReason}
                           onChange={(e) => setClientLossReason(e.target.value)}
-                          placeholder={t.vagonSale.transportDamagePlaceholder}
+                          placeholder="Transport vaqtida shikastlangan"
                           className="w-full px-3 py-2 border border-red-300 rounded-lg"
                         />
                       </div>
@@ -649,20 +682,20 @@ export default function VagonSalePage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 mt-6">
+                <div className="flex flex-col sm:flex-row gap-2 mt-6 sticky bottom-0 bg-white pt-3 border-t">
                   <button
                     type="button"
                     onClick={() => {
                       setShowModal(false);
                       resetForm();
                     }}
-                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
                   >
                     {t.common.cancel}
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     {t.common.save}
                   </button>

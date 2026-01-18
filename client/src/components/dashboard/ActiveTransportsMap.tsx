@@ -75,7 +75,7 @@ export default function ActiveTransportsMap({ data }: Props) {
             <div className="text-2xl font-bold text-green-600">
               {data.reduce((sum, t) => sum + t.kubHajmi, 0).toFixed(1)} m³
             </div>
-            <div className="text-sm text-gray-600">{t.vagon.totalVolumeLabel}</div>
+            <div className="text-sm text-gray-600">{t.vagonSale.totalVolumeLabel}</div>
           </div>
         </Card>
         
