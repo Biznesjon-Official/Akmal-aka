@@ -550,14 +550,14 @@ export default function Dashboard() {
                   <p className="font-medium text-gray-900">{client.name}</p>
                 </div>
                 <div className="text-right">
-                  {client.usd_current_debt > 0 && (
+                  {Math.max(0, client.usd_current_debt || 0) > 0 && (
                     <p className="font-bold text-red-600">
-                      ${client.usd_current_debt.toLocaleString()}
+                      ${Math.max(0, client.usd_current_debt).toLocaleString()}
                     </p>
                   )}
-                  {client.rub_current_debt > 0 && (
+                  {Math.max(0, client.rub_current_debt || 0) > 0 && (
                     <p className="font-bold text-red-600">
-                      {client.rub_current_debt.toLocaleString()} ₽
+                      {Math.max(0, client.rub_current_debt).toLocaleString()} ₽
                     </p>
                   )}
                 </div>

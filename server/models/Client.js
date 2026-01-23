@@ -57,6 +57,19 @@ const clientSchema = new mongoose.Schema({
     comment: 'RUB da jami to\'langan'
   },
   
+  // DELIVERY QARZLARI (YANGI)
+  delivery_total_debt: {
+    type: Number,
+    default: 0,
+    comment: 'Delivery (olib kelib berish) jami qarzi (USD)'
+  },
+  delivery_total_paid: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Delivery uchun jami to\'langan (USD)'
+  },
+  
   // ESKI FIELD'LAR (Backward compatibility) - DEPRECATED
   total_received_volume: {
     type: Number,
@@ -102,6 +115,11 @@ clientSchema.virtual('usd_current_debt').get(function() {
 
 clientSchema.virtual('rub_current_debt').get(function() {
   return this.rub_total_debt - this.rub_total_paid;
+});
+
+// DELIVERY VIRTUAL FIELDS (YANGI)
+clientSchema.virtual('delivery_current_debt').get(function() {
+  return this.delivery_total_debt - this.delivery_total_paid;
 });
 
 // Backward compatibility uchun eski virtual field

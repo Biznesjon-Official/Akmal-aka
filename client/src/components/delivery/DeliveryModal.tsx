@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import axios from '@/lib/axios';
 import { useLanguage } from '@/context/LanguageContext';
 import Icon from '@/components/Icon';
@@ -16,6 +16,16 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
   const queryClient = useQueryClient();
   const isEdit = !!delivery;
 
+  // Mijozlar ro'yxatini olish
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      const response = await axios.get('/client');
+      return response.data;
+    },
+    staleTime: 60000, // 1 daqiqa cache
+  });
+
   const [formData, setFormData] = useState({
     orderNumber: delivery?.orderNumber || '',
     month: delivery?.month || new Date().toISOString().slice(0, 7),
@@ -27,6 +37,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
     orderDate: delivery?.orderDate ? new Date(delivery.orderDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
     sender: delivery?.sender || '',
     receiver: delivery?.receiver || '',
+    client: delivery?.client?._id || '', // YANGI: Mijoz ID
     vagonNumber: delivery?.vagonNumber || '',
     shipmentNumber: delivery?.shipmentNumber || '',
     actualWeight: delivery?.actualWeight || '',
@@ -68,9 +79,9 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
       if (isEdit) {
-        return await axios.put(`/api/delivery/${delivery._id}`, data);
+        return await axios.put(`/delivery/${delivery._id}`, data);
       } else {
-        return await axios.post('/api/delivery', data);
+        return await axios.post('/delivery', data);
       }
     },
     onSuccess: () => {
@@ -82,11 +93,13 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('📤 Delivery ma\'lumotlari yuborilmoqda:', formData);
     await saveMutation.mutateAsync(formData);
   }, [formData, saveMutation]);
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    console.log(`🔄 Field o'zgartirildi: ${name} = ${value}`);
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
 
@@ -226,7 +239,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* Tomonlar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.sender} *
@@ -253,6 +266,28 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
                 required
                 className="input-field"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mijoz (ixtiyoriy)
+              </label>
+              <select
+                name="client"
+                value={formData.client}
+                onChange={handleChange}
+                className="input-field"
+              >
+                <option value="">Mijoz tanlanmagan</option>
+                {clients.map((client: any) => (
+                  <option key={client._id} value={client._id}>
+                    {client.name} - {client.phone}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-blue-600 mt-1">
+                💡 Mijoz tanlanganida qarz mijozlar sahifasida ko'rinadi
+              </p>
             </div>
           </div>
 

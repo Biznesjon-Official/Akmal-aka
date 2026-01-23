@@ -25,6 +25,31 @@ const vagonSaleSchema = new mongoose.Schema({
     min: [0.01, 'Hajm 0 dan katta bo\'lishi kerak'],
     comment: 'Ombordan jo\'natilgan hajm'
   },
+  
+  // DONA BO'YICHA SOTUV (Yangi)
+  sale_unit: {
+    type: String,
+    enum: ['volume', 'pieces'],
+    default: 'volume',
+    comment: 'Sotuv birligi: hajm yoki dona'
+  },
+  sent_quantity: {
+    type: Number,
+    min: 0,
+    comment: 'Jo\'natilgan dona soni (faqat dona bo\'yicha sotishda)'
+  },
+  accepted_quantity: {
+    type: Number,
+    min: 0,
+    comment: 'Qabul qilingan dona soni'
+  },
+  transport_loss_quantity: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Transport vaqtida yo\'qolgan dona soni'
+  },
+  
   transport_loss_m3: {
     type: Number,
     default: 0,
@@ -122,13 +147,19 @@ const vagonSaleSchema = new mongoose.Schema({
   // Narx ma'lumotlari
   sale_currency: {
     type: String,
-    enum: ['USD', 'RUB'],
-    required: [true, 'Valyuta tanlanishi shart']
+    enum: ['USD'], // Faqat USD
+    required: [true, 'Valyuta tanlanishi shart'],
+    default: 'USD'
   },
   price_per_m3: {
     type: Number,
-    required: [true, 'Narx kiritilishi shart'],
-    min: [1, 'Narx 0 dan katta bo\'lishi kerak']
+    min: [0, 'Narx 0 dan kichik bo\'lishi mumkin emas'],
+    comment: 'Hajm bo\'yicha narx (m³ uchun)'
+  },
+  price_per_piece: {
+    type: Number,
+    min: [0, 'Dona narxi 0 dan kichik bo\'lishi mumkin emas'],
+    comment: 'Dona bo\'yicha narx'
   },
   exchange_rate: {
     type: Number,
@@ -203,7 +234,15 @@ vagonSaleSchema.pre('save', function(next) {
     this.transport_loss_reason = this.client_loss_reason;
   }
   
-  // 2. BRAK JAVOBGARLIK HISOBLASH
+  // 2. DONA BO'YICHA SOTUV HISOBLASH
+  if (this.sale_unit === 'pieces' && this.sent_quantity) {
+    // Dona bo'yicha sotishda qabul qilingan dona = jo'natilgan - yo'qolgan
+    const validSentQuantity = isNaN(this.sent_quantity) || !isFinite(this.sent_quantity) ? 0 : this.sent_quantity;
+    const validTransportLossQuantity = isNaN(this.transport_loss_quantity) || !isFinite(this.transport_loss_quantity) ? 0 : this.transport_loss_quantity;
+    this.accepted_quantity = validSentQuantity - validTransportLossQuantity;
+  }
+  
+  // 3. BRAK JAVOBGARLIK HISOBLASH
   if (this.brak_liability_distribution) {
     const brakDist = this.brak_liability_distribution;
     
@@ -227,35 +266,59 @@ vagonSaleSchema.pre('save', function(next) {
     }
   }
   
-  // 3. Mijoz qabul qilgan hajm = Ombordan jo'natilgan - Transport yo'qotishi
+  // 4. Mijoz qabul qilgan hajm = Ombordan jo'natilgan - Transport yo'qotishi
   const validDispatchedVolume = isNaN(this.warehouse_dispatched_volume_m3) || !isFinite(this.warehouse_dispatched_volume_m3) ? 0 : this.warehouse_dispatched_volume_m3;
   const validTransportLoss = isNaN(this.transport_loss_m3) || !isFinite(this.transport_loss_m3) ? 0 : this.transport_loss_m3;
   this.client_received_volume_m3 = validDispatchedVolume - validTransportLoss;
   
-  // 4. Backward compatibility uchun eski field'larni yangilash
+  // 5. Backward compatibility uchun eski field'larni yangilash
   this.sent_volume_m3 = this.warehouse_dispatched_volume_m3;
   this.client_loss_m3 = this.transport_loss_m3;
   this.accepted_volume_m3 = this.client_received_volume_m3;
   
-  // 5. YANGI TO'LOV HISOBLASH LOGIKASI
-  let billableVolume = this.client_received_volume_m3; // Asosiy qabul qilingan hajm
+  // 6. YANGI TO'LOV HISOBLASH LOGIKASI (sotuv birligiga qarab)
+  let billableAmount = 0;
   
-  // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak
-  if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
-    billableVolume += this.brak_liability_distribution.buyer_liable_volume_m3;
+  if (this.sale_unit === 'pieces') {
+    // Dona bo'yicha sotuv
+    let billableQuantity = this.accepted_quantity || 0;
+    
+    // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak (dona hisobida)
+    if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
+      // Brak hajmini donaga aylantirish (taxminiy)
+      // Bu yerda lot ma'lumotlari kerak bo'ladi, lekin pre-save hook da populate qilish mumkin emas
+      // Shuning uchun faqat hajm bo'yicha hisoblash
+      billableAmount = this.client_received_volume_m3 * (this.price_per_m3 || 0);
+      if (this.brak_liability_distribution.buyer_liable_volume_m3 > 0) {
+        billableAmount += this.brak_liability_distribution.buyer_liable_volume_m3 * (this.price_per_m3 || 0);
+      }
+    } else {
+      // Faqat qabul qilingan dona uchun to'lov
+      const validPricePerPiece = isNaN(this.price_per_piece) || !isFinite(this.price_per_piece) ? 0 : this.price_per_piece;
+      billableAmount = billableQuantity * validPricePerPiece;
+    }
+  } else {
+    // Hajm bo'yicha sotuv (eski logika)
+    let billableVolume = this.client_received_volume_m3; // Asosiy qabul qilingan hajm
+    
+    // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak
+    if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
+      billableVolume += this.brak_liability_distribution.buyer_liable_volume_m3;
+    }
+    
+    const validBillableVolume = isNaN(billableVolume) || !isFinite(billableVolume) ? 0 : billableVolume;
+    const validPricePerM3 = isNaN(this.price_per_m3) || !isFinite(this.price_per_m3) ? 0 : this.price_per_m3;
+    billableAmount = validBillableVolume * validPricePerM3;
   }
   
-  // 6. Jami narx = To'lanishi kerak bo'lgan hajm × Narx
-  // NaN ni oldini olish
-  const validBillableVolume = isNaN(billableVolume) || !isFinite(billableVolume) ? 0 : billableVolume;
-  const validPricePerM3 = isNaN(this.price_per_m3) || !isFinite(this.price_per_m3) ? 0 : this.price_per_m3;
-  this.total_price = validBillableVolume * validPricePerM3;
+  // 7. Jami narx
+  this.total_price = billableAmount;
   
-  // 7. Qarz = Jami narx - To'langan
+  // 8. Qarz = Jami narx - To'langan
   const validPaidAmount = isNaN(this.paid_amount) || !isFinite(this.paid_amount) ? 0 : this.paid_amount;
   this.debt = this.total_price - validPaidAmount;
   
-  // 8. Holat
+  // 9. Holat
   if (this.debt === 0 && this.total_price > 0) {
     this.status = 'paid';
   } else if (this.paid_amount > 0) {
@@ -322,46 +385,27 @@ vagonSaleSchema.virtual('sent_volume_percentage').get(function() {
 vagonSaleSchema.set('toJSON', { virtuals: true });
 vagonSaleSchema.set('toObject', { virtuals: true });
 
-// Post-save: Transport yo'qotishi uchun LossLiability yaratish
-vagonSaleSchema.post('save', async function(doc) {
-  // Agar transport yo'qotishi bor va javobgar shaxs ko'rsatilgan bo'lsa
-  if (doc.transport_loss_m3 > 0 && doc.transport_loss_responsible_person && doc.isNew) {
-    try {
-      const LossLiability = require('./LossLiability');
-      const VagonLot = require('./VagonLot');
-      
-      // Lot ma'lumotlarini olish (tannarx uchun)
-      const lot = await VagonLot.findById(doc.lot);
-      if (!lot) return;
-      
-      // Zarar qiymatini hisoblash
-      const estimatedLossValue = doc.transport_loss_m3 * lot.cost_per_m3;
-      
-      const lossLiability = new LossLiability({
-        loss_type: 'transport_loss',
-        vagon: doc.vagon,
-        lot: doc.lot,
-        sale: doc._id,
-        loss_volume_m3: doc.transport_loss_m3,
-        loss_date: doc.sale_date || new Date(),
-        loss_location: 'Transport/Yetkazib berish',
-        loss_reason: doc.transport_loss_reason || 'Transport yo\'qotishi',
-        responsible_person: doc.transport_loss_responsible_person,
-        estimated_loss_value: estimatedLossValue,
-        estimated_loss_currency: lot.purchase_currency,
-        liability_percentage: 100, // To'liq javobgarlik
-        created_by: doc.created_by || doc.vagon // Fallback
-      });
-      
-      await lossLiability.save();
-      
-      console.log(`✅ Transport LossLiability yaratildi: ${doc.transport_loss_responsible_person} - ${doc.transport_loss_m3} m³`);
-    } catch (error) {
-      console.error('❌ Transport LossLiability yaratishda xatolik:', error);
-      // Xatolik asosiy jarayonni to'xtatmasligi kerak
-    }
-  }
-});
+// ❌ POST-SAVE HOOK O'CHIRILDI - TRANSACTION ICHIDA MANUAL BAJARILADI
+// Post-save hook MongoDB transaction ichida ishlamaydi yoki noto'g'ri ishlaydi
+// Shuning uchun VagonSale routes'da transaction ichida manual bajaramiz
+
+// vagonSaleSchema.post('save', async function(doc) {
+//   if (doc.total_price > 0) {
+//     try {
+//       await updateClientDebt(doc.client);
+//       if (doc.isNew) {
+//         await createCashRecords(doc);
+//       }
+//     } catch (error) {
+//       console.error('❌ Mijoz qarzi yangilashda xatolik:', error);
+//     }
+//   }
+// });
+
+// HELPER FUNCTIONS - ENDI ISHLATILMAYDI (routes'da session bilan bajariladi)
+// async function updateClientDebt(clientId) { ... }
+// async function createCashRecords(doc) { ... }
+// async function createTransportLossLiability(doc) { ... }
 
 // Instance method: To'lov qilish mumkinligini tekshirish
 vagonSaleSchema.methods.canPay = function(amount) {
@@ -371,6 +415,51 @@ vagonSaleSchema.methods.canPay = function(amount) {
 // Instance method: To'liq to'langanligini tekshirish
 vagonSaleSchema.methods.isPaid = function() {
   return this.debt === 0 && this.total_price > 0;
+};
+
+// Instance method: Haqiqiy to'langan summani Cash jadvalidan hisoblash
+vagonSaleSchema.methods.calculateActualPaidAmount = async function() {
+  const Cash = require('./Cash');
+  
+  const payments = await Cash.find({
+    vagonSale: this._id,
+    type: { $in: ['client_payment', 'debt_payment'] },
+    isDeleted: false
+  });
+  
+  let totalPaid = 0;
+  payments.forEach(payment => {
+    if (payment.currency === this.sale_currency) {
+      totalPaid += payment.amount || 0;
+    }
+  });
+  
+  return totalPaid;
+};
+
+// Instance method: paid_amount ni Cash jadvalidagi haqiqiy to'lovlar bilan sinxronlash
+vagonSaleSchema.methods.syncPaidAmountWithCash = async function() {
+  const actualPaidAmount = await this.calculateActualPaidAmount();
+  
+  if (Math.abs(this.paid_amount - actualPaidAmount) > 0.01) {
+    console.log(`🔄 ${this._id} uchun paid_amount sinxronlanmoqda: ${this.paid_amount} → ${actualPaidAmount}`);
+    this.paid_amount = actualPaidAmount;
+    this.debt = this.total_price - this.paid_amount;
+    
+    // Holat yangilash
+    if (this.debt === 0 && this.total_price > 0) {
+      this.status = 'paid';
+    } else if (this.paid_amount > 0) {
+      this.status = 'partial';
+    } else {
+      this.status = 'pending';
+    }
+    
+    await this.save();
+    return true; // O'zgarish bo'ldi
+  }
+  
+  return false; // O'zgarish bo'lmadi
 };
 
 // Instance method: Brak javobgarligini o'rnatish

@@ -16,6 +16,8 @@ interface ConfirmOptions {
   confirmText?: string;
   cancelText?: string;
   type?: 'danger' | 'warning' | 'info';
+  onConfirm?: () => void;
+  onCancel?: () => void;
 }
 
 export function useDialog() {
@@ -28,7 +30,6 @@ export function useDialog() {
 
   const [confirmState, setConfirmState] = useState<ConfirmOptions & { 
     isOpen: boolean;
-    onConfirm?: () => void;
   }>({
     isOpen: false,
     title: '',
@@ -55,12 +56,16 @@ export function useDialog() {
         onConfirm: () => {
           resolve(true);
           setConfirmState(prev => ({ ...prev, isOpen: false }));
+        },
+        onCancel: () => {
+          resolve(false);
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
         }
       });
     });
   }, []);
 
-  const closeConfirm = useCallback(() => {
+  const closeConfirm = useCallback((confirmed: boolean = false) => {
     setConfirmState(prev => ({ ...prev, isOpen: false }));
   }, []);
 

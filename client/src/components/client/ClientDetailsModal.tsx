@@ -17,6 +17,10 @@ interface Client {
   total_received_volume: number;
   total_debt: number;
   total_paid: number;
+  // YANGI: Delivery qarzlari
+  delivery_total_debt?: number;
+  delivery_total_paid?: number;
+  delivery_current_debt?: number;
   notes?: string;
   createdAt: string;
 }
@@ -219,7 +223,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
               {/* Qarz holati */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">💳 Qarz holati</h3>
+                  <h3 className="text-lg font-semibold mb-4">💳 Vagon sotuv qarzi</h3>
                   {debtByCurrency && debtByCurrency.length > 0 ? (
                     <div className="space-y-3">
                       {debtByCurrency.map((debt, index) => (
@@ -250,40 +254,76 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                   ) : (
                     <div className="text-center text-gray-500 py-4">
                       <div className="text-2xl mb-2">✅</div>
-                      <p>Qarz yo'q</p>
+                      <p>Vagon sotuv qarzi yo'q</p>
                     </div>
                   )}
                 </Card>
 
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">📈 Sotuv statistikasi</h3>
-                  {salesStats && salesStats.length > 0 ? (
+                  <h3 className="text-lg font-semibold mb-4">🚚 Olib kelib berish qarzi</h3>
+                  {client.delivery_current_debt !== undefined ? (
                     <div className="space-y-3">
-                      {salesStats.map((stat, index) => (
-                        <div key={index} className="border-l-4 border-green-500 pl-4">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium">{stat._id}</span>
-                            <span className="font-bold text-green-600">
-                              {formatCurrency(stat.totalSales, stat._id)}
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            {stat.count} ta sotuv | {formatNumber(stat.totalVolume)} m³
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            O'rtacha narx: {formatCurrency(stat.avgPrice, stat._id)}/m³
-                          </div>
+                      <div className="border-l-4 border-purple-500 pl-4">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">USD</span>
+                          <span className={`font-bold ${
+                            client.delivery_current_debt > 0 ? 'text-red-600' : 'text-green-600'
+                          }`}>
+                            {formatCurrency(client.delivery_current_debt, 'USD')}
+                          </span>
                         </div>
-                      ))}
+                        <div className="text-sm text-gray-600 mt-1">
+                          Jami: {formatCurrency(client.delivery_total_debt || 0, 'USD')} | 
+                          To'langan: {formatCurrency(client.delivery_total_paid || 0, 'USD')}
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                          <div 
+                            className="bg-purple-500 h-2 rounded-full"
+                            style={{ 
+                              width: `${Math.min(((client.delivery_total_paid || 0) / (client.delivery_total_debt || 1)) * 100, 100)}%`
+                            }}
+                          ></div>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center text-gray-500 py-4">
-                      <div className="text-2xl mb-2">📊</div>
-                      <p>Sotuvlar yo'q</p>
+                      <div className="text-2xl mb-2">✅</div>
+                      <p>Olib kelib berish qarzi yo'q</p>
                     </div>
                   )}
                 </Card>
               </div>
+
+              {/* Sotuv statistikasi */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4">📈 Sotuv statistikasi</h3>
+                {salesStats && salesStats.length > 0 ? (
+                  <div className="space-y-3">
+                    {salesStats.map((stat, index) => (
+                      <div key={index} className="border-l-4 border-green-500 pl-4">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">{stat._id}</span>
+                          <span className="font-bold text-green-600">
+                            {formatCurrency(stat.totalSales, stat._id)}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {stat.count} ta sotuv | {formatNumber(stat.totalVolume)} m³
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          O'rtacha narx: {formatCurrency(stat.avgPrice, stat._id)}/m³
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-4">
+                    <div className="text-2xl mb-2">📊</div>
+                    <p>Sotuvlar yo'q</p>
+                  </div>
+                )}
+              </Card>
 
               {/* Oylik dinamika */}
               {monthlySales && monthlySales.length > 0 && (

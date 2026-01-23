@@ -295,9 +295,9 @@ router.get('/stats/summary', auth, async (req, res) => {
     let expense = 0;
     
     transactions.forEach(t => {
-      if (t.type === 'client_payment' || t.type === 'initial_balance') {
+      if (t.type === 'client_payment' || t.type === 'initial_balance' || t.type === 'debt_sale') {
         income += t.amount_rub;
-      } else if (t.type === 'expense') {
+      } else if (t.type === 'expense' || t.type === 'debt_payment') {
         expense += t.amount_rub;
       }
     });

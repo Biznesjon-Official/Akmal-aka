@@ -9,7 +9,7 @@ import Layout from '@/components/Layout';
 import VagonTableSkeleton from '@/components/vagon/VagonTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Icon from '@/components/Icon';
-import axios from 'axios';
+import axios from '@/lib/axios';
 
 interface VagonLot {
   _id: string;
@@ -78,6 +78,7 @@ interface Vagon {
 }
 
 interface LotInput {
+  _id?: string; // Tahrirlash uchun
   thickness: string;
   width: string;
   length: string;
@@ -97,6 +98,10 @@ export default function VagonPage() {
   const [vagons, setVagons] = useState<Vagon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  
+  // ✅ LOADING STATES
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingVagon, setEditingVagon] = useState<Vagon | null>(null);
   
   // Vagon ma'lumotlari
   const [vagonCode, setVagonCode] = useState('');
@@ -134,10 +139,7 @@ export default function VagonPage() {
 
   const fetchVagons = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/vagon`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get('/vagon');
       setVagons(response.data);
     } catch (error) {
       console.error('Error fetching vagons:', error);
@@ -182,78 +184,139 @@ export default function VagonPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validatsiya - faqat to'liq to'ldirilgan lotlarni olish
-    const validLots = lots.filter(lot => 
-      lot.thickness && 
-      lot.width && 
-      lot.length && 
-      lot.quantity && 
-      lot.purchase_amount &&
-      parseFloat(lot.thickness) > 0 &&
-      parseFloat(lot.width) > 0 &&
-      parseFloat(lot.length) > 0 &&
-      parseInt(lot.quantity) > 0 &&
-      parseFloat(lot.purchase_amount) > 0
-    );
-    
-    if (validLots.length === 0) {
-      showAlert({
-        title: t.messages.error,
-        message: t.messages.enterCompleteLotInfo,
-        type: 'warning'
-      });
-      return;
-    }
+    // ✅ LOADING STATE BOSHLASH
+    if (isSubmitting) return; // Double-click oldini olish
+    setIsSubmitting(true);
     
     try {
-      const token = localStorage.getItem('token');
-      
-      // 1. Vagon yaratish
-      const vagonData = {
-        vagonCode,
-        month,
-        sending_place: sendingPlace,
-        receiving_place: receivingPlace
-      };
-      
-      const vagonResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/vagon`,
-        vagonData,
-        { headers: { Authorization: `Bearer ${token}` } }
+      // Validatsiya - faqat to'liq to'ldirilgan lotlarni olish
+      const validLots = lots.filter(lot => 
+        lot.thickness && 
+        lot.width && 
+        lot.length && 
+        lot.quantity && 
+        lot.purchase_amount &&
+        parseFloat(lot.thickness) > 0 &&
+        parseFloat(lot.width) > 0 &&
+        parseFloat(lot.length) > 0 &&
+        parseInt(lot.quantity) > 0 &&
+        parseFloat(lot.purchase_amount) > 0
       );
       
-      const vagonId = vagonResponse.data._id;
-      
-      // 2. Har bir lot uchun so'rov yuborish
-      for (const lot of validLots) {
-        // Hajmni hisoblash
-        const volume = calculateLotVolume(lot);
-        
-        const lotData = {
-          vagon: vagonId,
-          dimensions: `${lot.thickness}×${lot.width}×${lot.length}`,
-          quantity: parseInt(lot.quantity),
-          volume_m3: volume,
-          loss_volume_m3: parseFloat(lot.loss_volume_m3) || 0,
-          loss_responsible_person: lot.loss_responsible_person || null,
-          loss_reason: lot.loss_reason || null,
-          loss_date: parseFloat(lot.loss_volume_m3) > 0 ? new Date() : null,
-          purchase_currency: lot.currency,
-          purchase_amount: parseFloat(lot.purchase_amount)
-        };
-        
-        await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot`,
-          lotData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      if (validLots.length === 0 && !editingVagon) {
+        showAlert({
+          title: t.messages.error,
+          message: t.messages.enterCompleteLotInfo,
+          type: 'warning'
+        });
+        return;
       }
       
-      showAlert({
-        title: t.messages.success,
-        message: t.messages.vagonAndLotsAdded,
-        type: 'success'
-      });
+      const token = localStorage.getItem('token');
+      
+      if (editingVagon) {
+        // TAHRIRLASH REJIMI
+        // 1. Vagon ma'lumotlarini yangilash
+        const vagonData = {
+          month,
+          sending_place: sendingPlace,
+          receiving_place: receivingPlace
+        };
+        
+        await axios.put(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon/${editingVagon._id}`,
+          vagonData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        // 2. Lotlarni yangilash
+        for (const lot of validLots) {
+          const volume = calculateLotVolume(lot);
+          
+          const lotData = {
+            dimensions: `${lot.thickness}×${lot.width}×${lot.length}`,
+            quantity: parseInt(lot.quantity),
+            volume_m3: volume,
+            loss_volume_m3: parseFloat(lot.loss_volume_m3) || 0,
+            loss_responsible_person: lot.loss_responsible_person || null,
+            loss_reason: lot.loss_reason || null,
+            loss_date: parseFloat(lot.loss_volume_m3) > 0 ? new Date() : null,
+            purchase_currency: lot.currency,
+            purchase_amount: parseFloat(lot.purchase_amount)
+          };
+          
+          if (lot._id) {
+            // Mavjud lotni yangilash
+            await axios.put(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot/${lot._id}`,
+              lotData,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          } else {
+            // Yangi lot qo'shish
+            await axios.post(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot`,
+              { ...lotData, vagon: editingVagon._id },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+          }
+        }
+        
+        showAlert({
+          title: t.messages.success,
+          message: t.messages.vagonUpdated || 'Vagon muvaffaqiyatli yangilandi',
+          type: 'success'
+        });
+      } else {
+        // YANGI YARATISH REJIMI
+        // 1. Vagon yaratish
+        const vagonData = {
+          vagonCode,
+          month,
+          sending_place: sendingPlace,
+          receiving_place: receivingPlace
+        };
+        
+        const vagonResponse = await axios.post(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon`,
+          vagonData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        const vagonId = vagonResponse.data._id;
+        
+        // 2. Har bir lot uchun so'rov yuborish
+        for (const lot of validLots) {
+          // Hajmni hisoblash
+          const volume = calculateLotVolume(lot);
+          
+          const lotData = {
+            vagon: vagonId,
+            dimensions: `${lot.thickness}×${lot.width}×${lot.length}`,
+            quantity: parseInt(lot.quantity),
+            volume_m3: volume,
+            loss_volume_m3: parseFloat(lot.loss_volume_m3) || 0,
+            loss_responsible_person: lot.loss_responsible_person || null,
+            loss_reason: lot.loss_reason || null,
+            loss_date: parseFloat(lot.loss_volume_m3) > 0 ? new Date() : null,
+            purchase_currency: lot.currency,
+            purchase_amount: parseFloat(lot.purchase_amount)
+          };
+          
+          await axios.post(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot`,
+            lotData,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        }
+        
+        showAlert({
+          title: t.messages.success,
+          message: t.messages.vagonAndLotsAdded,
+          type: 'success'
+        });
+      }
+      
       fetchVagons();
       setShowModal(false);
       resetForm();
@@ -263,6 +326,9 @@ export default function VagonPage() {
         message: error.response?.data?.message || t.messages.errorOccurred,
         type: 'error'
       });
+    } finally {
+      // ✅ LOADING STATE TUGASHI
+      setIsSubmitting(false);
     }
   };
 
@@ -272,6 +338,38 @@ export default function VagonPage() {
     setSendingPlace('');
     setReceivingPlace('');
     setLots([{ thickness: '', width: '', length: '', quantity: '', loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', currency: 'USD', purchase_amount: '' }]);
+    setEditingVagon(null);
+  };
+
+  const openEditModal = (vagon: Vagon) => {
+    setEditingVagon(vagon);
+    setVagonCode(vagon.vagonCode);
+    setMonth(vagon.month);
+    setSendingPlace(vagon.sending_place);
+    setReceivingPlace(vagon.receiving_place);
+    
+    // Lotlarni yuklash
+    if (vagon.lots && vagon.lots.length > 0) {
+      const loadedLots = vagon.lots.map(lot => {
+        // dimensions formatidan o'lchamlarni ajratib olish: "31×125×6"
+        const dims = lot.dimensions.split('×');
+        return {
+          _id: lot._id,
+          thickness: dims[0] || '',
+          width: dims[1] || '',
+          length: dims[2] || '',
+          quantity: lot.quantity.toString(),
+          loss_volume_m3: (lot.loss_volume_m3 || 0).toString(),
+          loss_responsible_person: lot.loss_responsible_person || '',
+          loss_reason: lot.loss_reason || '',
+          currency: lot.currency || 'USD',
+          purchase_amount: (lot.purchase_amount || 0).toString()
+        };
+      });
+      setLots(loadedLots);
+    }
+    
+    setShowModal(true);
   };
 
   const closeVagon = async (vagonId: string, reason: string = 'manual_closure') => {
@@ -294,7 +392,7 @@ export default function VagonPage() {
     
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(
+      const response = await axios.patch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/vagon/${vagonId}/close`,
         { 
           reason: reason,
@@ -303,6 +401,8 @@ export default function VagonPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
+      console.log('Close vagon response:', response.data);
+      
       showAlert({
         title: t.messages.success,
         message: `${t.messages.vagonSuccessfullyClosed}\n${t.messages.reason}: ${reasonText}`,
@@ -310,9 +410,12 @@ export default function VagonPage() {
       });
       fetchVagons();
     } catch (error: any) {
+      console.error('Close vagon error:', error);
+      console.error('Error response:', error.response?.data);
+      
       showAlert({
         title: t.messages.error,
-        message: error.response?.data?.message || t.messages.errorOccurred,
+        message: error.response?.data?.message || error.message || t.messages.errorOccurred,
         type: 'error'
       });
     }
@@ -516,6 +619,13 @@ export default function VagonPage() {
                         </span>
                       </div>
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => openEditModal(vagon)}
+                          className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm flex items-center gap-1"
+                        >
+                          <Icon name="edit" size="sm" />
+                          {t.common.edit || 'Tahrirlash'}
+                        </button>
                         {vagon.status === 'active' && (
                           <button
                             onClick={() => closeVagon(vagon._id, 'manual_closure')}
@@ -561,7 +671,9 @@ export default function VagonPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
             <div className="bg-white rounded-lg p-6 w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">{t.vagonSale.newVagonAndLots}</h2>
+                <h2 className="text-2xl font-bold">
+                  {editingVagon ? (t.vagon.editVagon || 'Vagonni tahrirlash') : t.vagonSale.newVagonAndLots}
+                </h2>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -585,6 +697,7 @@ export default function VagonPage() {
                         onChange={(e) => setVagonCode(e.target.value)}
                         placeholder="V-001"
                         className="w-full px-3 py-2 border rounded-lg"
+                        disabled={!!editingVagon}
                       />
                     </div>
                     <div>
@@ -621,19 +734,25 @@ export default function VagonPage() {
                       />
                     </div>
                   </div>
+                  {editingVagon && (
+                    <div className="mt-3 p-2 bg-blue-100 border border-blue-300 rounded text-sm text-blue-800">
+                      <Icon name="info" size="sm" className="inline mr-1" />
+                      {t.vagon.editInfo || 'Tahrirlash rejimida vagon va lotlar ma\'lumotlarini o\'zgartirishingiz mumkin. Yangi lot qo\'shish ham mumkin.'}
+                    </div>
+                  )}
                 </div>
 
-                {/* Lotlar */}
+                {/* Lotlar - yangi vagon yaratishda va tahrirlashda */}
                 <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold">{t.vagon.lots}</h3>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-orange-600">
-                        {calculateTotalVolume().toFixed(4)} m³
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-semibold">{t.vagon.lots}</h3>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {calculateTotalVolume().toFixed(4)} m³
+                        </div>
+                        <div className="text-sm text-gray-600">{t.vagon.totalVolumeLabel}</div>
                       </div>
-                      <div className="text-sm text-gray-600">{t.vagon.totalVolumeLabel}</div>
                     </div>
-                  </div>
 
                   <div className="space-y-4">
                     {lots.map((lot, index) => (
@@ -793,9 +912,24 @@ export default function VagonPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    disabled={isSubmitting}
+                    className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+                      isSubmitting
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
                   >
-                    {t.common.save}
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Saqlanmoqda...
+                      </>
+                    ) : (
+                      t.common.save
+                    )}
                   </button>
                 </div>
               </form>

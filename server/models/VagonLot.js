@@ -100,6 +100,14 @@ const vagonLotSchema = new mongoose.Schema({
     comment: 'DEPRECATED: Ishlatilmaydi, warehouse_remaining_volume_m3 ishlatiladi'
   },
   
+  // Qolgan dona soni (avtomatik hisoblash)
+  remaining_quantity: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Qolgan dona soni (avtomatik hisoblash)'
+  },
+  
   // Moliyaviy ma'lumotlar (YANGI TERMINOLOGIYA)
   allocated_expenses: {
     type: Number,

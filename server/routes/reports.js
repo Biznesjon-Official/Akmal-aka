@@ -1369,18 +1369,44 @@ router.get('/dashboard-realtime', auth, async (req, res) => {
     // OGOHLANTIRISHLAR
     const alerts = [];
 
-    // Qarz bo'lgan mijozlar
+    // Qarz bo'lgan mijozlar (aggregation bilan hisoblash)
     const Client = require('../models/Client');
-    const debtClients = await Client.find({
-      $or: [
-        { usd_current_debt: { $gt: 1000 } },
-        { rub_current_debt: { $gt: 90000 } } // ~1000 USD ekvivalenti
-      ],
-      isDeleted: false
-    }).select('name usd_current_debt rub_current_debt').sort({ 
-      usd_current_debt: -1, 
-      rub_current_debt: -1 
-    }).limit(5);
+    const debtClients = await Client.aggregate([
+      {
+        $match: { isDeleted: false }
+      },
+      {
+        $addFields: {
+          usd_current_debt: {
+            $max: [0, { $subtract: ['$usd_total_debt', '$usd_total_paid'] }]
+          },
+          rub_current_debt: {
+            $max: [0, { $subtract: ['$rub_total_debt', '$rub_total_paid'] }]
+          }
+        }
+      },
+      {
+        $match: {
+          $or: [
+            { usd_current_debt: { $gt: 100 } }, // $100 dan ko'p USD qarz
+            { rub_current_debt: { $gt: 9000 } } // ~$100 ekvivalenti RUB qarz
+          ]
+        }
+      },
+      {
+        $sort: { usd_current_debt: -1, rub_current_debt: -1 }
+      },
+      {
+        $limit: 5
+      },
+      {
+        $project: {
+          name: 1,
+          usd_current_debt: 1,
+          rub_current_debt: 1
+        }
+      }
+    ]);
 
     debtClients.forEach(client => {
       const usdDebt = client.usd_current_debt || 0;

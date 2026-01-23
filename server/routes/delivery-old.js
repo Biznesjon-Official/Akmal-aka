@@ -2,8 +2,6 @@ const express = require('express');
 const router = express.Router();
 const Delivery = require('../models/Delivery');
 const Cash = require('../models/Cash');
-const Client = require('../models/Client');
-const { updateClientDeliveryDebt } = require('../utils/clientHelpers');
 const auth = require('../middleware/auth');
 
 // Oy bo'yicha hisobot (bu route birinchi bo'lishi kerak, chunki /reports/monthly /:id bilan conflict qiladi)
@@ -80,7 +78,6 @@ router.get('/:id', auth, async (req, res) => {
       _id: req.params.id, 
       isDeleted: false 
     })
-      .populate('client', 'name phone') // YANGI: Mijoz ma'lumotlarini olish
       .populate('createdBy', 'username')
       .populate('updatedBy', 'username');
     
@@ -97,8 +94,6 @@ router.get('/:id', auth, async (req, res) => {
 
 // Yangi delivery yaratish
 router.post('/', auth, async (req, res) => {
-  console.log('📥 Olib kelib berish yaratish so\'rovi keldi:', req.body);
-  
   try {
     const {
       orderNumber,
@@ -111,7 +106,6 @@ router.post('/', auth, async (req, res) => {
       orderDate,
       sender,
       receiver,
-      client, // YANGI: Mijoz ID
       vagonNumber,
       shipmentNumber,
       actualWeight,
@@ -145,7 +139,6 @@ router.post('/', auth, async (req, res) => {
       orderDate,
       sender,
       receiver,
-      client: client || null, // YANGI: Mijoz (ixtiyoriy)
       vagonNumber,
       shipmentNumber,
       actualWeight,
@@ -165,25 +158,11 @@ router.post('/', auth, async (req, res) => {
     
     await delivery.save();
     
-    // MIJOZ QARZINI YANGILASH (agar mijoz tanlangan bo'lsa)
-    if (client) {
-      console.log(`🚚 Olib kelib berish yaratildi, mijoz qarzi yangilanmoqda: ${client}`);
-      try {
-        await updateClientDeliveryDebt(client);
-        console.log(`✅ Mijoz ${client} qarzi yangilandi`);
-      } catch (error) {
-        console.error(`❌ Mijoz ${client} qarzini yangilashda xatolik:`, error);
-      }
-    } else {
-      console.log(`ℹ️  Mijoz tanlanmagan, qarz yangilanmaydi`);
-    }
-    
     // KASSA INTEGRATSIYASI: To'lov kiritilgan bo'lsa, kassaga qo'shamiz
     if (payment > 0) {
       await Cash.create({
         type: 'delivery_payment',
         delivery: delivery._id,
-        client: client || null, // YANGI: Mijoz bilan bog'lash
         currency: 'USD',
         amount: payment,
         description: `Delivery #${orderNumber} to'lovi: ${fromLocation} → ${toLocation}`,
@@ -198,21 +177,18 @@ router.post('/', auth, async (req, res) => {
       delivery: delivery._id,
       currency: 'USD',
       amount: totalTariff,
-      description: `Delivery #${orderNumber} xarajatlari: Afgon (${afghanTariff}) + KZ (${tariffKZ.toFixed(2)}) + UZ (${tariffUZ.toFixed(2)})`,
+      description: `Delivery #${orderNumber} xarajatlari: Afgon ($${afghanTariff}) + KZ ($${tariffKZ.toFixed(2)}) + UZ ($${tariffUZ.toFixed(2)})`,
       transaction_date: new Date(),
       createdBy: req.user.userId
     });
     
     const populatedDelivery = await Delivery.findById(delivery._id)
-      .populate('client', 'name phone') // YANGI: Mijoz ma'lumotlarini olish
       .populate('createdBy', 'username')
       .populate('updatedBy', 'username');
     
     res.status(201).json(populatedDelivery);
   } catch (error) {
     console.error('Delivery yaratishda xatolik:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Request body:', req.body);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
@@ -240,7 +216,6 @@ router.put('/:id', auth, async (req, res) => {
       orderDate,
       sender,
       receiver,
-      client, // YANGI: Mijoz ID
       vagonNumber,
       shipmentNumber,
       actualWeight,
@@ -263,10 +238,6 @@ router.put('/:id', auth, async (req, res) => {
       paymentStatus = debt === 0 ? 'paid' : 'partial';
     }
     
-    // Eski to'lov va xarajatlarni eslab qolamiz
-    const oldPayment = delivery.payment;
-    const oldTotalTariff = delivery.totalTariff;
-    
     // Yangilash
     delivery.orderNumber = orderNumber;
     delivery.month = month;
@@ -278,7 +249,6 @@ router.put('/:id', auth, async (req, res) => {
     delivery.orderDate = orderDate;
     delivery.sender = sender;
     delivery.receiver = receiver;
-    delivery.client = client || null; // YANGI: Mijoz
     delivery.vagonNumber = vagonNumber;
     delivery.shipmentNumber = shipmentNumber;
     delivery.actualWeight = actualWeight;
@@ -294,12 +264,11 @@ router.put('/:id', auth, async (req, res) => {
     delivery.paymentStatus = paymentStatus;
     delivery.updatedBy = req.user.userId;
     
-    await delivery.save();
+    // Eski to'lov va xarajatlarni eslab qolamiz
+    const oldPayment = delivery.payment;
+    const oldTotalTariff = delivery.totalTariff;
     
-    // MIJOZ QARZINI YANGILASH (agar mijoz tanlangan bo'lsa)
-    if (client) {
-      await updateClientDeliveryDebt(client);
-    }
+    await delivery.save();
     
     // KASSA INTEGRATSIYASI: To'lov o'zgarganda kassani yangilaymiz
     if (payment !== oldPayment) {
@@ -311,7 +280,6 @@ router.put('/:id', auth, async (req, res) => {
         await Cash.create({
           type: 'delivery_payment',
           delivery: delivery._id,
-          client: client || null, // YANGI: Mijoz bilan bog'lash
           currency: 'USD',
           amount: payment,
           description: `Delivery #${orderNumber} to'lovi: ${fromLocation} → ${toLocation}`,
@@ -332,14 +300,13 @@ router.put('/:id', auth, async (req, res) => {
         delivery: delivery._id,
         currency: 'USD',
         amount: totalTariff,
-        description: `Delivery #${orderNumber} xarajatlari: Afgon (${afghanTariff}) + KZ (${tariffKZ.toFixed(2)}) + UZ (${tariffUZ.toFixed(2)})`,
+        description: `Delivery #${orderNumber} xarajatlari: Afgon ($${afghanTariff}) + KZ ($${tariffKZ.toFixed(2)}) + UZ ($${tariffUZ.toFixed(2)})`,
         transaction_date: new Date(),
         createdBy: req.user.userId
       });
     }
     
     const populatedDelivery = await Delivery.findById(delivery._id)
-      .populate('client', 'name phone') // YANGI: Mijoz ma'lumotlarini olish
       .populate('createdBy', 'username')
       .populate('updatedBy', 'username');
     

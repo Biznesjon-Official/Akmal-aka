@@ -31,7 +31,7 @@ export default function DeliveryPage() {
       if (selectedMonth) params.append('month', selectedMonth);
       if (statusFilter) params.append('status', statusFilter);
       
-      const response = await axios.get(`/api/delivery?${params.toString()}`);
+      const response = await axios.get(`/delivery?${params.toString()}`);
       return response.data;
     },
     staleTime: 30000, // 30 soniya cache
@@ -43,7 +43,7 @@ export default function DeliveryPage() {
     queryKey: ['delivery-monthly-report', selectedMonth],
     queryFn: async () => {
       if (!selectedMonth) return null;
-      const response = await axios.get(`/api/delivery/reports/monthly?month=${selectedMonth}`);
+      const response = await axios.get(`/delivery/reports/monthly?month=${selectedMonth}`);
       return response.data;
     },
     enabled: !!selectedMonth,
@@ -54,7 +54,7 @@ export default function DeliveryPage() {
   // Deliveryni o'chirish
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await axios.delete(`/api/delivery/${id}`);
+      await axios.delete(`/delivery/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });

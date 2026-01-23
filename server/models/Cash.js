@@ -4,7 +4,7 @@ const cashSchema = new mongoose.Schema({
   // Tranzaksiya turi
   type: {
     type: String,
-    enum: ['client_payment', 'expense', 'initial_balance', 'delivery_payment', 'delivery_expense'],
+    enum: ['client_payment', 'expense', 'initial_balance', 'delivery_payment', 'delivery_expense', 'debt_sale', 'debt_payment'],
     required: [true, 'Tranzaksiya turi kiritilishi shart']
   },
   
@@ -100,9 +100,9 @@ cashSchema.statics.getBalanceByCurrency = async function() {
       balances[currency] = { income: 0, expense: 0, balance: 0 };
     }
     
-    if (item._id.type === 'client_payment' || item._id.type === 'initial_balance' || item._id.type === 'delivery_payment') {
+    if (item._id.type === 'client_payment' || item._id.type === 'initial_balance' || item._id.type === 'delivery_payment' || item._id.type === 'debt_sale') {
       balances[currency].income += item.total;
-    } else if (item._id.type === 'expense' || item._id.type === 'delivery_expense') {
+    } else if (item._id.type === 'expense' || item._id.type === 'delivery_expense' || item._id.type === 'debt_payment') {
       balances[currency].expense += item.total;
     }
     

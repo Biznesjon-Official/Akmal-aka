@@ -301,7 +301,7 @@ router.get('/:id/stats', auth, async (req, res) => {
 });
 
 // Vagonni yopish
-router.post('/:id/close', auth, async (req, res) => {
+router.patch('/:id/close', auth, async (req, res) => {
   try {
     const vagon = await Vagon.findOne({ 
       _id: req.params.id, 
@@ -316,7 +316,14 @@ router.post('/:id/close', auth, async (req, res) => {
       return res.status(400).json({ message: 'Vagon allaqachon yopilgan' });
     }
     
+    const { reason, notes } = req.body;
+    
     vagon.status = 'closed';
+    vagon.closure_date = new Date();
+    vagon.closure_reason = reason || 'manual_closure';
+    vagon.closure_notes = notes || '';
+    vagon.closed_by = req.user.userId;
+    
     await vagon.save();
     
     res.json({ 
@@ -325,7 +332,7 @@ router.post('/:id/close', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Vagon close error:', error);
-    res.status(500).json({ message: 'Vagonni yopishda xatolik' });
+    res.status(500).json({ message: 'Vagonni yopishda xatolik', error: error.message });
   }
 });
 

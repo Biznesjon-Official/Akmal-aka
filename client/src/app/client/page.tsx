@@ -10,7 +10,7 @@ import ClientDetailsModal from '@/components/client/ClientDetailsModal';
 import ClientTableSkeleton from '@/components/client/ClientTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Icon from '@/components/Icon';
-import axios from 'axios';
+import axios from '@/lib/axios';
 
 interface Client {
   _id: string;
@@ -28,6 +28,11 @@ interface Client {
   rub_total_debt: number;
   rub_total_paid: number;
   rub_current_debt: number;
+  
+  // DELIVERY QARZLARI (YANGI)
+  delivery_total_debt?: number;
+  delivery_total_paid?: number;
+  delivery_current_debt?: number;
   
   // ESKI FIELD'LAR (Backward compatibility)
   total_received_volume: number;
@@ -48,7 +53,12 @@ export default function ClientPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  
+  // ✅ LOADING STATES
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDebtSubmitting, setIsDebtSubmitting] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showDebtModal, setShowDebtModal] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'debt' | 'volume' | 'date'>('name');
@@ -58,6 +68,12 @@ export default function ClientPage() {
     phone: '',
     address: '',
     notes: ''
+  });
+  const [debtData, setDebtData] = useState({
+    amount: '',
+    currency: 'USD',
+    description: '',
+    type: 'add' // 'add' yoki 'subtract'
   });
 
   useEffect(() => {
@@ -74,10 +90,7 @@ export default function ClientPage() {
 
   const fetchClients = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/client`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get('/client');
       setClients(response.data);
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -88,21 +101,16 @@ export default function ClientPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // ✅ LOADING STATE BOSHLASH
+    if (isSubmitting) return; // Double-click oldini olish
+    setIsSubmitting(true);
+    
     try {
-      const token = localStorage.getItem('token');
-      
       if (editingClient) {
-        await axios.put(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/client/${editingClient._id}`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await axios.put(`/client/${editingClient._id}`, formData);
       } else {
-        await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/client`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await axios.post('/client', formData);
       }
       
       fetchClients();
@@ -114,6 +122,9 @@ export default function ClientPage() {
         message: error.response?.data?.message || t.client.saveError,
         type: 'error'
       });
+    } finally {
+      // ✅ LOADING STATE TUGASHI
+      setIsSubmitting(false);
     }
   };
 
@@ -128,10 +139,7 @@ export default function ClientPage() {
     if (!confirmed) return;
     
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/client/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.delete(`/client/${id}`);
       fetchClients();
     } catch (error: any) {
       showAlert({
@@ -158,6 +166,67 @@ export default function ClientPage() {
     setShowModal(true);
   };
 
+  const openDebtModal = (client: Client) => {
+    setEditingClient(client);
+    setDebtData({
+      amount: '',
+      currency: 'USD',
+      description: '',
+      type: 'add'
+    });
+    setShowDebtModal(true);
+  };
+
+  const handleDebtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // ✅ LOADING STATE BOSHLASH
+    if (isDebtSubmitting) return; // Double-click oldini olish
+    setIsDebtSubmitting(true);
+    
+    try {
+      if (!editingClient || !debtData.amount || parseFloat(debtData.amount) <= 0) {
+        showAlert({
+          title: t.messages.error,
+          message: t.messages.amountMustBePositive,
+          type: 'warning'
+        });
+        return;
+      }
+
+      const amount = parseFloat(debtData.amount);
+      
+      await axios.post(
+        `/client/${editingClient._id}/debt`,
+        {
+          amount: debtData.type === 'add' ? amount : -amount,
+          currency: debtData.currency,
+          description: debtData.description || `${debtData.type === 'add' ? 'Qarz qo\'shildi' : 'Qarz kamaytrildi'}: ${amount} ${debtData.currency}`,
+          type: debtData.type === 'add' ? 'debt_increase' : 'debt_decrease'
+        }
+      );
+      
+      showAlert({
+        title: t.messages.success,
+        message: `${editingClient.name}ga ${debtData.type === 'add' ? 'qarz qo\'shildi' : 'qarz kamaytrildi'}: ${amount} ${debtData.currency}`,
+        type: 'success'
+      });
+      
+      fetchClients();
+      setShowDebtModal(false);
+      setDebtData({ amount: '', currency: 'USD', description: '', type: 'add' });
+    } catch (error: any) {
+      showAlert({
+        title: t.messages.error,
+        message: error.response?.data?.message || t.messages.errorOccurred,
+        type: 'error'
+      });
+    } finally {
+      // ✅ LOADING STATE TUGASHI
+      setIsDebtSubmitting(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({ name: '', phone: '', address: '', notes: '' });
     setEditingClient(null);
@@ -168,7 +237,9 @@ export default function ClientPage() {
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            client.phone.includes(searchTerm);
       
-      const hasDebt = (client.usd_current_debt || 0) > 0 || (client.rub_current_debt || 0) > 0;
+      const hasDebt = Math.max(0, client.usd_current_debt || 0) > 0 || 
+                      Math.max(0, client.rub_current_debt || 0) > 0 || 
+                      Math.max(0, client.delivery_current_debt || 0) > 0;
       
       if (filterBy === 'debt') return matchesSearch && hasDebt;
       if (filterBy === 'no-debt') return matchesSearch && !hasDebt;
@@ -179,8 +250,12 @@ export default function ClientPage() {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'debt':
-          const aDebt = (a.usd_current_debt || 0) + (a.rub_current_debt || 0) * 0.011; // USD ekvivalenti
-          const bDebt = (b.usd_current_debt || 0) + (b.rub_current_debt || 0) * 0.011;
+          const aDebt = Math.max(0, a.usd_current_debt || 0) + 
+                       Math.max(0, a.rub_current_debt || 0) * 0.011 + 
+                       Math.max(0, a.delivery_current_debt || 0); // USD ekvivalenti
+          const bDebt = Math.max(0, b.usd_current_debt || 0) + 
+                       Math.max(0, b.rub_current_debt || 0) * 0.011 + 
+                       Math.max(0, b.delivery_current_debt || 0);
           return bDebt - aDebt;
         case 'volume':
           const aVolume = (a.usd_total_received_volume || 0) + (a.rub_total_received_volume || 0);
@@ -268,28 +343,38 @@ export default function ClientPage() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-blue-600">{clients.length}</div>
             <div className="text-sm text-blue-600">{t.client.totalClients}</div>
           </div>
           <div className="bg-red-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-red-600">
-              {clients.filter(c => (c.usd_current_debt || 0) > 0 || (c.rub_current_debt || 0) > 0).length}
+              {clients.filter(c => 
+                Math.max(0, c.usd_current_debt || 0) > 0 || 
+                Math.max(0, c.rub_current_debt || 0) > 0 || 
+                Math.max(0, c.delivery_current_debt || 0) > 0
+              ).length}
             </div>
             <div className="text-sm text-red-600">{t.vagonSale.clientsWithDebt}</div>
           </div>
           <div className="bg-green-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-green-600">
-              ${clients.reduce((sum, c) => sum + (c.usd_current_debt || 0), 0).toLocaleString()}
+              ${clients.reduce((sum, c) => sum + Math.max(0, c.usd_current_debt || 0), 0).toLocaleString()}
             </div>
             <div className="text-sm text-green-600">{t.client.usdDebt}</div>
           </div>
           <div className="bg-orange-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-orange-600">
-              {clients.reduce((sum, c) => sum + (c.rub_current_debt || 0), 0).toLocaleString()} ₽
+              {clients.reduce((sum, c) => sum + Math.max(0, c.rub_current_debt || 0), 0).toLocaleString()} ₽
             </div>
             <div className="text-sm text-orange-600">{t.client.rubDebt}</div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              ${clients.reduce((sum, c) => sum + Math.max(0, c.delivery_current_debt || 0), 0).toLocaleString()}
+            </div>
+            <div className="text-sm text-purple-600">🚚 Olib kelib berish qarzi</div>
           </div>
         </div>
       </div>
@@ -312,7 +397,9 @@ export default function ClientPage() {
                     )}
                   </div>
                   <div className={`w-3 h-3 rounded-full ${
-                    ((client.usd_current_debt || 0) > 0 || (client.rub_current_debt || 0) > 0) ? 'bg-red-500' : 'bg-green-500'
+                    (Math.max(0, client.usd_current_debt || 0) > 0 || 
+                     Math.max(0, client.rub_current_debt || 0) > 0 || 
+                     Math.max(0, client.delivery_current_debt || 0) > 0) ? 'bg-red-500' : 'bg-green-500'
                   }`}></div>
                 </div>
               </div>
@@ -337,7 +424,7 @@ export default function ClientPage() {
                     <div className="flex justify-between">
                       <span className="text-gray-600 font-semibold">{t.client.usdRemaining}:</span>
                       <span className={`font-bold ${(client.usd_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ${(client.usd_current_debt || 0).toLocaleString()}
+                        ${Math.max(0, client.usd_current_debt || 0).toLocaleString()}
                       </span>
                     </div>
                   </>
@@ -357,14 +444,36 @@ export default function ClientPage() {
                     <div className="flex justify-between">
                       <span className="text-gray-600 font-semibold">{t.client.rubRemaining}:</span>
                       <span className={`font-bold ${(client.rub_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {(client.rub_current_debt || 0).toLocaleString()} ₽
+                        {Math.max(0, client.rub_current_debt || 0).toLocaleString()} ₽
                       </span>
                     </div>
                   </>
                 )}
                 
+                {/* OLIB KELIB BERISH QARZLARI (YANGI) */}
+                {(client.delivery_total_debt || 0) > 0 && (
+                  <>
+                    <div className="border-t pt-2 mt-2">
+                      <div className="flex justify-between">
+                        <span className="text-purple-600 font-medium">🚚 Olib kelib berish qarzi:</span>
+                        <span className="font-semibold text-purple-600">${(client.delivery_total_debt || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-purple-600">🚚 Olib kelib berish to'langan:</span>
+                        <span className="font-semibold text-green-600">${(client.delivery_total_paid || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-purple-600 font-semibold">🚚 Olib kelib berish qolgan:</span>
+                        <span className={`font-bold ${(client.delivery_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          ${Math.max(0, client.delivery_current_debt || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
                 {/* Agar hech qanday qarz bo'lmasa */}
-                {(client.usd_total_debt || 0) === 0 && (client.rub_total_debt || 0) === 0 && (
+                {(client.usd_total_debt || 0) === 0 && (client.rub_total_debt || 0) === 0 && (client.delivery_total_debt || 0) === 0 && (
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-gray-600 font-semibold">{t.client.statusLabel}:</span>
                     <span className="font-bold text-green-600">{t.client.noDebt}</span>
@@ -375,21 +484,28 @@ export default function ClientPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => openDetailsModal(client._id)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-xl hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-200 text-xs font-medium"
                 >
                   <Icon name="details" size="sm" />
                   {t.client.details}
                 </button>
                 <button
+                  onClick={() => openDebtModal(client)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white px-3 py-2 rounded-xl hover:from-orange-600 hover:to-amber-700 shadow-lg hover:shadow-xl transition-all duration-200 text-xs font-medium"
+                >
+                  <Icon name="cash" size="sm" />
+                  {t.client.manageDebt || 'Qarz'}
+                </button>
+                <button
                   onClick={() => openEditModal(client)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200 text-sm font-medium"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200 text-xs font-medium"
                 >
                   <Icon name="edit" size="sm" />
                   {t.common.edit}
                 </button>
                 <button
                   onClick={() => handleDelete(client._id)}
-                  className="flex items-center justify-center bg-gradient-to-r from-red-500 to-rose-600 text-white px-3 py-2.5 rounded-xl hover:from-red-600 hover:to-rose-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                  className="flex items-center justify-center bg-gradient-to-r from-red-500 to-rose-600 text-white px-3 py-2 rounded-xl hover:from-red-600 hover:to-rose-700 shadow-lg hover:shadow-xl transition-all duration-200"
                 >
                   <Icon name="delete" size="sm" />
                 </button>
@@ -477,9 +593,24 @@ export default function ClientPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  disabled={isSubmitting}
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+                    isSubmitting
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                 >
-                  {t.common.save}
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saqlanmoqda...
+                    </>
+                  ) : (
+                    t.common.save
+                  )}
                 </button>
               </div>
             </form>
@@ -496,6 +627,139 @@ export default function ClientPage() {
             setSelectedClientId(null);
           }}
         />
+      )}
+
+      {/* Debt Management Modal */}
+      {showDebtModal && editingClient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold">
+                {t.client.manageDebt || 'Qarz boshqaruvi'} - {editingClient.name}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDebtModal(false);
+                  setEditingClient(null);
+                  setDebtData({ amount: '', currency: 'USD', description: '', type: 'add' });
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100 group"
+                aria-label="Yopish"
+              >
+                <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDebtSubmit}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t.client.debtType || 'Amal turi'}</label>
+                  <select
+                    value={debtData.type}
+                    onChange={(e) => setDebtData({ ...debtData, type: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="add">{t.client.addDebt || 'Qarz qo\'shish'}</option>
+                    <option value="subtract">{t.client.reduceDebt || 'Qarz kamaytirish'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t.common.amount}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={debtData.amount}
+                    onChange={(e) => setDebtData({ ...debtData, amount: e.target.value })}
+                    placeholder="1000"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t.common.currency}</label>
+                  <select
+                    value={debtData.currency}
+                    onChange={(e) => setDebtData({ ...debtData, currency: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="RUB">RUB</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">{t.common.description}</label>
+                  <textarea
+                    value={debtData.description}
+                    onChange={(e) => setDebtData({ ...debtData, description: e.target.value })}
+                    placeholder={t.client.debtDescriptionPlaceholder || 'Qarz sababi yoki izoh...'}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    rows={3}
+                  />
+                </div>
+
+                {/* Hozirgi qarz ko'rsatish */}
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <h4 className="font-semibold mb-2">{t.client.currentDebtStatus || 'Hozirgi qarz'}:</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>USD:</span>
+                      <span className={`font-semibold ${Math.max(0, editingClient.usd_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        ${Math.max(0, editingClient.usd_current_debt || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>RUB:</span>
+                      <span className={`font-semibold ${Math.max(0, editingClient.rub_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {Math.max(0, editingClient.rub_current_debt || 0).toLocaleString()} ₽
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDebtModal(false);
+                    setEditingClient(null);
+                    setDebtData({ amount: '', currency: 'USD', description: '', type: 'add' });
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  {t.common.cancel}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDebtSubmitting}
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+                    isDebtSubmitting
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      : debtData.type === 'add' 
+                        ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  {isDebtSubmitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {debtData.type === 'add' ? 'Qo\'shilmoqda...' : 'Kamaytirilmoqda...'}
+                    </>
+                  ) : (
+                    debtData.type === 'add' ? (t.client.addDebt || 'Qarz qo\'shish') : (t.client.reduceDebt || 'Qarz kamaytirish')
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
     </Layout>

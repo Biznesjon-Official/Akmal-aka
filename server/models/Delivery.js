@@ -84,6 +84,14 @@ const deliverySchema = new mongoose.Schema({
     comment: 'Qabul qiluvchi'
   },
   
+  // Mijoz (YANGI)
+  client: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Client',
+    required: false, // Ixtiyoriy, chunki ba'zi deliverylar mijozga bog'lanmasligi mumkin
+    comment: 'Qaysi mijoz uchun delivery'
+  },
+  
   // Vagon malumotlari
   vagonNumber: {
     type: String,
@@ -200,8 +208,10 @@ const deliverySchema = new mongoose.Schema({
 deliverySchema.index({ month: 1, orderNumber: 1 });
 deliverySchema.index({ isDeleted: 1 });
 deliverySchema.index({ paymentStatus: 1 });
+deliverySchema.index({ client: 1 }); // YANGI: Mijoz bo'yicha qidirish
 deliverySchema.index({ month: 1, isDeleted: 1 }); // Compound index
 deliverySchema.index({ month: 1, paymentStatus: 1, isDeleted: 1 }); // Compound index
+deliverySchema.index({ client: 1, isDeleted: 1 }); // YANGI: Mijoz va deleted status
 
 // Virtual field - to'liq to'langan yoki yo'qligini tekshirish
 deliverySchema.virtual('isPaid').get(function() {

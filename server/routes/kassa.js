@@ -596,12 +596,15 @@ router.post('/client-payment', [auth, [
       return res.status(404).json({ message: 'Mijoz topilmadi' });
     }
     
-    // Qarz tekshiruvi
-    const currentDebt = currency === 'USD' ? clientDoc.usd_total_debt : clientDoc.rub_total_debt;
+    // Qarz tekshiruvi - JORIY QARZNI HISOBLASH
+    const currentDebt = currency === 'USD' ? 
+      Math.max(0, clientDoc.usd_total_debt - clientDoc.usd_total_paid) : 
+      Math.max(0, clientDoc.rub_total_debt - clientDoc.rub_total_paid);
+      
     if (amount > currentDebt) {
       await session.abortTransaction();
       return res.status(400).json({ 
-        message: `Mijoz qarzi: ${currentDebt} ${currency}. Siz ${amount} ${currency} kiritdingiz.` 
+        message: `Mijoz joriy qarzi: ${currentDebt} ${currency}. Siz ${amount} ${currency} kiritdingiz.` 
       });
     }
     
@@ -612,31 +615,39 @@ router.post('/client-payment', [auth, [
       valyuta: currency,
       summaRUB: currency === 'RUB' ? amount : amount * 95.5, // Taxminiy kurs
       summaUSD: currency === 'USD' ? amount : amount * 0.0105,
-      tavsif: `Mijoz to'lovi: ${clientDoc.name} (${payment_method})`,
+      tavsif: `Mijoz to'lovi: ${clientDoc.name} (${payment_method}) ${notes ? '- ' + notes : ''}`,
       sana: new Date(),
-      yaratuvchi: req.user.userId,
-      qoshimchaMalumot: JSON.stringify({
-        client_id: client,
-        client_name: clientDoc.name,
-        payment_method,
-        notes: notes || ''
-      })
+      yaratuvchi: req.user.userId
     });
     
     await kassaEntry.save({ session });
     
-    // Mijoz qarzini yangilash
+    // Cash modeliga ham yozish (yangi tizim uchun)
+    const Cash = require('../models/Cash');
+    const cashEntry = new Cash({
+      type: 'client_payment',
+      client: client,
+      currency: currency,
+      amount: amount,
+      description: `Qarz to'lovi: ${clientDoc.name} - ${amount} ${currency} (${payment_method})`,
+      transaction_date: new Date(),
+      createdBy: req.user.userId
+    });
+    
+    await cashEntry.save({ session });
+    
+    // Mijoz qarzini yangilash - FAQAT TO'LOVNI OSHIRISH
     if (currency === 'USD') {
       clientDoc.usd_total_paid += amount;
-      clientDoc.usd_total_debt -= amount;
+      // usd_total_debt ni o'zgartirmaymiz - u doimiy qoladi
     } else {
       clientDoc.rub_total_paid += amount;
-      clientDoc.rub_total_debt -= amount;
+      // rub_total_debt ni o'zgartirmaymiz - u doimiy qoladi
     }
     
-    // Backward compatibility
+    // Backward compatibility - FAQAT TO'LOVNI OSHIRISH
     clientDoc.total_paid += (currency === 'USD' ? amount * 95.5 : amount);
-    clientDoc.total_debt -= (currency === 'USD' ? amount * 95.5 : amount);
+    // total_debt ni o'zgartirmaymiz - u doimiy qoladi
     
     await clientDoc.save({ session });
     
@@ -651,7 +662,9 @@ router.post('/client-payment', [auth, [
           amount,
           currency,
           payment_method,
-          remaining_debt: currency === 'USD' ? clientDoc.usd_total_debt : clientDoc.rub_total_debt
+          remaining_debt: currency === 'USD' ? 
+            Math.max(0, clientDoc.usd_total_debt - clientDoc.usd_total_paid) : 
+            Math.max(0, clientDoc.rub_total_debt - clientDoc.rub_total_paid)
         }
       },
       req.user.userId,
@@ -664,8 +677,8 @@ router.post('/client-payment', [auth, [
       message: 'To\'lov muvaffaqiyatli saqlandi',
       payment: kassaEntry,
       client_remaining_debt: {
-        usd: clientDoc.usd_total_debt,
-        rub: clientDoc.rub_total_debt
+        usd: Math.max(0, clientDoc.usd_total_debt - clientDoc.usd_total_paid),
+        rub: Math.max(0, clientDoc.rub_total_debt - clientDoc.rub_total_paid)
       }
     });
     

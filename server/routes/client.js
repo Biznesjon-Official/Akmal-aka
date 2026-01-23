@@ -36,7 +36,10 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Mijoz topilmadi' });
     }
     
-    res.json(client);
+    // Virtual field'lar bilan qaytarish
+    const clientWithVirtuals = client.toObject({ virtuals: true });
+    
+    res.json(clientWithVirtuals);
   } catch (error) {
     console.error('Client get error:', error);
     res.status(500).json({ message: 'Mijoz ma\'lumotlarini olishda xatolik' });
@@ -140,10 +143,27 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Mijoz topilmadi' });
     }
     
-    // Qarz borligini tekshirish
-    if (client.current_debt > 0) {
+    // Qarz borligini tekshirish - YANGI TIZIM (USD va RUB alohida)
+    const usdDebt = Math.max(0, client.usd_total_debt - client.usd_total_paid);
+    const rubDebt = Math.max(0, client.rub_total_debt - client.rub_total_paid);
+    
+    if (usdDebt > 0 || rubDebt > 0) {
+      let debtMessage = 'Mijozning qarzi bor:';
+      if (usdDebt > 0) {
+        debtMessage += ` ${usdDebt.toLocaleString()} USD`;
+      }
+      if (rubDebt > 0) {
+        if (usdDebt > 0) debtMessage += ' va';
+        debtMessage += ` ${rubDebt.toLocaleString()} RUB`;
+      }
+      debtMessage += '. Avval qarzni to\'lang';
+      
       return res.status(400).json({ 
-        message: `Mijozning ${client.current_debt.toLocaleString()} so'm qarzi bor. Avval qarzni to'lang` 
+        message: debtMessage,
+        debt_details: {
+          usd: usdDebt,
+          rub: rubDebt
+        }
       });
     }
     
@@ -183,6 +203,134 @@ router.get('/:id/stats', auth, async (req, res) => {
   } catch (error) {
     console.error('Client stats error:', error);
     res.status(500).json({ message: 'Statistikani olishda xatolik' });
+  }
+});
+
+// Mijoz qarzini boshqarish (qo'shish/kamaytirish)
+router.post('/:id/debt', auth, async (req, res) => {
+  const session = await require('mongoose').startSession();
+  session.startTransaction();
+  
+  try {
+    const { amount, currency, description, type } = req.body;
+    
+    if (!amount || !currency || !type) {
+      await session.abortTransaction();
+      return res.status(400).json({ 
+        message: 'Summa, valyuta va amal turi kiritilishi shart' 
+      });
+    }
+    
+    if (!['debt_increase', 'debt_decrease'].includes(type)) {
+      await session.abortTransaction();
+      return res.status(400).json({ 
+        message: 'Amal turi faqat debt_increase yoki debt_decrease bo\'lishi mumkin' 
+      });
+    }
+    
+    const client = await Client.findOne({ 
+      _id: req.params.id, 
+      isDeleted: false 
+    }).session(session);
+    
+    if (!client) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'Mijoz topilmadi' });
+    }
+    
+    const amountValue = Math.abs(amount);
+    
+    // Kassaga yozish
+    const Cash = require('../models/Cash');
+    let cashTransaction;
+    
+    if (type === 'debt_increase') {
+      // Qarz qo'shish = Yog'och sotilgan (kirim)
+      cashTransaction = await Cash.create([{
+        type: 'debt_sale',
+        client: client._id,
+        currency: currency,
+        amount: amountValue,
+        description: description || `Qarzga sotuv: ${client.name} - ${amountValue} ${currency}`,
+        transaction_date: new Date(),
+        createdBy: req.user.userId
+      }], { session });
+      
+      // FAQAT qarzni oshirish, to'lovni emas!
+      if (currency === 'USD') {
+        client.usd_total_debt += amountValue;
+        // usd_total_paid ni o'zgartirmaymiz!
+      } else if (currency === 'RUB') {
+        client.rub_total_debt += amountValue;
+        // rub_total_paid ni o'zgartirmaymiz!
+      }
+      
+      console.log(`✅ Qarz qo'shildi: ${client.name} - ${amountValue} ${currency}`);
+      
+    } else if (type === 'debt_decrease') {
+      // Qarz kamaytirish = To'lov qilingan
+      
+      // Avval qarz borligini tekshirish
+      const currentDebt = currency === 'USD' ? 
+        Math.max(0, client.usd_total_debt - client.usd_total_paid) : 
+        Math.max(0, client.rub_total_debt - client.rub_total_paid);
+      
+      if (amountValue > currentDebt) {
+        await session.abortTransaction();
+        return res.status(400).json({ 
+          message: `${currency} da qarz: ${currentDebt.toLocaleString()}. Siz ${amountValue.toLocaleString()} kamaytirmoqchisiz` 
+        });
+      }
+      
+      cashTransaction = await Cash.create([{
+        type: 'client_payment',
+        client: client._id,
+        currency: currency,
+        amount: amountValue,
+        description: description || `Qarz to'lovi: ${client.name} - ${amountValue} ${currency}`,
+        transaction_date: new Date(),
+        createdBy: req.user.userId
+      }], { session });
+      
+      // FAQAT to'lovni oshirish, qarzni emas!
+      if (currency === 'USD') {
+        client.usd_total_paid += amountValue;
+        // usd_total_debt ni o'zgartirmaymiz!
+      } else if (currency === 'RUB') {
+        client.rub_total_paid += amountValue;
+        // rub_total_debt ni o'zgartirmaymiz!
+      }
+      
+      console.log(`✅ Qarz to'landi: ${client.name} - ${amountValue} ${currency}`);
+    }
+    
+    await client.save({ session });
+    await session.commitTransaction();
+    
+    // Yangilangan qarz hisobini hisoblash
+    const updatedClient = await Client.findById(client._id);
+    const usdDebt = Math.max(0, updatedClient.usd_total_debt - updatedClient.usd_total_paid);
+    const rubDebt = Math.max(0, updatedClient.rub_total_debt - updatedClient.rub_total_paid);
+    
+    res.json({ 
+      message: `${type === 'debt_increase' ? 'Qarz qo\'shildi' : 'Qarz to\'landi'}`,
+      client: client.name,
+      amount: amountValue,
+      currency: currency,
+      transaction_id: cashTransaction[0]._id,
+      updated_debt: {
+        usd: usdDebt,
+        rub: rubDebt
+      },
+      // Yangilangan client ma'lumotlarini ham qaytarish
+      updated_client: updatedClient.toObject({ virtuals: true })
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Client debt management error:', error);
+    res.status(500).json({ message: 'Qarz boshqarishda xatolik', error: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
