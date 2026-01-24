@@ -269,14 +269,14 @@ function WoodContent() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">{t.common.loading}</div>
+        <div className="container-full-desktop flex justify-center items-center h-64">{t.common.loading}</div>
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="container-full-desktop space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">{t.wood.title}</h1>

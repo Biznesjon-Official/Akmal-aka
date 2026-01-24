@@ -97,107 +97,122 @@ export default function DeliveryPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="container-full-desktop space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
                 <Icon name="transport" className="text-white" />
               </div>
               {t.delivery.title}
             </h1>
-          <p className="text-gray-500 mt-1">{t.delivery.serviceDescription}</p>
-        </div>
-        
-        <button
-          onClick={handleAdd}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Icon name="add" size="sm" />
-          {t.delivery.addDelivery}
-        </button>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t.delivery.month}
-            </label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="input-field"
-            >
-              <option value="">{t.common.filter}</option>
-              {getMonthOptions().map(month => (
-                <option key={month} value={month}>{month}</option>
-              ))}
-            </select>
+            <p className="text-gray-500 mt-1">{t.delivery.serviceDescription}</p>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t.delivery.paymentStatus}
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="input-field"
-            >
-              <option value="">{t.common.filter}</option>
-              <option value="paid">{t.delivery.paid}</option>
-              <option value="partial">{t.delivery.partial}</option>
-              <option value="unpaid">{t.delivery.unpaid}</option>
-            </select>
-          </div>
+          <button
+            onClick={handleAdd}
+            className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
+          >
+            <Icon name="add" size="sm" />
+            <span className="hidden sm:inline">{t.delivery.addDelivery}</span>
+            <span className="sm:hidden">Qo'shish</span>
+          </button>
         </div>
-      </Card>
 
-      {/* Monthly Report */}
-      {selectedMonth && (
-        monthlyReport ? (
-          <MonthlyReportCard report={monthlyReport} />
-        ) : (
-          <MonthlyReportSkeleton />
-        )
-      )}
+        {/* Filters */}
+        <Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {t.delivery.month}
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="input-field"
+              >
+                <option value="">{t.common.filter}</option>
+                {getMonthOptions().map(month => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {t.delivery.paymentStatus}
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="input-field"
+              >
+                <option value="">{t.common.filter}</option>
+                <option value="paid">{t.delivery.paid}</option>
+                <option value="partial">{t.delivery.partial}</option>
+                <option value="unpaid">{t.delivery.unpaid}</option>
+              </select>
+            </div>
 
-      {/* Deliveries Table */}
-      <Card>
-        {isLoading ? (
-          <DeliveryTableSkeleton />
-        ) : deliveries.length === 0 ? (
-          <div className="text-center py-12">
-            <Icon name="transport" className="mx-auto text-gray-400 mb-4" size="lg" />
-            <p className="text-gray-500">{t.delivery.noDeliveries}</p>
-          </div>
-        ) : (
-          <DeliveryTable
-            deliveries={deliveries}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
-        )}
-      </Card>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <Suspense fallback={
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+            {/* Clear filters button */}
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setSelectedMonth('');
+                  setStatusFilter('');
+                }}
+                className="btn-secondary w-full sm:w-auto"
+              >
+                <span className="hidden sm:inline">{t.delivery.clearFilters}</span>
+                <span className="sm:hidden">Tozalash</span>
+              </button>
             </div>
           </div>
-        }>
-          <DeliveryModal
-            delivery={selectedDelivery}
-            onClose={handleModalClose}
-          />
-        </Suspense>
-      )}
+        </Card>
+
+        {/* Monthly Report */}
+        {selectedMonth && (
+          monthlyReport ? (
+            <MonthlyReportCard report={monthlyReport} />
+          ) : (
+            <MonthlyReportSkeleton />
+          )
+        )}
+
+        {/* Deliveries Table */}
+        <Card>
+          {isLoading ? (
+            <DeliveryTableSkeleton />
+          ) : deliveries.length === 0 ? (
+            <div className="text-center py-12">
+              <Icon name="transport" className="mx-auto text-gray-400 mb-4" size="lg" />
+              <p className="text-gray-500">{t.delivery.noDeliveries}</p>
+            </div>
+          ) : (
+            <DeliveryTable
+              deliveries={deliveries}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          )}
+        </Card>
+
+        {/* Modal */}
+        {isModalOpen && (
+          <Suspense fallback={
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+              </div>
+            </div>
+          }>
+            <DeliveryModal
+              delivery={selectedDelivery}
+              onClose={handleModalClose}
+            />
+          </Suspense>
+        )}
       </div>
     </Layout>
   );

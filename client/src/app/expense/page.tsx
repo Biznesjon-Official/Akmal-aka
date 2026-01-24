@@ -198,7 +198,7 @@ export default function ExpensePage() {
   if (authLoading || isLoading) {
     return (
       <Layout>
-        <div className="p-6 space-y-6">
+        <div className="container-full-desktop space-y-6">
           <div className="flex justify-between items-center">
             <div className="space-y-2">
               <Skeleton className="h-8 w-48" />
@@ -220,7 +220,7 @@ export default function ExpensePage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-6">
+      <div className="container-full-desktop">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
           <div className="flex-1 min-w-0">

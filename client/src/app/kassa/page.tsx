@@ -262,7 +262,7 @@ function KassaContent() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="container-full-desktop space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center">

@@ -18,15 +18,20 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <LanguageProvider>
       <ToastProvider />
-      <div className="h-screen flex overflow-hidden">
+      <div className="min-h-screen bg-gray-50">
         <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         
-        <div className="flex flex-col w-0 flex-1 overflow-hidden">
-          <Header setSidebarOpen={setSidebarOpen} />
+        <div className="md:pl-72">
+          {/* Fixed Header */}
+          <div className="fixed top-0 right-0 left-0 md:left-72 z-30">
+            <Header setSidebarOpen={setSidebarOpen} />
+          </div>
           
-          <main className="flex-1 relative overflow-y-auto focus:outline-none">
-            <div className="py-4 sm:py-6 md:py-8">
-              <div className="w-full px-4 sm:px-6 md:px-8">
+          {/* Main content with top padding to account for fixed header */}
+          <main className="pt-14 sm:pt-16 lg:pt-20">
+            <div className="py-2 sm:py-4 lg:py-6">
+              {/* Mobile va tablet uchun container, desktop uchun to'liq kenglik */}
+              <div className="px-4 sm:px-6 lg:px-4">
                 {children}
               </div>
             </div>

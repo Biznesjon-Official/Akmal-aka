@@ -113,24 +113,24 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-enter">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto modal-enter modal-content">
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 backdrop-enter">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl w-full max-w-full sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto modal-enter modal-content">
+        <div className="sticky top-0 bg-white border-b px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
             <Icon name="transport" />
             {isEdit ? t.delivery.editDelivery : t.delivery.addDelivery}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
           >
             <Icon name="close" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Asosiy ma'lumotlar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.orderNumber} *
@@ -159,7 +159,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
               />
             </div>
 
-            <div>
+            <div className="sm:col-span-2 lg:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.orderDate} *
               </label>
@@ -175,7 +175,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* Kodlar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.codeUZ} *
@@ -206,7 +206,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* Marshrutlar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.fromLocation} *
@@ -217,7 +217,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
                 value={formData.fromLocation}
                 onChange={handleChange}
                 required
-                placeholder="Afg'oniston"
+                placeholder={t.delivery.fromLocationPlaceholder}
                 className="input-field"
               />
             </div>
@@ -232,14 +232,14 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
                 value={formData.toLocation}
                 onChange={handleChange}
                 required
-                placeholder="O'zbekiston / Qozog'iston"
+                placeholder={t.delivery.toLocationPlaceholder}
                 className="input-field"
               />
             </div>
           </div>
 
           {/* Tomonlar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.sender} *
@@ -268,9 +268,9 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
               />
             </div>
 
-            <div>
+            <div className="sm:col-span-2 lg:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mijoz (ixtiyoriy)
+                {t.delivery.clientOptional}
               </label>
               <select
                 name="client"
@@ -278,7 +278,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
                 onChange={handleChange}
                 className="input-field"
               >
-                <option value="">Mijoz tanlanmagan</option>
+                <option value="">{t.delivery.clientNotSelected}</option>
                 {clients.map((client: any) => (
                   <option key={client._id} value={client._id}>
                     {client.name} - {client.phone}
@@ -286,13 +286,13 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
                 ))}
               </select>
               <p className="text-xs text-blue-600 mt-1">
-                💡 Mijoz tanlanganida qarz mijozlar sahifasida ko'rinadi
+                {t.delivery.clientDebtNote}
               </p>
             </div>
           </div>
 
           {/* Vagon ma'lumotlari */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.vagonNumber} *
@@ -323,7 +323,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* Vaznlar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.tonnage} *
@@ -354,7 +354,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
               />
             </div>
 
-            <div>
+            <div className="sm:col-span-2 lg:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.delivery.roundedWeight} *
               </label>
@@ -371,10 +371,10 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* Tariflar */}
-          <div className="bg-blue-50 rounded-lg p-4 space-y-4">
-            <h3 className="font-semibold text-gray-900">Tariflar (USD)</h3>
+          <div className="bg-blue-50 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+            <h3 className="font-semibold text-gray-900">{t.delivery.tariffsUSD}</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t.delivery.rateKZ} (1 tonna) *
@@ -427,7 +427,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
               />
             </div>
 
-            <div className="bg-white rounded-lg p-4">
+            <div className="bg-white rounded-lg p-3 sm:p-4">
               <div className="text-lg font-bold text-gray-900">
                 {t.delivery.totalTariff}: ${calculatedValues.totalTariff.toFixed(2)}
               </div>
@@ -435,8 +435,8 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* To'lovlar */}
-          <div className="bg-green-50 rounded-lg p-4 space-y-4">
-            <h3 className="font-semibold text-gray-900">To'lovlar (USD)</h3>
+          <div className="bg-green-50 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+            <h3 className="font-semibold text-gray-900">{t.delivery.paymentsUSD}</h3>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -452,7 +452,7 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
               />
             </div>
 
-            <div className={`bg-white rounded-lg p-4 ${calculatedValues.debt > 0 ? 'border-2 border-red-300' : 'border-2 border-green-300'}`}>
+            <div className={`bg-white rounded-lg p-3 sm:p-4 ${calculatedValues.debt > 0 ? 'border-2 border-red-300' : 'border-2 border-green-300'}`}>
               <div className={`text-lg font-bold ${calculatedValues.debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
                 {t.delivery.debt}: ${calculatedValues.debt.toFixed(2)}
               </div>
@@ -460,18 +460,18 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
           </div>
 
           {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t">
             <button
               type="button"
               onClick={onClose}
-              className="btn-secondary"
+              className="btn-secondary order-2 sm:order-1"
             >
               {t.common.cancel}
             </button>
             <button
               type="submit"
               disabled={saveMutation.isPending}
-              className="btn-primary"
+              className="btn-primary order-1 sm:order-2"
             >
               {saveMutation.isPending ? t.common.loading : t.common.save}
             </button>

@@ -71,7 +71,7 @@ function ExchangeRatesContent() {
   if (user?.role !== 'admin') {
     return (
       <Layout>
-        <div className="text-center py-12">
+        <div className="container-full-desktop text-center py-12">
           <h2 className="text-2xl font-semibold text-gray-900">{t.exchangeRates.noAccess}</h2>
           <p className="mt-2 text-gray-600">{t.exchangeRates.noAccessMessage}</p>
         </div>
@@ -113,7 +113,7 @@ function ExchangeRatesContent() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="container-full-desktop space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center">

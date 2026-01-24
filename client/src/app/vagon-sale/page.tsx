@@ -676,7 +676,7 @@ export default function VagonSalePage() {
   if (authLoading || loading) {
     return (
       <Layout>
-        <div className="p-6 space-y-6">
+        <div className="container-full-desktop space-y-6">
           <div className="flex justify-between items-center">
             <div className="space-y-2">
               <Skeleton className="h-8 w-48" />
@@ -706,7 +706,7 @@ export default function VagonSalePage() {
 
   return (
     <Layout>
-      <div className="p-6">
+      <div className="container-full-desktop">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold flex items-center">
             <Icon name="sales" className="mr-3" size="lg" />

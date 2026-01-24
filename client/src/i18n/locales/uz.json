@@ -30,7 +30,8 @@
     "selectAll": "Barchasi",
     "systemName": "Akmal aka",
     "systemSubtitle": "Import/Export",
-    "systemSubtitleFull": "Import/Export Boshqaruv"
+    "systemSubtitleFull": "Import/Export Boshqaruv",
+    "closeSidebar": "Sidebar yopish"
   },
   "auth": {
     "login": "Kirish",
@@ -725,7 +726,15 @@
     "paidOrders": "Tolangan",
     "partialOrders": "Qisman tolangan",
     "unpaidOrders": "Tolanmagan",
-    "serviceDescription": "Afg'onistondan yuk yetkazib berish xizmati"
+    "serviceDescription": "Afg'onistondan yuk yetkazib berish xizmati",
+    "clientOptional": "Mijoz (ixtiyoriy)",
+    "clientNotSelected": "Mijoz tanlanmagan",
+    "clientDebtNote": "💡 Mijoz tanlanganida qarz mijozlar sahifasida ko'rinadi",
+    "tariffsUSD": "Tariflar (USD)",
+    "paymentsUSD": "To'lovlar (USD)",
+    "fromLocationPlaceholder": "Afg'oniston",
+    "toLocationPlaceholder": "O'zbekiston / Qozog'iston",
+    "clearFilters": "Filtrlarni tozalash"
   },
   "purchase": {
     "title": "Xaridlar",
