@@ -21,9 +21,9 @@ export default function Layout({ children }: LayoutProps) {
       <div className="min-h-screen bg-gray-50">
         <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         
-        <div className="md:pl-72">
+        <div className="md:pl-64 lg:pl-72">
           {/* Fixed Header */}
-          <div className="fixed top-0 right-0 left-0 md:left-72 z-30">
+          <div className="fixed top-0 right-0 left-0 md:left-64 lg:left-72 z-30">
             <Header setSidebarOpen={setSidebarOpen} />
           </div>
           

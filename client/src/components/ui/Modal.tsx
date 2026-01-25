@@ -66,7 +66,8 @@ export default function Modal({
       <div 
         className={`
           bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-2xl border-0 sm:border border-gray-200/50 w-full ${sizeClasses[size]} 
-          h-full sm:h-auto sm:max-h-[90vh] overflow-hidden transform transition-all duration-300 scale-100 animate-slideUp
+          h-full sm:h-auto sm:max-h-[90vh] max-h-screen overflow-hidden transform transition-all duration-300 scale-100 animate-slideUp
+          flex flex-col
         `}
       >
         {/* Header */}
@@ -91,8 +92,10 @@ export default function Modal({
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto h-[calc(100vh-56px)] sm:h-auto sm:max-h-[calc(90vh-100px)] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-          {children}
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+          <div className="p-3 sm:p-6 lg:p-8">
+            {children}
+          </div>
         </div>
       </div>
     </div>

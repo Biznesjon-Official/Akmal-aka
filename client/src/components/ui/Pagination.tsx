@@ -75,7 +75,7 @@ export default function Pagination({
   return (
     <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 ${className}`}>
       {/* Ma'lumot */}
-      <div className="text-sm text-gray-600">
+      <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
         {totalItems > 0 ? (
           <>
             <span className="font-medium">{startItem}</span>

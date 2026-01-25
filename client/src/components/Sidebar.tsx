@@ -170,17 +170,17 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-gray-200">
+      <div className="hidden md:flex md:w-64 lg:w-72 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-gray-200">
         {/* Header section - fixed */}
-        <div className="flex-shrink-0 pt-6 pb-4">
-          <div className="flex items-center flex-shrink-0 px-5">
+        <div className="flex-shrink-0 pt-4 lg:pt-6 pb-3 lg:pb-4">
+          <div className="flex items-center flex-shrink-0 px-3 lg:px-5">
             <div className="flex items-center">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold text-base">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold text-sm lg:text-base">
                 A
               </div>
-              <div className="ml-4">
-                <h2 className="text-base font-bold text-gray-900">{t.common.systemName}</h2>
-                <p className="text-sm text-gray-500">{t.common.systemSubtitleFull}</p>
+              <div className="ml-3 lg:ml-4 min-w-0 flex-1">
+                <h2 className="text-sm lg:text-base font-bold text-gray-900 truncate">{t.common.systemName}</h2>
+                <p className="text-xs lg:text-sm text-gray-500 truncate">{t.common.systemSubtitleFull}</p>
               </div>
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
         
         {/* Navigation section - scrollable */}
         <div className="flex-1 overflow-y-auto">
-          <nav className="px-4 space-y-3 pb-4">
+          <nav className="px-2 lg:px-4 space-y-2 lg:space-y-3 pb-4">
             {allNavigation.map((item, idx) => {
               const isActive = pathname === item.href;
               
@@ -196,21 +196,21 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`group flex items-center px-4 py-4 text-base font-medium rounded-xl transition-all duration-200 ${
+                  className={`group flex items-center px-3 lg:px-4 py-3 lg:py-4 text-sm lg:text-base font-medium rounded-xl transition-all duration-200 ${
                     isActive
                       ? 'bg-blue-50 text-blue-700 shadow-sm border-l-4 border-blue-500'
                       : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                   }`}
                 >
                   <div 
-                    className="mr-4 flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center shadow-sm"
+                    className="mr-3 lg:mr-4 flex-shrink-0 h-8 w-8 lg:h-10 lg:w-10 rounded-xl flex items-center justify-center shadow-sm"
                     style={{
                       backgroundColor: getBackgroundColor(idx, isActive)
                     }}
                   >
                     {getIcon(idx, isActive)}
                   </div>
-                  <span className="font-medium truncate text-base">{item.name}</span>
+                  <span className="font-medium truncate text-sm lg:text-base">{item.name}</span>
                 </Link>
               );
             })}

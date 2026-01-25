@@ -31,7 +31,8 @@
     "systemName": "Akmal aka",
     "systemSubtitle": "Import/Export",
     "systemSubtitleFull": "Import/Export Boshqaruv",
-    "closeSidebar": "Sidebar yopish"
+    "closeSidebar": "Sidebar yopish",
+    "manual": "Qo'lda"
   },
   "auth": {
     "login": "Kirish",
@@ -625,7 +626,36 @@
     "rates": "kurslar",
     "actions": "Amallar",
     "importantNote": "Muhim eslatma",
-    "systemNote": "Tizimda faqat USD ↔ RUB valyuta kurslari ishlatiladi. USD kursi 1 USD = X RUB, RUB kursi esa 1 RUB = X USD ko'rinishida saqlanadi."
+    "systemNote": "Tizimda faqat USD ↔ RUB valyuta kurslari ishlatiladi. USD kursi 1 USD = X RUB, RUB kursi esa 1 RUB = X USD ko'rinishida saqlanadi.",
+    "widget": {
+      "title": "Valyuta Kurslari",
+      "realTime": "Real-time",
+      "database": "Database",
+      "refresh": "Yangilash",
+      "live": "Live",
+      "lastUpdate": "Oxirgi yangilanish",
+      "realTimeApi": "Real-time API",
+      "noDataLoaded": "Valyuta kurslari yuklanmadi"
+    },
+    "page": {
+      "title": "Valyuta Kurslari",
+      "subtitle": "Real-time va qo'lda kurslarni boshqaring",
+      "refresh": "Yangilash",
+      "realTimeRates": "Real-time Kurslar",
+      "live": "LIVE",
+      "americanDollar": "Amerikan dollari",
+      "russianRuble": "Rossiya rubli",
+      "databaseRates": "Database Kurslar",
+      "databaseRatesSubtitle": "Qo'lda o'rnatilgan valyuta kurslari",
+      "edit": "Tahrirlash",
+      "save": "Saqlash",
+      "cancel": "Bekor",
+      "realTimeInfo": "Real-time kurslar haqida ma'lumot",
+      "autoUpdate": "Real-time kurslar har 30 daqiqada avtomatik yangilanadi",
+      "manualUpdate": "Qo'lda yangilash orqali istalgan vaqtda yangilash mumkin",
+      "fallbackApi": "API ishlamasa, fallback API ishlatiladi",
+      "databaseInfo": "Database kurslar qo'lda o'rnatilgan kurslardir"
+    }
   },
   "reports": {
     "title": "Hisobotlar",

@@ -11,20 +11,22 @@ interface TableProps {
 
 export function Table({ children, className = '', title, subtitle, actions }: TableProps) {
   return (
-    <div className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 overflow-hidden ${className}`}>
+    <div className={`bg-white/90 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 overflow-hidden ${className}`}>
       {(title || actions) && (
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          <div>
-            {title && <h3 className="text-lg sm:text-xl font-bold">{title}</h3>}
-            {subtitle && <p className="text-blue-100 text-xs sm:text-sm mt-1">{subtitle}</p>}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+          <div className="min-w-0 flex-1">
+            {title && <h3 className="text-base sm:text-lg lg:text-xl font-bold truncate">{title}</h3>}
+            {subtitle && <p className="text-blue-100 text-xs sm:text-sm mt-1 truncate">{subtitle}</p>}
           </div>
-          {actions && <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto">{actions}</div>}
+          {actions && <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto flex-shrink-0">{actions}</div>}
         </div>
       )}
       <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-        <table className="w-full divide-y divide-gray-200">
-          {children}
-        </table>
+        <div className="min-w-full">
+          <table className="w-full divide-y divide-gray-200 min-w-[600px] sm:min-w-0">
+            {children}
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -54,10 +56,10 @@ interface TableHeadProps {
 export function TableHead({ children, className = '', sortable = false, onSort }: TableHeadProps) {
   return (
     <th 
-      className={`px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider ${sortable ? 'cursor-pointer hover:bg-gray-200' : ''} ${className}`}
+      className={`px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap ${sortable ? 'cursor-pointer hover:bg-gray-200' : ''} ${className}`}
       onClick={sortable ? onSort : undefined}
     >
-      <div className="flex items-center">
+      <div className="flex items-center min-h-[44px]">
         {children}
         {sortable && (
           <svg className="w-4 h-4 ml-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,11 +157,13 @@ interface TableCellProps {
 export function TableCell({ children, className = '', colSpan, rowSpan }: TableCellProps) {
   return (
     <td 
-      className={`px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap ${className}`}
+      className={`px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm min-h-[44px] ${className}`}
       colSpan={colSpan}
       rowSpan={rowSpan}
     >
-      {children}
+      <div className="min-h-[44px] flex items-center">
+        {children}
+      </div>
     </td>
   );
 }

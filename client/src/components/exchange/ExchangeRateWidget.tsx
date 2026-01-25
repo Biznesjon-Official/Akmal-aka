@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import Icon from '@/components/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useState } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface ExchangeRate {
   _id: string;
@@ -32,6 +33,7 @@ interface ExchangeRateData {
 }
 
 export default function ExchangeRateWidget() {
+  const { t } = useLanguage();
   const [showRealTime, setShowRealTime] = useState(true);
 
   const { data, isLoading, refetch } = useQuery<ExchangeRateData>({
@@ -115,7 +117,7 @@ export default function ExchangeRateWidget() {
       <Card className="p-6 bg-white shadow-lg border-0">
         <div className="text-center">
           <Icon name="alert-circle" className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500 text-sm">Valyuta kurslari yuklanmadi</p>
+          <p className="text-gray-500 text-sm">{t.exchangeRates.widget.noDataLoaded}</p>
         </div>
       </Card>
     );
@@ -147,7 +149,7 @@ export default function ExchangeRateWidget() {
             <Icon name="trending-up" className="h-5 w-5 text-white" />
           </div>
           <h3 className="text-lg font-bold text-gray-900">
-            Valyuta Kurslari
+            {t.exchangeRates.widget.title}
           </h3>
         </div>
         
@@ -162,7 +164,7 @@ export default function ExchangeRateWidget() {
                   : 'bg-gray-100 text-gray-700 border border-gray-200'
               }`}
             >
-              {showRealTime ? 'Real-time' : 'Database'}
+              {showRealTime ? t.exchangeRates.widget.realTime : t.exchangeRates.widget.database}
             </button>
           )}
           
@@ -219,7 +221,7 @@ export default function ExchangeRateWidget() {
               {rate.isRealTime && (
                 <div className="flex items-center justify-end space-x-1">
                   <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-emerald-600 font-medium">Live</span>
+                  <span className="text-xs text-emerald-600 font-medium">{t.exchangeRates.widget.live}</span>
                 </div>
               )}
             </div>
@@ -231,12 +233,12 @@ export default function ExchangeRateWidget() {
       <div className="mt-6 pt-4 border-t border-gray-200">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>
-            Oxirgi yangilanish: {formatDateTime(data.lastFetch)}
+            {t.exchangeRates.widget.lastUpdate}: {formatDateTime(data.lastFetch)}
           </span>
           {data.realTime && showRealTime && (
             <span className="flex items-center space-x-1 bg-emerald-50 px-2 py-1 rounded-full">
               <Icon name="wifi" className="h-3 w-3 text-emerald-600" />
-              <span className="text-emerald-600 font-medium">Real-time API</span>
+              <span className="text-emerald-600 font-medium">{t.exchangeRates.widget.realTimeApi}</span>
             </span>
           )}
         </div>

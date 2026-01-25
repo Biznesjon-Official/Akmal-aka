@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import Icon from '@/components/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from 'react-hot-toast';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface ExchangeRate {
   _id: string;
@@ -36,6 +37,7 @@ interface ExchangeRateData {
 }
 
 export default function ExchangeRatePage() {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [editingRate, setEditingRate] = useState<{ currency: string; rate: string } | null>(null);
 
@@ -61,10 +63,10 @@ export default function ExchangeRatePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exchange-rates'] });
       setEditingRate(null);
-      toast.success('Kurs yangilandi!');
+      toast.success(t.exchangeRates.updateSuccess);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Xatolik yuz berdi');
+      toast.error(error.response?.data?.message || t.exchangeRates.updateError);
     }
   });
 
@@ -82,7 +84,7 @@ export default function ExchangeRatePage() {
   const getSourceBadge = (source: string, isRealTime: boolean) => {
     const badges = {
       api: { text: 'API', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-      manual: { text: 'Qo\'lda', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+      manual: { text: t.common.manual || 'Qo\'lda', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
       fallback: { text: 'Fallback', color: 'bg-amber-50 text-amber-700 border border-amber-200' }
     };
 
@@ -96,7 +98,7 @@ export default function ExchangeRatePage() {
         {isRealTime && (
           <div className="flex items-center space-x-1">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-            <span className="text-xs text-emerald-600 font-medium">Live</span>
+            <span className="text-xs text-emerald-600 font-medium">{t.exchangeRates.widget.live}</span>
           </div>
         )}
       </div>
@@ -108,7 +110,7 @@ export default function ExchangeRatePage() {
 
     const rate = parseFloat(editingRate.rate);
     if (isNaN(rate) || rate <= 0) {
-      toast.error('Kurs musbat raqam bo\'lishi kerak');
+      toast.error(t.messages.amountMustBePositive);
       return;
     }
 
@@ -163,10 +165,10 @@ export default function ExchangeRatePage() {
                 </div>
               </div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                Valyuta Kurslari
+                {t.exchangeRates.page.title}
               </h1>
               <p className="text-gray-600 text-lg">
-                Real-time va qo'lda kurslarni boshqaring
+                {t.exchangeRates.page.subtitle}
               </p>
               
               {/* Refresh button */}
@@ -179,7 +181,7 @@ export default function ExchangeRatePage() {
                   className="bg-white shadow-md hover:shadow-lg transition-all duration-200 border-0"
                 >
                   <Icon name="refresh-cw" className="h-4 w-4 mr-2" />
-                  Yangilash
+                  {t.exchangeRates.page.refresh}
                 </Button>
               </div>
             </div>
@@ -194,11 +196,11 @@ export default function ExchangeRatePage() {
                     </div>
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Real-time Kurslar
+                    {t.exchangeRates.page.realTimeRates}
                   </h2>
                   <div className="flex items-center justify-center space-x-2">
                     <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <span className="text-emerald-600 font-semibold">LIVE</span>
+                    <span className="text-emerald-600 font-semibold">{t.exchangeRates.page.live}</span>
                     <span className="text-gray-500 text-sm">
                       • {formatDateTime(data.realTime.lastUpdated)}
                     </span>
@@ -214,7 +216,7 @@ export default function ExchangeRatePage() {
                         </div>
                         <div>
                           <h3 className="text-xl font-bold text-gray-900">1 USD</h3>
-                          <p className="text-gray-500">Amerikan dollari</p>
+                          <p className="text-gray-500">{t.exchangeRates.page.americanDollar}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -234,7 +236,7 @@ export default function ExchangeRatePage() {
                         </div>
                         <div>
                           <h3 className="text-xl font-bold text-gray-900">1 RUB</h3>
-                          <p className="text-gray-500">Rossiya rubli</p>
+                          <p className="text-gray-500">{t.exchangeRates.page.russianRuble}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -258,10 +260,10 @@ export default function ExchangeRatePage() {
                   </div>
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  Database Kurslar
+                  {t.exchangeRates.page.databaseRates}
                 </h2>
                 <p className="text-gray-600 mt-2">
-                  Qo'lda o'rnatilgan valyuta kurslari
+                  {t.exchangeRates.page.databaseRatesSubtitle}
                 </p>
               </div>
 
@@ -318,7 +320,7 @@ export default function ExchangeRatePage() {
                             className="bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-md"
                           >
                             <Icon name="check" className="h-4 w-4 mr-1" />
-                            Saqlash
+                            {t.exchangeRates.page.save}
                           </Button>
                           <Button
                             size="sm"
@@ -327,7 +329,7 @@ export default function ExchangeRatePage() {
                             className="bg-gray-100 hover:bg-gray-200 text-gray-700 border-0"
                           >
                             <Icon name="x" className="h-4 w-4 mr-1" />
-                            Bekor
+                            {t.exchangeRates.page.cancel}
                           </Button>
                         </div>
                       ) : (
@@ -347,7 +349,7 @@ export default function ExchangeRatePage() {
                             className="bg-blue-100 hover:bg-blue-200 text-blue-700 border-0 shadow-sm"
                           >
                             <Icon name="edit" className="h-4 w-4 mr-1" />
-                            Tahrirlash
+                            {t.exchangeRates.page.edit}
                           </Button>
                         </div>
                       )}
@@ -365,27 +367,27 @@ export default function ExchangeRatePage() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold text-blue-900 mb-4">
-                    Real-time kurslar haqida ma'lumot
+                    {t.exchangeRates.page.realTimeInfo}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-blue-800">
                     <div className="space-y-3">
                       <div className="flex items-center space-x-3">
                         <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                        <span>Real-time kurslar har 30 daqiqada avtomatik yangilanadi</span>
+                        <span>{t.exchangeRates.page.autoUpdate}</span>
                       </div>
                       <div className="flex items-center space-x-3">
                         <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span>Qo'lda yangilash orqali istalgan vaqtda yangilash mumkin</span>
+                        <span>{t.exchangeRates.page.manualUpdate}</span>
                       </div>
                     </div>
                     <div className="space-y-3">
                       <div className="flex items-center space-x-3">
                         <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                        <span>API ishlamasa, fallback API ishlatiladi</span>
+                        <span>{t.exchangeRates.page.fallbackApi}</span>
                       </div>
                       <div className="flex items-center space-x-3">
                         <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                        <span>Database kurslar qo'lda o'rnatilgan kurslardir</span>
+                        <span>{t.exchangeRates.page.databaseInfo}</span>
                       </div>
                     </div>
                   </div>
