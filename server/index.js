@@ -8,6 +8,9 @@ const morgan = require('morgan');
 const path = require('path');
 require('dotenv').config();
 
+// Services
+const exchangeRateService = require('./services/exchangeRateService');
+
 const app = express();
 
 // Trust proxy - Nginx orqali kelayotgan so'rovlar uchun
@@ -181,6 +184,10 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`🚀 Server ${PORT} portda ishlamoqda`);
     console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔒 Security: Helmet, Rate Limiting, Compression enabled`);
+    
+    // Real-time valyuta kurslarini avtomatik yangilashni boshlash
+    console.log(`💱 Real-time valyuta kurslari avtomatik yangilanishi boshlandi`);
+    exchangeRateService.startAutoUpdate();
   });
 }
 

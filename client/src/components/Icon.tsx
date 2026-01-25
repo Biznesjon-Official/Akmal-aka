@@ -61,7 +61,69 @@ const Icon: React.FC<IconProps> = ({ name, className = '', size = 'md' }) => {
           </svg>
         );
       
-      case 'expenses':
+      case 'wifi':
+        return (
+          <svg {...commonProps}>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0l1.06-1.06A18 18 0 0 0 .36 7.94L1.42 9zm3.54 3.54a10 10 0 0 1 14.08 0l1.06-1.06a12 12 0 0 0-16.2 0l1.06 1.06zm3.54 3.54a4 4 0 0 1 5.66 0l1.06-1.06a6 6 0 0 0-7.78 0l1.06 1.06zM12 18a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
+          </svg>
+        );
+
+      case 'database':
+        return (
+          <svg {...commonProps}>
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+            <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+          </svg>
+        );
+
+      case 'globe':
+        return (
+          <svg {...commonProps}>
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        );
+
+      case 'pause':
+        return (
+          <svg {...commonProps}>
+            <rect x="6" y="4" width="4" height="16"/>
+            <rect x="14" y="4" width="4" height="16"/>
+          </svg>
+        );
+
+      case 'play':
+        return (
+          <svg {...commonProps}>
+            <polygon points="5,3 19,12 5,21"/>
+          </svg>
+        );
+
+      case 'refresh-cw':
+        return (
+          <svg {...commonProps}>
+            <polyline points="23,4 23,10 17,10"/>
+            <polyline points="1,20 1,14 7,14"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+          </svg>
+        );
+
+      case 'check':
+        return (
+          <svg {...commonProps}>
+            <polyline points="20,6 9,17 4,12"/>
+          </svg>
+        );
+
+      case 'x':
+        return (
+          <svg {...commonProps}>
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        );
         return (
           <svg {...commonProps}>
             <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" />

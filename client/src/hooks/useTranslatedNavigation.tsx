@@ -65,8 +65,8 @@ export function useTranslatedNavigation() {
   const adminNavigation = useMemo(() => [
     { 
       name: t.sidebar.exchangeRates, 
-      href: '/exchange-rates', 
-      icon: <Icon name="usd" size="sm" />,
+      href: '/exchange-rate', 
+      icon: <Icon name="trending-up" size="sm" />,
       gradient: 'from-yellow-500 to-yellow-600' 
     },
     // Backup qismi olib tashlandi - foydasiz

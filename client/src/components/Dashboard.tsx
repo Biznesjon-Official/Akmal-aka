@@ -6,6 +6,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Card } from '@/components/ui/Card';
 import Icon from '@/components/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import ExchangeRateWidget from '@/components/exchange/ExchangeRateWidget';
 
 interface DashboardData {
   // MOLIYAVIY HOLAT
@@ -251,6 +252,9 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* VALYUTA KURSLARI */}
+     
 
       {/* VAGON HOLATI */}
       <div>

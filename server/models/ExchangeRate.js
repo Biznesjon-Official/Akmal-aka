@@ -28,7 +28,20 @@ const exchangeRateSchema = new mongoose.Schema({
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false // Real-time yangilanishlar uchun
+  },
+  
+  // Real-time API dan kelganmi
+  isRealTime: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Real-time ma'lumot manbai
+  source: {
+    type: String,
+    enum: ['manual', 'api', 'fallback'],
+    default: 'manual'
   }
 }, {
   timestamps: true
