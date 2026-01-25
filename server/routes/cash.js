@@ -28,14 +28,23 @@ router.get('/balance/by-currency', auth, async (req, res) => {
   }
 });
 
-// Barcha tranzaksiyalar
+// Barcha tranzaksiyalar (PAGINATION BILAN)
 router.get('/', auth, async (req, res) => {
   try {
-    const { type, startDate, endDate, currency } = req.query;
+    const { 
+      type, 
+      startDate, 
+      endDate, 
+      currency, 
+      client,
+      page = 1, 
+      limit = 20 
+    } = req.query;
     
     const filter = { isDeleted: false };
     if (type) filter.type = type;
     if (currency) filter.currency = currency;
+    if (client) filter.client = client;
     
     if (startDate || endDate) {
       filter.transaction_date = {};
@@ -43,15 +52,41 @@ router.get('/', auth, async (req, res) => {
       if (endDate) filter.transaction_date.$lte = new Date(endDate);
     }
     
+    // Pagination parametrlari
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Jami soni
+    const total = await Cash.countDocuments(filter);
+    
+    // Tranzaksiyalarni olish (faqat kerakli fieldlar)
     const transactions = await Cash.find(filter)
+      .select('type client vagon vagonSale expense currency amount description transaction_date createdAt')
       .populate('client', 'name phone')
       .populate('vagon', 'vagonCode month')
-      .populate('vagonSale')
-      .populate('expense')
       .populate('createdBy', 'username')
-      .sort({ transaction_date: -1 });
+      .sort({ transaction_date: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
     
-    res.json(transactions);
+    // Pagination ma'lumotlari
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+    
+    res.json({
+      transactions,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limitNum,
+        hasNextPage,
+        hasPrevPage
+      }
+    });
   } catch (error) {
     console.error('Cash list error:', error);
     res.status(500).json({ message: 'Tranzaksiyalar ro\'yxatini olishda xatolik' });

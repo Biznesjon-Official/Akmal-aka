@@ -165,14 +165,15 @@ router.post('/', auth, async (req, res) => {
     
     await delivery.save();
     
-    // MIJOZ QARZINI YANGILASH (agar mijoz tanlangan bo'lsa)
+    // MIJOZ QARZINI DARHOL YANGILASH (agar mijoz tanlangan bo'lsa)
     if (client) {
-      console.log(`🚚 Olib kelib berish yaratildi, mijoz qarzi yangilanmoqda: ${client}`);
+      console.log(`🚚 Olib kelib berish yaratildi, mijoz qarzi darhol yangilanmoqda: ${client}`);
       try {
         await updateClientDeliveryDebt(client);
-        console.log(`✅ Mijoz ${client} qarzi yangilandi`);
+        console.log(`✅ Mijoz ${client} qarzi darhol yangilandi`);
       } catch (error) {
         console.error(`❌ Mijoz ${client} qarzini yangilashda xatolik:`, error);
+        // Bu xatolik response'ga ta'sir qilmaydi
       }
     } else {
       console.log(`ℹ️  Mijoz tanlanmagan, qarz yangilanmaydi`);
@@ -296,9 +297,10 @@ router.put('/:id', auth, async (req, res) => {
     
     await delivery.save();
     
-    // MIJOZ QARZINI YANGILASH (agar mijoz tanlangan bo'lsa)
+    // MIJOZ QARZINI DARHOL YANGILASH (agar mijoz tanlangan bo'lsa)
     if (client) {
       await updateClientDeliveryDebt(client);
+      console.log(`✅ Mijoz ${client} qarzi darhol yangilandi`);
     }
     
     // KASSA INTEGRATSIYASI: To'lov o'zgarganda kassani yangilaymiz

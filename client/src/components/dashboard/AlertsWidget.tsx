@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/utils/formatters';
+import Icon from '@/components/Icon';
 
 interface Alert {
   type: 'debt' | 'low_stock' | 'transport_delay';
@@ -31,36 +32,36 @@ export default function AlertsWidget({ alerts }: Props) {
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
-      icon: '🚨'
+      icon: 'alert-triangle'
     },
     medium: {
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       borderColor: 'border-orange-200',
-      icon: '⚠️'
+      icon: 'alert-circle'
     },
     low: {
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
       borderColor: 'border-yellow-200',
-      icon: '💡'
+      icon: 'lightbulb'
     }
   };
 
   const typeConfig = {
     debt: {
       title: t.dashboard.debt,
-      icon: '💳',
+      icon: 'credit-card',
       color: 'text-red-600'
     },
     low_stock: {
       title: t.dashboard.lowStock,
-      icon: '📦',
+      icon: 'package',
       color: 'text-orange-600'
     },
     transport_delay: {
       title: t.dashboard.transportDelay,
-      icon: '🚛',
+      icon: 'truck',
       color: 'text-blue-600'
     }
   };
@@ -69,11 +70,14 @@ export default function AlertsWidget({ alerts }: Props) {
     return (
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">🔔 {t.dashboard.alerts}</h3>
-          <div className="text-green-500 text-2xl">✅</div>
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Icon name="bell" className="h-5 w-5 text-gray-600 mr-2" />
+            {t.dashboard.alerts}
+          </h3>
+          <Icon name="check-circle" className="h-6 w-6 text-green-500" />
         </div>
         <div className="text-center text-gray-500 py-8">
-          <div className="text-4xl mb-2">🎉</div>
+          <Icon name="party" className="h-10 w-10 text-gray-400 mx-auto mb-2" />
           <p>{t.dashboard.noAlerts}</p>
           <p className="text-sm mt-1">{t.dashboard.allProcessesNormal}</p>
         </div>
@@ -84,8 +88,9 @@ export default function AlertsWidget({ alerts }: Props) {
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">
-          🔔 {t.dashboard.alerts} ({alerts.length})
+        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+          <Icon name="bell" className="h-5 w-5 text-gray-600 mr-2" />
+          {t.dashboard.alerts} ({alerts.length})
         </h3>
         
         {/* Filter */}
@@ -124,9 +129,10 @@ export default function AlertsWidget({ alerts }: Props) {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-3 flex-1">
-                  <div className="text-xl">
-                    {priorityStyle.icon}
-                  </div>
+                  <Icon 
+                    name={priorityStyle.icon} 
+                    className={`h-5 w-5 ${priorityStyle.color} mt-0.5`} 
+                  />
                   
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-1">

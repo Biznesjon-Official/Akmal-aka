@@ -123,7 +123,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-8 text-center">
-          <div className="text-red-500 text-4xl mb-4">⚠️</div>
+          <Icon name="alert-triangle" className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">Xatolik yuz berdi</h3>
           <p className="text-gray-600 mb-4">Mijoz ma'lumotlarini yuklashda muammo</p>
           <button
@@ -140,10 +140,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
   const { client, sales, salesStats, payments, debtByCurrency, monthlySales, summary } = clientDetails;
 
   const tabs = [
-    { id: 'overview', name: '📊 Umumiy', icon: '📊' },
-    { id: 'sales', name: '💰 Sotuvlar', icon: '💰' },
-    { id: 'payments', name: '💳 To\'lovlar', icon: '💳' },
-    { id: 'lots', name: '📦 Lotlar', icon: '📦' }
+    { id: 'overview', name: 'Umumiy', icon: 'dashboard' },
+    { id: 'sales', name: 'Sotuvlar', icon: 'trending-up' },
+    { id: 'payments', name: 'To\'lovlar', icon: 'credit-card' },
+    { id: 'lots', name: 'Lotlar', icon: 'package' }
   ];
 
   return (
@@ -203,13 +203,13 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-4 px-2 border-b-2 font-medium text-sm ${
+                className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
+                <Icon name={tab.icon} className="h-4 w-4 mr-2" />
                 {tab.name}
               </button>
             ))}
@@ -223,7 +223,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
               {/* Qarz holati */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">💳 Vagon sotuv qarzi</h3>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Icon name="credit-card" className="h-5 w-5 text-blue-600 mr-2" />
+                    Vagon sotuv qarzi
+                  </h3>
                   {debtByCurrency && debtByCurrency.length > 0 ? (
                     <div className="space-y-3">
                       {debtByCurrency.map((debt, index) => (
@@ -253,14 +256,17 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                     </div>
                   ) : (
                     <div className="text-center text-gray-500 py-4">
-                      <div className="text-2xl mb-2">✅</div>
+                      <Icon name="check-circle" className="h-8 w-8 text-green-500 mx-auto mb-2" />
                       <p>Vagon sotuv qarzi yo'q</p>
                     </div>
                   )}
                 </Card>
 
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">🚚 Olib kelib berish qarzi</h3>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Icon name="truck" className="h-5 w-5 text-purple-600 mr-2" />
+                    Olib kelib berish qarzi
+                  </h3>
                   {client.delivery_current_debt !== undefined ? (
                     <div className="space-y-3">
                       <div className="border-l-4 border-purple-500 pl-4">
@@ -288,7 +294,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                     </div>
                   ) : (
                     <div className="text-center text-gray-500 py-4">
-                      <div className="text-2xl mb-2">✅</div>
+                      <Icon name="check-circle" className="h-8 w-8 text-green-500 mx-auto mb-2" />
                       <p>Olib kelib berish qarzi yo'q</p>
                     </div>
                   )}
@@ -297,7 +303,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
 
               {/* Sotuv statistikasi */}
               <Card className="p-6">
-                <h3 className="text-lg font-semibold mb-4">📈 Sotuv statistikasi</h3>
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Icon name="trending-up" className="h-5 w-5 text-green-600 mr-2" />
+                  Sotuv statistikasi
+                </h3>
                 {salesStats && salesStats.length > 0 ? (
                   <div className="space-y-3">
                     {salesStats.map((stat, index) => (
@@ -319,7 +328,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                   </div>
                 ) : (
                   <div className="text-center text-gray-500 py-4">
-                    <div className="text-2xl mb-2">📊</div>
+                    <Icon name="dashboard" className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                     <p>Sotuvlar yo'q</p>
                   </div>
                 )}
@@ -328,7 +337,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
               {/* Oylik dinamika */}
               {monthlySales && monthlySales.length > 0 && (
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">📈 Oylik sotuv dinamikasi</h3>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Icon name="trending-up" className="h-5 w-5 text-blue-600 mr-2" />
+                    Oylik sotuv dinamikasi
+                  </h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={monthlySales}>
@@ -363,7 +375,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
 
           {activeTab === 'sales' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">💰 Sotuvlar tarixi</h3>
+              <h3 className="text-lg font-semibold flex items-center">
+                <Icon name="trending-up" className="h-5 w-5 text-green-600 mr-2" />
+                Sotuvlar tarixi
+              </h3>
               {sales && sales.length > 0 ? (
                 <div className="space-y-3">
                   {sales.map((sale) => (
@@ -409,7 +424,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                 </div>
               ) : (
                 <div className="text-center text-gray-500 py-8">
-                  <div className="text-4xl mb-2">💰</div>
+                  <Icon name="trending-up" className="h-16 w-16 text-gray-400 mx-auto mb-2" />
                   <p>Sotuvlar yo'q</p>
                 </div>
               )}
@@ -418,7 +433,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
 
           {activeTab === 'payments' && clientPayments && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">💳 To'lovlar tarixi</h3>
+              <h3 className="text-lg font-semibold flex items-center">
+                <Icon name="credit-card" className="h-5 w-5 text-blue-600 mr-2" />
+                To'lovlar tarixi
+              </h3>
               {clientPayments.payments && clientPayments.payments.length > 0 ? (
                 <div className="space-y-3">
                   {clientPayments.payments.map((payment: Payment) => (
@@ -435,8 +453,8 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                             {new Date(payment.createdAt).toLocaleDateString('uz-UZ')}
                           </div>
                         </div>
-                        <div className="text-green-600 text-2xl">
-                          ✅
+                        <div className="text-green-600">
+                          <Icon name="check-circle" className="h-6 w-6" />
                         </div>
                       </div>
                     </Card>
@@ -444,7 +462,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                 </div>
               ) : (
                 <div className="text-center text-gray-500 py-8">
-                  <div className="text-4xl mb-2">💳</div>
+                  <Icon name="credit-card" className="h-16 w-16 text-gray-400 mx-auto mb-2" />
                   <p>To'lovlar yo'q</p>
                 </div>
               )}
@@ -453,7 +471,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
 
           {activeTab === 'lots' && clientLots && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">📦 Sotib olgan lotlar</h3>
+              <h3 className="text-lg font-semibold flex items-center">
+                <Icon name="package" className="h-5 w-5 text-orange-600 mr-2" />
+                Sotib olgan lotlar
+              </h3>
               {clientLots.lotStats && clientLots.lotStats.length > 0 ? (
                 <div className="space-y-3">
                   {clientLots.lotStats.map((lot: any, index: number) => (
@@ -487,7 +508,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                 </div>
               ) : (
                 <div className="text-center text-gray-500 py-8">
-                  <div className="text-4xl mb-2">📦</div>
+                  <Icon name="package" className="h-16 w-16 text-gray-400 mx-auto mb-2" />
                   <p>Lotlar yo'q</p>
                 </div>
               )}

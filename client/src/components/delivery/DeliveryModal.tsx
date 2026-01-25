@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import axios from '@/lib/axios';
 import { useLanguage } from '@/context/LanguageContext';
@@ -17,14 +17,23 @@ function DeliveryModal({ delivery, onClose }: DeliveryModalProps) {
   const isEdit = !!delivery;
 
   // Mijozlar ro'yxatini olish
-  const { data: clients = [] } = useQuery({
+  const { data: clientsData = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
       const response = await axios.get('/client');
-      return response.data;
+      // Backend'dan pagination format kelishi mumkin
+      if (response.data.clients) {
+        return response.data.clients;
+      } else {
+        // Eski format (backward compatibility)
+        return response.data;
+      }
     },
     staleTime: 60000, // 1 daqiqa cache
   });
+
+  // Clients array ekanligini ta'minlash
+  const clients = Array.isArray(clientsData) ? clientsData : [];
 
   const [formData, setFormData] = useState({
     orderNumber: delivery?.orderNumber || '',

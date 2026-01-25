@@ -211,109 +211,114 @@ vagonLotSchema.index({ isDeleted: 1 });
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonLotSchema.pre('save', async function(next) {
-  // 1. Omborda mavjud hajm = Umumiy hajm - Brak
-  const volume = Number(this.volume_m3) || 0;
-  const lossVolume = Number(this.loss_volume_m3) || 0;
-  const dispatchedVolume = Number(this.warehouse_dispatched_volume_m3) || 0;
-  
-  this.warehouse_available_volume_m3 = Math.max(0, volume - lossVolume);
-  
-  // 2. Omborda qolgan hajm = Mavjud - Jo'natilgan
-  this.warehouse_remaining_volume_m3 = Math.max(0, this.warehouse_available_volume_m3 - dispatchedVolume);
-  
-  // 3. Backward compatibility uchun eski field'larni yangilash
-  this.sold_volume_m3 = dispatchedVolume;
-  this.remaining_volume_m3 = this.warehouse_remaining_volume_m3;
-  this.available_volume_m3 = this.warehouse_available_volume_m3;
-  
-  // 4. Qolgan soni (taxminiy)
-  if (volume > 0 && this.quantity > 0) {
-    const remaining_percentage = this.warehouse_remaining_volume_m3 / volume;
-    this.remaining_quantity = Math.max(0, Math.floor(this.quantity * remaining_percentage));
-  } else {
-    this.remaining_quantity = 0;
-  }
-  
-  // 5. YANGI MOLIYAVIY HISOBLASHLAR (UNIFIED CURRENCY)
-  
-  // Jami sarmoya = Xarid + Taqsimlangan xarajatlar
-  const purchaseAmount = Number(this.purchase_amount) || 0;
-  const allocatedExpenses = Number(this.allocated_expenses) || 0;
-  const totalRevenue = Number(this.total_revenue) || 0;
-  
-  this.total_investment = purchaseAmount + allocatedExpenses;
-  
-  // Tannarx = Jami sarmoya / Umumiy hajm
-  if (volume > 0) {
-    this.cost_per_m3 = this.total_investment / volume;
-    this.break_even_price_per_m3 = this.cost_per_m3;
-  } else {
-    this.cost_per_m3 = 0;
-    this.break_even_price_per_m3 = 0;
-  }
-  
-  // Haqiqiy foyda = Daromad - (Sarmoya * Sotilgan foiz)
-  if (volume > 0) {
-    const sold_percentage = dispatchedVolume / volume;
-    const proportional_investment = this.total_investment * sold_percentage;
-    this.realized_profit = totalRevenue - proportional_investment;
-  } else {
-    this.realized_profit = 0;
-  }
-  
-  // Sotilmagan qiymat = Qolgan hajm * Tannarx
-  this.unrealized_value = this.warehouse_remaining_volume_m3 * this.cost_per_m3;
-  
-  // Backward compatibility
-  this.total_expenses = this.total_investment;
-  this.profit = this.realized_profit;
-  
-  // Asosiy valyutaga konvertatsiya (xatolik bo'lsa ham davom etadi)
   try {
-    const SystemSettings = require('./SystemSettings');
+    // 1. Omborda mavjud hajm = Umumiy hajm - Brak
+    const volume = Number(this.volume_m3) || 0;
+    const lossVolume = Number(this.loss_volume_m3) || 0;
+    const dispatchedVolume = Number(this.warehouse_dispatched_volume_m3) || 0;
     
-    const investmentInBase = await SystemSettings.convertToBaseCurrency(
-      this.total_investment, 
-      this.purchase_currency
-    );
+    this.warehouse_available_volume_m3 = Math.max(0, volume - lossVolume);
     
-    const revenueInBase = await SystemSettings.convertToBaseCurrency(
-      totalRevenue, 
-      this.purchase_currency
-    );
+    // 2. Omborda qolgan hajm = Mavjud - Jo'natilgan
+    this.warehouse_remaining_volume_m3 = Math.max(0, this.warehouse_available_volume_m3 - dispatchedVolume);
     
-    // Asosiy valyutada tannarx
-    if (volume > 0) {
-      this.base_currency_cost_per_m3 = investmentInBase.amount / volume;
+    // 3. Backward compatibility uchun eski field'larni yangilash
+    this.sold_volume_m3 = dispatchedVolume;
+    this.remaining_volume_m3 = this.warehouse_remaining_volume_m3;
+    this.available_volume_m3 = this.warehouse_available_volume_m3;
+    
+    // 4. Qolgan soni (taxminiy)
+    if (volume > 0 && this.quantity > 0) {
+      const remaining_percentage = this.warehouse_remaining_volume_m3 / volume;
+      this.remaining_quantity = Math.max(0, Math.floor(this.quantity * remaining_percentage));
     } else {
-      this.base_currency_cost_per_m3 = 0;
+      this.remaining_quantity = 0;
     }
     
-    // Asosiy valyutada foyda
+    // 5. YANGI MOLIYAVIY HISOBLASHLAR (UNIFIED CURRENCY)
+    
+    // Jami sarmoya = Xarid + Taqsimlangan xarajatlar
+    const purchaseAmount = Number(this.purchase_amount) || 0;
+    const allocatedExpenses = Number(this.allocated_expenses) || 0;
+    const totalRevenue = Number(this.total_revenue) || 0;
+    
+    this.total_investment = purchaseAmount + allocatedExpenses;
+    
+    // Tannarx = Jami sarmoya / Umumiy hajm
+    if (volume > 0) {
+      this.cost_per_m3 = this.total_investment / volume;
+      this.break_even_price_per_m3 = this.cost_per_m3;
+    } else {
+      this.cost_per_m3 = 0;
+      this.break_even_price_per_m3 = 0;
+    }
+    
+    // Haqiqiy foyda = Daromad - (Sarmoya * Sotilgan foiz)
     if (volume > 0) {
       const sold_percentage = dispatchedVolume / volume;
-      const proportional_investment_base = investmentInBase.amount * sold_percentage;
-      this.base_currency_realized_profit = revenueInBase.amount - proportional_investment_base;
+      const proportional_investment = this.total_investment * sold_percentage;
+      this.realized_profit = totalRevenue - proportional_investment;
     } else {
-      this.base_currency_realized_profit = 0;
+      this.realized_profit = 0;
     }
     
-    // Asosiy valyutada qiymatlar
-    this.base_currency_unrealized_value = this.warehouse_remaining_volume_m3 * (this.base_currency_cost_per_m3 || 0);
-    this.base_currency_total_investment = investmentInBase.amount;
-    this.base_currency_total_revenue = revenueInBase.amount;
+    // Sotilmagan qiymat = Qolgan hajm * Tannarx
+    this.unrealized_value = this.warehouse_remaining_volume_m3 * this.cost_per_m3;
     
+    // Backward compatibility
+    this.total_expenses = this.total_investment;
+    this.profit = this.realized_profit;
+    
+    // Asosiy valyutaga konvertatsiya (xatolik bo'lsa ham davom etadi)
+    try {
+      const SystemSettings = require('./SystemSettings');
+      
+      const investmentInBase = await SystemSettings.convertToBaseCurrency(
+        this.total_investment, 
+        this.purchase_currency
+      );
+      
+      const revenueInBase = await SystemSettings.convertToBaseCurrency(
+        totalRevenue, 
+        this.purchase_currency
+      );
+      
+      // Asosiy valyutada tannarx
+      if (volume > 0) {
+        this.base_currency_cost_per_m3 = investmentInBase.amount / volume;
+      } else {
+        this.base_currency_cost_per_m3 = 0;
+      }
+      
+      // Asosiy valyutada foyda
+      if (volume > 0) {
+        const sold_percentage = dispatchedVolume / volume;
+        const proportional_investment_base = investmentInBase.amount * sold_percentage;
+        this.base_currency_realized_profit = revenueInBase.amount - proportional_investment_base;
+      } else {
+        this.base_currency_realized_profit = 0;
+      }
+      
+      // Asosiy valyutada qiymatlar
+      this.base_currency_unrealized_value = this.warehouse_remaining_volume_m3 * (this.base_currency_cost_per_m3 || 0);
+      this.base_currency_total_investment = investmentInBase.amount;
+      this.base_currency_total_revenue = revenueInBase.amount;
+      
+    } catch (error) {
+      console.error('⚠️ Currency conversion error in VagonLot (using fallback):', error.message);
+      // Xatolik bo'lsa, asl valyutadagi qiymatlarni ishlatish
+      this.base_currency_cost_per_m3 = this.cost_per_m3;
+      this.base_currency_realized_profit = this.realized_profit;
+      this.base_currency_unrealized_value = this.unrealized_value;
+      this.base_currency_total_investment = this.total_investment;
+      this.base_currency_total_revenue = totalRevenue;
+    }
+    
+    next();
   } catch (error) {
-    console.error('⚠️ Currency conversion error in VagonLot (using fallback):', error.message);
-    // Xatolik bo'lsa, asl valyutadagi qiymatlarni ishlatish
-    this.base_currency_cost_per_m3 = this.cost_per_m3;
-    this.base_currency_realized_profit = this.realized_profit;
-    this.base_currency_unrealized_value = this.unrealized_value;
-    this.base_currency_total_investment = this.total_investment;
-    this.base_currency_total_revenue = totalRevenue;
+    console.error('❌ VagonLot pre-save hook error:', error);
+    next(error);
   }
-  
-  next();
 });
 
 // Post-save: Brak uchun LossLiability yaratish
@@ -429,13 +434,19 @@ vagonLotSchema.methods.createLossLiability = async function(
   return liability;
 };
 
-// Post-save hook: Vagon jami ma'lumotlarini yangilash
+// Post-save hook: Vagon jami ma'lumotlarini yangilash (AVTOMATIK OPTIMIZATSIYA)
 vagonLotSchema.post('save', async function(doc) {
   try {
-    const { updateVagonTotals } = require('../utils/vagonHelpers');
-    await updateVagonTotals(doc.vagon);
+    const { autoUpdateVagonTotals, autoCreateIndexes } = require('../middleware/autoOptimization');
+    
+    // Vagon totals'ni avtomatik yangilash
+    await autoUpdateVagonTotals(doc.vagon);
+    
+    // Yangi field'lar uchun avtomatik index yaratish
+    await autoCreateIndexes('vagonlots', doc.toObject());
+    
   } catch (error) {
-    console.error('❌ Vagon totals yangilashda xatolik:', error);
+    console.error('❌ VagonLot post-save optimization error:', error.message);
     // Xatolik asosiy jarayonni to'xtatmasligi kerak
   }
 });
@@ -443,11 +454,11 @@ vagonLotSchema.post('save', async function(doc) {
 // Post-remove hook: Vagon jami ma'lumotlarini yangilash
 vagonLotSchema.post('remove', async function(doc) {
   try {
-    const { updateVagonTotals } = require('../utils/vagonHelpers');
-    await updateVagonTotals(doc.vagon);
+    const { autoUpdateVagonTotals } = require('../middleware/autoOptimization');
+    await autoUpdateVagonTotals(doc.vagon);
   } catch (error) {
-    console.error('❌ Vagon totals yangilashda xatolik:', error);
+    console.error('❌ VagonLot post-remove optimization error:', error.message);
   }
 });
 
-module.exports = mongoose.model('VagonLot', vagonLotSchema);module.exports = mongoose.model('VagonLot', vagonLotSchema);
+module.exports = mongoose.model('VagonLot', vagonLotSchema);

@@ -218,116 +218,121 @@ vagonSaleSchema.index({ sale_date: -1 });
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonSaleSchema.pre('save', function(next) {
-  // YANGI TERMINOLOGIYA BILAN HISOBLASH
-  
-  // 1. Yangi field'larni eski field'lardan to'ldirish (agar yangi field'lar bo'sh bo'lsa)
-  if (!this.warehouse_dispatched_volume_m3 && this.sent_volume_m3) {
-    this.warehouse_dispatched_volume_m3 = this.sent_volume_m3;
-  }
-  if (!this.transport_loss_m3 && this.client_loss_m3) {
-    this.transport_loss_m3 = this.client_loss_m3;
-  }
-  if (!this.transport_loss_responsible_person && this.client_loss_responsible_person) {
-    this.transport_loss_responsible_person = this.client_loss_responsible_person;
-  }
-  if (!this.transport_loss_reason && this.client_loss_reason) {
-    this.transport_loss_reason = this.client_loss_reason;
-  }
-  
-  // 2. DONA BO'YICHA SOTUV HISOBLASH
-  if (this.sale_unit === 'pieces' && this.sent_quantity) {
-    // Dona bo'yicha sotishda qabul qilingan dona = jo'natilgan - yo'qolgan
-    const validSentQuantity = isNaN(this.sent_quantity) || !isFinite(this.sent_quantity) ? 0 : this.sent_quantity;
-    const validTransportLossQuantity = isNaN(this.transport_loss_quantity) || !isFinite(this.transport_loss_quantity) ? 0 : this.transport_loss_quantity;
-    this.accepted_quantity = validSentQuantity - validTransportLossQuantity;
-  }
-  
-  // 3. BRAK JAVOBGARLIK HISOBLASH
-  if (this.brak_liability_distribution) {
-    const brakDist = this.brak_liability_distribution;
+  try {
+    // YANGI TERMINOLOGIYA BILAN HISOBLASH
     
-    // Foizlar yig'indisi 100% bo'lishi kerak
-    if (brakDist.seller_percentage + brakDist.buyer_percentage !== 100) {
-      brakDist.seller_percentage = 100 - brakDist.buyer_percentage;
+    // 1. Yangi field'larni eski field'lardan to'ldirish (agar yangi field'lar bo'sh bo'lsa)
+    if (!this.warehouse_dispatched_volume_m3 && this.sent_volume_m3) {
+      this.warehouse_dispatched_volume_m3 = this.sent_volume_m3;
+    }
+    if (!this.transport_loss_m3 && this.client_loss_m3) {
+      this.transport_loss_m3 = this.client_loss_m3;
+    }
+    if (!this.transport_loss_responsible_person && this.client_loss_responsible_person) {
+      this.transport_loss_responsible_person = this.client_loss_responsible_person;
+    }
+    if (!this.transport_loss_reason && this.client_loss_reason) {
+      this.transport_loss_reason = this.client_loss_reason;
     }
     
-    // Brak hajmlarini hisoblash
-    if (brakDist.total_brak_volume_m3 > 0) {
-      brakDist.seller_liable_volume_m3 = (brakDist.total_brak_volume_m3 * brakDist.seller_percentage) / 100;
-      brakDist.buyer_liable_volume_m3 = (brakDist.total_brak_volume_m3 * brakDist.buyer_percentage) / 100;
+    // 2. DONA BO'YICHA SOTUV HISOBLASH
+    if (this.sale_unit === 'pieces' && this.sent_quantity) {
+      // Dona bo'yicha sotishda qabul qilingan dona = jo'natilgan - yo'qolgan
+      const validSentQuantity = isNaN(this.sent_quantity) || !isFinite(this.sent_quantity) ? 0 : this.sent_quantity;
+      const validTransportLossQuantity = isNaN(this.transport_loss_quantity) || !isFinite(this.transport_loss_quantity) ? 0 : this.transport_loss_quantity;
+      this.accepted_quantity = Math.max(0, validSentQuantity - validTransportLossQuantity);
+    }
+    
+    // 3. BRAK JAVOBGARLIK HISOBLASH
+    if (this.brak_liability_distribution) {
+      const brakDist = this.brak_liability_distribution;
       
-      // Xaridor brak uchun to'lov qilishi kerakmi?
-      brakDist.buyer_must_pay_for_brak = brakDist.buyer_percentage > 0;
+      // Foizlar yig'indisi 100% bo'lishi kerak
+      if (brakDist.seller_percentage + brakDist.buyer_percentage !== 100) {
+        brakDist.seller_percentage = Math.max(0, 100 - brakDist.buyer_percentage);
+      }
+      
+      // Brak hajmlarini hisoblash
+      if (brakDist.total_brak_volume_m3 > 0) {
+        brakDist.seller_liable_volume_m3 = (brakDist.total_brak_volume_m3 * brakDist.seller_percentage) / 100;
+        brakDist.buyer_liable_volume_m3 = (brakDist.total_brak_volume_m3 * brakDist.buyer_percentage) / 100;
+        
+        // Xaridor brak uchun to'lov qilishi kerakmi?
+        brakDist.buyer_must_pay_for_brak = brakDist.buyer_percentage > 0;
+      }
+      
+      // Transport yo'qotishini brak bilan sinxronlash
+      if (!this.transport_loss_m3) {
+        this.transport_loss_m3 = brakDist.total_brak_volume_m3;
+      }
     }
     
-    // Transport yo'qotishini brak bilan sinxronlash
-    if (!this.transport_loss_m3) {
-      this.transport_loss_m3 = brakDist.total_brak_volume_m3;
-    }
-  }
-  
-  // 4. Mijoz qabul qilgan hajm = Ombordan jo'natilgan - Transport yo'qotishi
-  const validDispatchedVolume = isNaN(this.warehouse_dispatched_volume_m3) || !isFinite(this.warehouse_dispatched_volume_m3) ? 0 : this.warehouse_dispatched_volume_m3;
-  const validTransportLoss = isNaN(this.transport_loss_m3) || !isFinite(this.transport_loss_m3) ? 0 : this.transport_loss_m3;
-  this.client_received_volume_m3 = validDispatchedVolume - validTransportLoss;
-  
-  // 5. Backward compatibility uchun eski field'larni yangilash
-  this.sent_volume_m3 = this.warehouse_dispatched_volume_m3;
-  this.client_loss_m3 = this.transport_loss_m3;
-  this.accepted_volume_m3 = this.client_received_volume_m3;
-  
-  // 6. YANGI TO'LOV HISOBLASH LOGIKASI (sotuv birligiga qarab)
-  let billableAmount = 0;
-  
-  if (this.sale_unit === 'pieces') {
-    // Dona bo'yicha sotuv
-    let billableQuantity = this.accepted_quantity || 0;
+    // 4. Mijoz qabul qilgan hajm = Ombordan jo'natilgan - Transport yo'qotishi
+    const validDispatchedVolume = isNaN(this.warehouse_dispatched_volume_m3) || !isFinite(this.warehouse_dispatched_volume_m3) ? 0 : this.warehouse_dispatched_volume_m3;
+    const validTransportLoss = isNaN(this.transport_loss_m3) || !isFinite(this.transport_loss_m3) ? 0 : this.transport_loss_m3;
+    this.client_received_volume_m3 = Math.max(0, validDispatchedVolume - validTransportLoss);
     
-    // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak (dona hisobida)
-    if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
-      // Brak hajmini donaga aylantirish (taxminiy)
-      // Bu yerda lot ma'lumotlari kerak bo'ladi, lekin pre-save hook da populate qilish mumkin emas
-      // Shuning uchun faqat hajm bo'yicha hisoblash
-      billableAmount = this.client_received_volume_m3 * (this.price_per_m3 || 0);
-      if (this.brak_liability_distribution.buyer_liable_volume_m3 > 0) {
-        billableAmount += this.brak_liability_distribution.buyer_liable_volume_m3 * (this.price_per_m3 || 0);
+    // 5. Backward compatibility uchun eski field'larni yangilash
+    this.sent_volume_m3 = this.warehouse_dispatched_volume_m3;
+    this.client_loss_m3 = this.transport_loss_m3;
+    this.accepted_volume_m3 = this.client_received_volume_m3;
+    
+    // 6. YANGI TO'LOV HISOBLASH LOGIKASI (sotuv birligiga qarab)
+    let billableAmount = 0;
+    
+    if (this.sale_unit === 'pieces') {
+      // Dona bo'yicha sotuv
+      let billableQuantity = this.accepted_quantity || 0;
+      
+      // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak (dona hisobida)
+      if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
+        // Brak hajmini donaga aylantirish (taxminiy)
+        // Bu yerda lot ma'lumotlari kerak bo'ladi, lekin pre-save hook da populate qilish mumkin emas
+        // Shuning uchun faqat hajm bo'yicha hisoblash
+        billableAmount = this.client_received_volume_m3 * (this.price_per_m3 || 0);
+        if (this.brak_liability_distribution.buyer_liable_volume_m3 > 0) {
+          billableAmount += this.brak_liability_distribution.buyer_liable_volume_m3 * (this.price_per_m3 || 0);
+        }
+      } else {
+        // Faqat qabul qilingan dona uchun to'lov
+        const validPricePerPiece = isNaN(this.price_per_piece) || !isFinite(this.price_per_piece) ? 0 : this.price_per_piece;
+        billableAmount = billableQuantity * validPricePerPiece;
       }
     } else {
-      // Faqat qabul qilingan dona uchun to'lov
-      const validPricePerPiece = isNaN(this.price_per_piece) || !isFinite(this.price_per_piece) ? 0 : this.price_per_piece;
-      billableAmount = billableQuantity * validPricePerPiece;
+      // Hajm bo'yicha sotuv (eski logika)
+      let billableVolume = this.client_received_volume_m3; // Asosiy qabul qilingan hajm
+      
+      // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak
+      if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
+        billableVolume += this.brak_liability_distribution.buyer_liable_volume_m3;
+      }
+      
+      const validBillableVolume = isNaN(billableVolume) || !isFinite(billableVolume) ? 0 : billableVolume;
+      const validPricePerM3 = isNaN(this.price_per_m3) || !isFinite(this.price_per_m3) ? 0 : this.price_per_m3;
+      billableAmount = validBillableVolume * validPricePerM3;
     }
-  } else {
-    // Hajm bo'yicha sotuv (eski logika)
-    let billableVolume = this.client_received_volume_m3; // Asosiy qabul qilingan hajm
     
-    // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak
-    if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
-      billableVolume += this.brak_liability_distribution.buyer_liable_volume_m3;
+    // 7. Jami narx
+    this.total_price = Math.max(0, billableAmount);
+    
+    // 8. Qarz = Jami narx - To'langan
+    const validPaidAmount = isNaN(this.paid_amount) || !isFinite(this.paid_amount) ? 0 : this.paid_amount;
+    this.debt = Math.max(0, this.total_price - validPaidAmount);
+    
+    // 9. Holat
+    if (this.debt === 0 && this.total_price > 0) {
+      this.status = 'paid';
+    } else if (this.paid_amount > 0) {
+      this.status = 'partial';
+    } else {
+      this.status = 'pending';
     }
     
-    const validBillableVolume = isNaN(billableVolume) || !isFinite(billableVolume) ? 0 : billableVolume;
-    const validPricePerM3 = isNaN(this.price_per_m3) || !isFinite(this.price_per_m3) ? 0 : this.price_per_m3;
-    billableAmount = validBillableVolume * validPricePerM3;
+    next();
+  } catch (error) {
+    console.error('❌ VagonSale pre-save hook error:', error);
+    next(error);
   }
-  
-  // 7. Jami narx
-  this.total_price = billableAmount;
-  
-  // 8. Qarz = Jami narx - To'langan
-  const validPaidAmount = isNaN(this.paid_amount) || !isFinite(this.paid_amount) ? 0 : this.paid_amount;
-  this.debt = this.total_price - validPaidAmount;
-  
-  // 9. Holat
-  if (this.debt === 0 && this.total_price > 0) {
-    this.status = 'paid';
-  } else if (this.paid_amount > 0) {
-    this.status = 'partial';
-  } else {
-    this.status = 'pending';
-  }
-  
-  next();
 });
 
 // Virtual fields

@@ -150,19 +150,49 @@ export default function VagonSalePage() {
 
   const fetchData = async () => {
     try {
+      console.log('🔄 Vagon sotuv ma\'lumotlari yangilanmoqda...');
       const [salesRes, clientsRes, vagonsRes] = await Promise.all([
         axios.get('/vagon-sale'),
         axios.get('/client'),
         axios.get('/vagon')
       ]);
-      setSales(salesRes.data);
-      setClients(clientsRes.data);
+      
+      // Sales data (pagination format bo'lishi mumkin)
+      if (salesRes.data.sales) {
+        setSales(salesRes.data.sales);
+        console.log(`✅ ${salesRes.data.sales.length} ta sotuv yuklandi`);
+      } else {
+        setSales(salesRes.data || []);
+        console.log(`✅ ${salesRes.data?.length || 0} ta sotuv yuklandi`);
+      }
+      
+      // Clients data (pagination format bo'lishi mumkin)
+      if (clientsRes.data.clients) {
+        setClients(clientsRes.data.clients);
+        console.log(`✅ ${clientsRes.data.clients.length} ta mijoz yuklandi`);
+      } else {
+        setClients(clientsRes.data || []);
+        console.log(`✅ ${clientsRes.data?.length || 0} ta mijoz yuklandi`);
+      }
+      
+      // Vagons data (pagination format bo'lishi mumkin)
+      let vagonsData = [];
+      if (vagonsRes.data.vagons) {
+        vagonsData = vagonsRes.data.vagons;
+      } else {
+        vagonsData = vagonsRes.data || [];
+      }
       
       // Faqat aktiv vagonlarni filter qilish
-      const activeVagons = vagonsRes.data.filter((v: any) => v.status !== 'closed');
+      const activeVagons = vagonsData.filter((v: any) => v.status !== 'closed');
       setVagons(activeVagons);
+      console.log(`✅ ${activeVagons.length} ta aktiv vagon yuklandi`);
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Xatolik bo'lsa bo'sh arraylar o'rnatish
+      setSales([]);
+      setClients([]);
+      setVagons([]);
     } finally {
       setLoading(false);
     }
@@ -730,7 +760,7 @@ export default function VagonSalePage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {sales.map((sale) => (
+            {(sales || []).map((sale) => (
               <div key={sale._id} className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-start mb-4">
                   <div>

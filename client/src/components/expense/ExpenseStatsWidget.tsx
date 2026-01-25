@@ -2,6 +2,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
+import Icon from '@/components/Icon';
 
 interface StatsData {
   byExpenseType: Array<{
@@ -45,17 +46,17 @@ export default function ExpenseStatsWidget({ data }: Props) {
 
   const getExpenseTypeIcon = (type: string) => {
     const icons: { [key: string]: string } = {
-      'transport_kelish': '🚛➡️',
-      'transport_ketish': '🚛⬅️',
-      'bojxona_kelish': '🛃📥',
-      'bojxona_ketish': '🛃📤',
-      'yuklash_tushirish': '📦⬆️⬇️',
-      'saqlanish': '🏢📦',
-      'ishchilar': '👷💰',
-      'qayta_ishlash': '⚙️🪚',
-      'boshqa': '📝💸'
+      'transport_kelish': 'truck',
+      'transport_ketish': 'truck',
+      'bojxona_kelish': 'building',
+      'bojxona_ketish': 'building',
+      'yuklash_tushirish': 'package',
+      'saqlanish': 'building',
+      'ishchilar': 'users',
+      'qayta_ishlash': 'settings',
+      'boshqa': 'clipboard'
     };
-    return icons[type] || '📊';
+    return icons[type] || 'dashboard';
   };
 
   return (
@@ -68,7 +69,7 @@ export default function ExpenseStatsWidget({ data }: Props) {
               <p className="text-blue-100 text-sm">Jami xarajatlar</p>
               <p className="text-3xl font-bold">{data.summary.totalExpenses}</p>
             </div>
-            <div className="text-4xl opacity-80">📊</div>
+            <Icon name="dashboard" className="h-10 w-10 opacity-80" />
           </div>
         </Card>
 
@@ -78,7 +79,7 @@ export default function ExpenseStatsWidget({ data }: Props) {
               <p className="text-green-100 text-sm">Jami summa</p>
               <p className="text-2xl font-bold">{formatNumber(data.summary.totalAmount)}</p>
             </div>
-            <div className="text-4xl opacity-80">💰</div>
+            <Icon name="dollar-sign" className="h-10 w-10 opacity-80" />
           </div>
         </Card>
 
@@ -88,7 +89,7 @@ export default function ExpenseStatsWidget({ data }: Props) {
               <p className="text-orange-100 text-sm">O'rtacha xarajat</p>
               <p className="text-2xl font-bold">{formatNumber(data.summary.avgExpense)}</p>
             </div>
-            <div className="text-4xl opacity-80">📈</div>
+            <Icon name="trending-up" className="h-10 w-10 opacity-80" />
           </div>
         </Card>
 
@@ -103,7 +104,7 @@ export default function ExpenseStatsWidget({ data }: Props) {
                 }
               </p>
             </div>
-            <div className="text-4xl opacity-80">🏆</div>
+            <Icon name="trending-up" className="h-10 w-10 opacity-80" />
           </div>
         </Card>
       </div>
@@ -114,10 +115,10 @@ export default function ExpenseStatsWidget({ data }: Props) {
           <Card key={currency._id} className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center">
-                <span className="text-2xl mr-2">
-                  {currency._id === 'USD' ? '💵' : 
-                   currency._id === 'RUB' ? '💶' : '💴'}
-                </span>
+                <Icon 
+                  name={currency._id === 'USD' ? 'dollar-sign' : 'dollar-sign'} 
+                  className="h-5 w-5 mr-2 text-green-600" 
+                />
                 {currency._id}
               </h3>
               <span className="text-sm text-gray-500">
@@ -139,7 +140,7 @@ export default function ExpenseStatsWidget({ data }: Props) {
       {/* Xarajat turlari bo'yicha */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <span className="text-2xl mr-2">📋</span>
+          <Icon name="clipboard" className="h-5 w-5 text-blue-600 mr-2" />
           Xarajat turlari bo'yicha taqsimot
         </h3>
         
@@ -150,7 +151,7 @@ export default function ExpenseStatsWidget({ data }: Props) {
             return (
               <div key={type._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center flex-1">
-                  <span className="text-2xl mr-3">{getExpenseTypeIcon(type._id)}</span>
+                  <Icon name={getExpenseTypeIcon(type._id)} className="h-6 w-6 text-blue-600 mr-3" />
                   <div className="flex-1">
                     <div className="font-medium text-gray-900">
                       {getExpenseTypeLabel(type._id)}

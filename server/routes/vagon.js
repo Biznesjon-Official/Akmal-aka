@@ -2,42 +2,99 @@ const express = require('express');
 const router = express.Router();
 const Vagon = require('../models/Vagon');
 const auth = require('../middleware/auth');
+const { cacheMiddleware, SmartInvalidation } = require('../utils/cacheManager');
 
-// Barcha vagonlar ro'yxati
-router.get('/', auth, async (req, res) => {
+// Barcha vagonlar ro'yxati (OPTIMIZED PAGINATION + CACHE)
+router.get('/', auth, cacheMiddleware(180), async (req, res) => {
   try {
-    const { status, month } = req.query;
+    const { 
+      status, 
+      month, 
+      page = 1, 
+      limit = 20,
+      includeLots = 'true', // Default true for better UX
+      search
+    } = req.query;
     
     const filter = { isDeleted: false };
     if (status) filter.status = status;
     if (month) filter.month = month;
     
-    const vagons = await Vagon.find(filter)
-      .select('-__v')
-      .sort({ createdAt: -1 })
-      .lean(); // OPTIMIZATSIYA
+    // Search filter
+    if (search) {
+      filter.$or = [
+        { vagonCode: { $regex: search, $options: 'i' } },
+        { sending_place: { $regex: search, $options: 'i' } },
+        { receiving_place: { $regex: search, $options: 'i' } }
+      ];
+    }
     
-    // Har bir vagon uchun lotlarni olish - OPTIMIZATSIYA
-    const VagonLot = require('../models/VagonLot');
-    const vagonIds = vagons.map(v => v._id);
-    const allLots = await VagonLot.find({ 
-      vagon: { $in: vagonIds }, 
-      isDeleted: false 
-    }).lean();
+    // Pagination parametrlari
+    const pageNum = parseInt(page);
+    const limitNum = Math.min(parseInt(limit), 100); // Max 100 items per page
+    const skip = (pageNum - 1) * limitNum;
     
-    // Lotlarni vagonlarga biriktirish
-    const lotsMap = {};
-    allLots.forEach(lot => {
-      const vagonId = lot.vagon.toString();
-      if (!lotsMap[vagonId]) lotsMap[vagonId] = [];
-      lotsMap[vagonId].push(lot);
+    // Parallel execution for better performance
+    const [total, vagons] = await Promise.all([
+      Vagon.countDocuments(filter),
+      Vagon.find(filter)
+        .select('vagonCode month sending_place receiving_place status total_volume_m3 total_loss_m3 available_volume_m3 sold_volume_m3 remaining_volume_m3 usd_total_cost usd_total_revenue usd_profit rub_total_cost rub_total_revenue rub_profit closure_date closure_reason closure_notes createdAt')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean() // Use lean for better performance
+    ]);
+    
+    // Conditionally load lots (only if requested)
+    if (includeLots === 'true' && vagons.length > 0) {
+      const VagonLot = require('../models/VagonLot');
+      const vagonIds = vagons.map(v => v._id);
+      
+      // Batch load lots with selected fields only
+      const allLots = await VagonLot.find({ 
+        vagon: { $in: vagonIds }, 
+        isDeleted: false 
+      })
+      .select('vagon dimensions quantity volume_m3 loss_volume_m3 loss_responsible_person loss_reason loss_date warehouse_available_volume_m3 warehouse_dispatched_volume_m3 warehouse_remaining_volume_m3 purchase_currency purchase_amount total_investment realized_profit unrealized_value break_even_price_per_m3')
+      .lean();
+      
+      // Map lots to vagons efficiently
+      const lotsMap = allLots.reduce((acc, lot) => {
+        const vagonId = lot.vagon.toString();
+        if (!acc[vagonId]) acc[vagonId] = [];
+        acc[vagonId].push({
+          ...lot,
+          // Backward compatibility fields
+          currency: lot.purchase_currency,
+          remaining_volume_m3: lot.warehouse_remaining_volume_m3
+        });
+        return acc;
+      }, {});
+      
+      vagons.forEach(vagon => {
+        vagon.lots = lotsMap[vagon._id.toString()] || [];
+      });
+    }
+    
+    // Pagination ma'lumotlari
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+    
+    res.json({
+      vagons,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limitNum,
+        hasNextPage,
+        hasPrevPage,
+        startIndex: skip + 1,
+        endIndex: Math.min(skip + limitNum, total)
+      }
     });
-    
-    vagons.forEach(vagon => {
-      vagon.lots = lotsMap[vagon._id.toString()] || [];
-    });
-    
-    res.json(vagons);
+
   } catch (error) {
     console.error('Vagon list error:', error);
     res.status(500).json({ message: 'Vagonlar ro\'yxatini olishda xatolik' });
@@ -167,6 +224,9 @@ router.post('/', auth, async (req, res) => {
     });
     
     await vagon.save();
+    
+    // Smart cache invalidation
+    SmartInvalidation.onVagonChange(vagon._id);
     
     res.status(201).json(vagon);
   } catch (error) {

@@ -39,6 +39,10 @@ const loginLimiter = rateLimit({
 app.use('/api/', limiter);
 app.use('/api/auth/login', loginLimiter);
 
+// Performance monitoring middleware
+const { performanceMonitor } = require('./middleware/autoOptimization');
+app.use(performanceMonitor);
+
 // Compression - Response hajmini kichraytirish
 app.use(compression());
 
@@ -102,6 +106,7 @@ app.use('/api/loss-liability', require('./routes/lossLiability')); // Yo'qotish 
 app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // Xarajat taqsimoti (YANGI)
 app.use('/api/system-settings', require('./routes/systemSettings')); // Tizim sozlamalari (YANGI)
 app.use('/api/delivery', require('./routes/delivery')); // Olib kelib berish logistika (YANGI)
+app.use('/api/monitoring', require('./routes/monitoring')); // System monitoring (YANGI)
 app.use('/api/backup', require('./routes/backup'));
 
 // Global error handler
@@ -118,15 +123,22 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'API endpoint topilmadi' });
 });
 
-// MongoDB connection
+// MongoDB connection with optimized pooling (REDUCED TIMEOUTS)
 const mongooseOptions = {
-  serverSelectionTimeoutMS: 30000, // 30 soniya
-  socketTimeoutMS: 45000, // 45 soniya
-  connectTimeoutMS: 30000, // 30 soniya
-  maxPoolSize: 10,
-  minPoolSize: 2,
+  serverSelectionTimeoutMS: 10000, // Reduced from 30000
+  socketTimeoutMS: 15000, // Reduced from 45000
+  connectTimeoutMS: 10000, // Reduced from 30000
+  maxPoolSize: 10, // Reduced from 20
+  minPoolSize: 2, // Reduced from 5
+  maxIdleTimeMS: 15000, // Reduced from 30000
   retryWrites: true,
-  retryReads: true
+  retryReads: true,
+  readPreference: 'primary', // Changed to primary for transaction compatibility
+  writeConcern: {
+    w: 'majority',
+    j: true,
+    wtimeout: 5000 // Reduced from 10000
+  }
 };
 
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/wood_system', mongooseOptions)

@@ -121,12 +121,18 @@ export default function ExpensePage() {
     }
   });
 
-  const { data: vagons } = useQuery({
-    queryKey: ['vagons'],
+  const { data: vagons, isLoading: vagonsLoading, error: vagonsError } = useQuery({
+    queryKey: ['vagons-simple'], // Alohida cache key
     queryFn: async () => {
-      const response = await axios.get('/vagon');
-      return response.data || []; // vagon array'ini qaytaramiz
-    }
+      console.log('🔍 Vagonlar yuklanmoqda...');
+      const response = await axios.get('/vagon?limit=100&includeLots=false&status=active'); // Faqat faol vagonlar
+      console.log('📦 Vagonlar javobi:', response.data);
+      const vagonsData = response.data?.vagons || response.data || [];
+      console.log('📋 Vagonlar ro\'yxati:', vagonsData.length, 'ta vagon');
+      return vagonsData;
+    },
+    staleTime: 60000, // 1 daqiqa cache
+    retry: 1
   });
 
   useEffect(() => {
@@ -145,9 +151,16 @@ export default function ExpensePage() {
         summaUSD: formData.valyuta === 'USD' ? parseFloat(formData.summa) : parseFloat(formData.summa) * 0.0105 // RUB -> USD
       };
       
-      await axios.post('/expense-advanced', submitData);
+      const response = await axios.post('/expense-advanced', submitData);
       
-      refetch();
+      // ✅ Muvaffaqiyat xabari - kassa integratsiyasi haqida
+      if (response.data.message) {
+        alert(`${response.data.message}\n\n💰 Bu xarajat kassada ham ko'rsatiladi.`);
+      } else {
+        alert(`✅ Xarajat muvaffaqiyatli qo'shildi!\n💰 Kassa balansida ham ko'rsatiladi.`);
+      }
+      
+      refetch(); // Xarajatlar ro'yxatini yangilash
       setShowModal(false);
       resetForm();
     } catch (error: any) {
@@ -672,13 +685,24 @@ export default function ExpensePage() {
                       value={formData.vagon}
                       onChange={(e) => setFormData({...formData, vagon: e.target.value})}
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500"
+                      disabled={vagonsLoading}
                     >
-                      <option value="">Vagon tanlanmagan</option>
-                      {Array.isArray(vagons) && vagons.map((vagon: any) => (
-                        <option key={vagon._id} value={vagon._id}>
-                          {vagon.vagonCode} - {vagon.sending_place} → {vagon.receiving_place}
-                        </option>
-                      ))}
+                      <option value="">
+                        {vagonsLoading ? 'Vagonlar yuklanmoqda...' : 
+                         vagonsError ? 'Vagonlarni yuklashda xatolik' : 
+                         'Vagon tanlanmagan'}
+                      </option>
+                      {Array.isArray(vagons) && vagons.length > 0 ? (
+                        vagons.map((vagon: any) => (
+                          <option key={vagon._id} value={vagon._id}>
+                            {vagon.vagonCode} - {vagon.sending_place} → {vagon.receiving_place}
+                          </option>
+                        ))
+                      ) : (
+                        !vagonsLoading && !vagonsError && (
+                          <option value="" disabled>Hozircha vagonlar yo'q</option>
+                        )
+                      )}
                     </select>
                   </div>
 

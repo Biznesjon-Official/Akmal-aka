@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useDialog } from '@/context/DialogContext';
 import Layout from '@/components/Layout';
-import ClientDetailsModal from '@/components/client/ClientDetailsModal';
 import ClientTableSkeleton from '@/components/client/ClientTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Icon from '@/components/Icon';
@@ -57,9 +56,7 @@ export default function ClientPage() {
   // ✅ LOADING STATES
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDebtSubmitting, setIsDebtSubmitting] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showDebtModal, setShowDebtModal] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'debt' | 'volume' | 'date'>('name');
   const [filterBy, setFilterBy] = useState<'all' | 'debt' | 'no-debt'>('all');
@@ -90,10 +87,20 @@ export default function ClientPage() {
 
   const fetchClients = async () => {
     try {
+      console.log('🔄 Mijozlar ro\'yxati yangilanmoqda...');
       const response = await axios.get('/client');
-      setClients(response.data);
+      // Backend'dan pagination format kelishi mumkin
+      if (response.data.clients) {
+        setClients(response.data.clients);
+        console.log(`✅ ${response.data.clients.length} ta mijoz yuklandi`);
+      } else {
+        // Eski format (backward compatibility)
+        setClients(response.data);
+        console.log(`✅ ${response.data.length} ta mijoz yuklandi`);
+      }
     } catch (error) {
       console.error('Error fetching clients:', error);
+      setClients([]); // Xatolik bo'lsa bo'sh array
     } finally {
       setLoading(false);
     }
@@ -150,11 +157,6 @@ export default function ClientPage() {
     }
   };
 
-  const openDetailsModal = (clientId: string) => {
-    setSelectedClientId(clientId);
-    setShowDetailsModal(true);
-  };
-
   const openEditModal = (client: Client) => {
     setEditingClient(client);
     setFormData({
@@ -167,6 +169,9 @@ export default function ClientPage() {
   };
 
   const openDebtModal = (client: Client) => {
+    console.log('🔍 openDebtModal called for:', client.name);
+    console.log('🔍 Current showDebtModal state:', showDebtModal);
+    
     setEditingClient(client);
     setDebtData({
       amount: '',
@@ -175,6 +180,8 @@ export default function ClientPage() {
       type: 'add'
     });
     setShowDebtModal(true);
+    
+    console.log('🔍 showDebtModal should now be true');
   };
 
   const handleDebtSubmit = async (e: React.FormEvent) => {
@@ -196,19 +203,28 @@ export default function ClientPage() {
 
       const amount = parseFloat(debtData.amount);
       
-      await axios.post(
+      const requestData = {
+        amount: debtData.type === 'add' ? amount : -amount,
+        currency: debtData.currency,
+        description: debtData.description || `${debtData.type === 'add' ? t.client.addDebt : t.client.reduceDebt}: ${amount} ${debtData.currency}`,
+        type: debtData.type === 'add' ? 'debt_increase' : 'debt_decrease'
+      };
+      
+      console.log('🔍 Sending debt request:', {
+        url: `/client/${editingClient._id}/debt`,
+        data: requestData
+      });
+      
+      const response = await axios.post(
         `/client/${editingClient._id}/debt`,
-        {
-          amount: debtData.type === 'add' ? amount : -amount,
-          currency: debtData.currency,
-          description: debtData.description || `${debtData.type === 'add' ? 'Qarz qo\'shildi' : 'Qarz kamaytrildi'}: ${amount} ${debtData.currency}`,
-          type: debtData.type === 'add' ? 'debt_increase' : 'debt_decrease'
-        }
+        requestData
       );
+      
+      console.log('✅ Debt response:', response.data);
       
       showAlert({
         title: t.messages.success,
-        message: `${editingClient.name}ga ${debtData.type === 'add' ? 'qarz qo\'shildi' : 'qarz kamaytrildi'}: ${amount} ${debtData.currency}`,
+        message: `${editingClient.name}ga ${debtData.type === 'add' ? t.client.addDebt : t.client.reduceDebt}: ${amount} ${debtData.currency}`,
         type: 'success'
       });
       
@@ -216,6 +232,9 @@ export default function ClientPage() {
       setShowDebtModal(false);
       setDebtData({ amount: '', currency: 'USD', description: '', type: 'add' });
     } catch (error: any) {
+      console.error('❌ Debt management error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      
       showAlert({
         title: t.messages.error,
         message: error.response?.data?.message || t.messages.errorOccurred,
@@ -232,7 +251,7 @@ export default function ClientPage() {
     setEditingClient(null);
   };
 
-  const filteredClients = clients
+  const filteredClients = (clients || [])
     .filter(client => {
       const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            client.phone.includes(searchTerm);
@@ -385,7 +404,7 @@ export default function ClientPage() {
               <div className="text-lg sm:text-2xl font-bold text-purple-600">
                 ${clients.reduce((sum, c) => sum + Math.max(0, c.delivery_current_debt || 0), 0).toLocaleString()}
               </div>
-              <div className="text-xs sm:text-sm text-purple-600">🚚 Olib kelib berish</div>
+              <div className="text-xs sm:text-sm text-purple-600">{t.client.deliveryDebt}</div>
             </div>
           </div>
         </div>
@@ -468,11 +487,11 @@ export default function ClientPage() {
                     <>
                       <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between">
-                          <span className="text-purple-600 font-medium text-xs">🚚 Olib kelib berish qarzi:</span>
+                          <span className="text-purple-600 font-medium text-xs">🚚 {t.client.deliveryDebt}:</span>
                           <span className="font-semibold text-purple-600">${(client.delivery_total_debt || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-purple-600 text-xs">🚚 To'langan:</span>
+                          <span className="text-purple-600 text-xs">🚚 {t.client.totalPaid}:</span>
                           <span className="font-semibold text-green-600">${(client.delivery_total_paid || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
@@ -495,20 +514,20 @@ export default function ClientPage() {
                 </div>
 
                 {/* Action Buttons - Responsive */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
-                    onClick={() => openDetailsModal(client._id)}
-                    className="btn-success text-xs py-2 px-3 flex items-center justify-center gap-1"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('🔍 Debt button clicked for:', client.name);
+                      openDebtModal(client);
+                    }}
+                    className="bg-gradient-to-r from-orange-500 to-amber-600 text-white text-xs py-2 px-3 rounded-xl hover:from-orange-600 hover:to-amber-700 transition-all duration-200 flex items-center justify-center gap-1 relative z-10"
+                    type="button"
+                    style={{ pointerEvents: 'auto' }}
                   >
-                    <Icon name="details" size="sm" />
-                    <span className="hidden sm:inline">{t.client.details}</span>
-                  </button>
-                  <button
-                    onClick={() => openDebtModal(client)}
-                    className="bg-gradient-to-r from-orange-500 to-amber-600 text-white text-xs py-2 px-3 rounded-xl hover:from-orange-600 hover:to-amber-700 transition-all duration-200 flex items-center justify-center gap-1"
-                  >
-                    <Icon name="cash" size="sm" />
-                    <span className="hidden sm:inline">Qarz</span>
+                    💰
+                    <span>{t.client.debt}</span>
                   </button>
                   <button
                     onClick={() => openEditModal(client)}
@@ -624,24 +643,13 @@ export default function ClientPage() {
           </div>
         )}
 
-        {/* Client Details Modal */}
-        {showDetailsModal && selectedClientId && (
-          <ClientDetailsModal
-            clientId={selectedClientId}
-            onClose={() => {
-              setShowDetailsModal(false);
-              setSelectedClientId(null);
-            }}
-          />
-        )}
-
         {/* Debt Management Modal - Responsive */}
         {showDebtModal && editingClient && (
           <div className="modal-overlay">
             <div className="modal-content animate-slideUp">
               <div className="modal-header">
                 <h2 className="text-lg sm:text-xl font-bold">
-                  {t.client.manageDebt || 'Qarz boshqaruvi'} - {editingClient.name}
+                  {t.client.manageDebt} - {editingClient.name}
                 </h2>
                 <button
                   type="button"
@@ -666,8 +674,8 @@ export default function ClientPage() {
                         onChange={(e) => setDebtData({ ...debtData, type: e.target.value })}
                         className="input-field"
                       >
-                        <option value="add">{t.client.addDebt || 'Qarz qo\'shish'}</option>
-                        <option value="subtract">{t.client.reduceDebt || 'Qarz kamaytirish'}</option>
+                        <option value="add">{t.client.addDebt}</option>
+                        <option value="subtract">{t.client.reduceDebt}</option>
                       </select>
                     </div>
 
@@ -701,7 +709,7 @@ export default function ClientPage() {
                       <textarea
                         value={debtData.description}
                         onChange={(e) => setDebtData({ ...debtData, description: e.target.value })}
-                        placeholder={t.client.debtDescriptionPlaceholder || 'Qarz sababi yoki izoh...'}
+                        placeholder={t.client.debtDescriptionPlaceholder}
                         className="input-field"
                         rows={3}
                       />
@@ -709,7 +717,7 @@ export default function ClientPage() {
 
                     {/* Hozirgi qarz ko'rsatish */}
                     <div className="form-section">
-                      <h4 className="font-semibold mb-2">{t.client.currentDebtStatus || 'Hozirgi qarz'}:</h4>
+                      <h4 className="font-semibold mb-2">{t.client.currentDebtStatus}:</h4>
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span>USD:</span>
@@ -750,7 +758,7 @@ export default function ClientPage() {
                         } text-white px-4 py-2 rounded-xl transition-all duration-200`}
                       >
                         {isDebtSubmitting ? t.common.loading : 
-                         debtData.type === 'add' ? (t.client.addDebt || 'Qarz qo\'shish') : (t.client.reduceDebt || 'Qarz kamaytirish')}
+                         debtData.type === 'add' ? t.client.addDebt : t.client.reduceDebt}
                       </button>
                     </div>
                   </div>

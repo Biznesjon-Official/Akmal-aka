@@ -255,8 +255,8 @@ function ExchangeRatesContent() {
             <TableHead>{t.exchangeRates.actions}</TableHead>
           </TableHeader>
           <TableBody loading={isLoading} empty={!exchangeRates?.length}>
-            {exchangeRates?.map((rate) => (
-              <TableRow key={rate._id}>
+            {exchangeRates?.map((rate, index) => (
+              <TableRow key={`${rate._id}-${rate.currency}-${index}`}>
                 <TableCell>
                   <div className="flex items-center">
                     <div className={`w-4 h-4 rounded-full mr-3 shadow-sm ${

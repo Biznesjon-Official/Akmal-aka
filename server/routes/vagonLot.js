@@ -5,6 +5,7 @@ const Vagon = require('../models/Vagon');
 const VagonExpense = require('../models/VagonExpense');
 const auth = require('../middleware/auth');
 const { logUserAction } = require('../middleware/auditLog');
+const { SmartInvalidation } = require('../utils/cacheManager');
 
 // Barcha lotlar (vagon bo'yicha filter)
 router.get('/', auth, async (req, res) => {
@@ -46,6 +47,9 @@ router.get('/:id', auth, async (req, res) => {
 
 // Yangi lot yaratish
 router.post('/', auth, async (req, res) => {
+  const session = await require('mongoose').startSession();
+  session.startTransaction();
+  
   try {
     const {
       vagon,
@@ -96,7 +100,7 @@ router.post('/', auth, async (req, res) => {
     // Jami xarajat = Xarid summasi (xarajatlar keyinroq qo'shiladi)
     lot.total_expenses = purchase_amount;
     
-    await lot.save();
+    await lot.save({ session });
     
     // Audit log
     await logUserAction(
@@ -111,24 +115,36 @@ router.post('/', auth, async (req, res) => {
     );
     
     // Vagonni yangilash
-    await updateVagonTotals(vagon);
+    await updateVagonTotals(vagon, session);
+    
+    // Cache invalidation
+    SmartInvalidation.onVagonLotChange(vagon, lot._id);
+    
+    await session.commitTransaction();
     
     res.status(201).json(lot);
   } catch (error) {
+    await session.abortTransaction();
     console.error('VagonLot create error:', error);
     res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
 // Lotni yangilash
 router.put('/:id', auth, async (req, res) => {
+  const session = await require('mongoose').startSession();
+  session.startTransaction();
+  
   try {
     const lot = await VagonLot.findOne({ 
       _id: req.params.id, 
       isDeleted: false 
-    });
+    }).session(session).read('primary');
     
     if (!lot) {
+      await session.abortTransaction();
       return res.status(404).json({ message: 'Lot topilmadi' });
     }
     
@@ -156,7 +172,7 @@ router.put('/:id', auth, async (req, res) => {
     const expenses = await VagonExpense.find({ 
       lot: lot._id, 
       isDeleted: false 
-    });
+    }).session(session);
     const totalExpenses = expenses.reduce((sum, exp) => {
       if (exp.currency === lot.purchase_currency) {
         return sum + exp.amount;
@@ -166,47 +182,65 @@ router.put('/:id', auth, async (req, res) => {
     
     lot.total_expenses = lot.purchase_amount + totalExpenses;
     
-    await lot.save();
+    await lot.save({ session });
     
     // Vagonni yangilash
-    await updateVagonTotals(lot.vagon);
+    await updateVagonTotals(lot.vagon, session);
+    
+    // Cache invalidation
+    SmartInvalidation.onVagonLotChange(lot.vagon, lot._id);
+    
+    await session.commitTransaction();
     
     res.json(lot);
   } catch (error) {
+    await session.abortTransaction();
     console.error('VagonLot update error:', error);
     res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
 // Lotni o'chirish (soft delete)
 router.delete('/:id', auth, async (req, res) => {
+  const session = await require('mongoose').startSession();
+  session.startTransaction();
+  
   try {
     const lot = await VagonLot.findOne({ 
       _id: req.params.id, 
       isDeleted: false 
-    });
+    }).session(session).read('primary');
     
     if (!lot) {
+      await session.abortTransaction();
       return res.status(404).json({ message: 'Lot topilmadi' });
     }
     
     // Sotilgan bo'lsa o'chirish mumkin emas
     if (lot.sold_volume_m3 > 0) {
+      await session.abortTransaction();
       return res.status(400).json({ 
         message: 'Bu lot bo\'yicha sotuvlar mavjud. O\'chirish mumkin emas' 
       });
     }
     
     lot.isDeleted = true;
-    await lot.save();
+    await lot.save({ session });
     
     // Vagonni yangilash
-    await updateVagonTotals(lot.vagon);
+    await updateVagonTotals(lot.vagon, session);
+    
+    await session.commitTransaction();
     
     res.json({ message: 'Lot o\'chirildi' });
   } catch (error) {
+    await session.abortTransaction();
     console.error('VagonLot delete error:', error);
     res.status(500).json({ message: 'Lotni o\'chirishda xatolik' });
+  } finally {
+    session.endSession();
   }
 });
 

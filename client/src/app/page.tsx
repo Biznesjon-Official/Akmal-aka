@@ -15,8 +15,7 @@ export default function Home() {
     if (!loading && !user) {
       router.push('/login');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading]); // router'ni olib tashladik
+  }, [user, loading, router]);
 
   if (loading) {
     return <LoadingSpinner />;

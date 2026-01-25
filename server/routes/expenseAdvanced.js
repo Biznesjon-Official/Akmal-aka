@@ -3,11 +3,12 @@ const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const Kassa = require('../models/Kassa');
 const auth = require('../middleware/auth');
+const { cacheMiddleware, SmartInvalidation } = require('../utils/cacheManager');
 
 const router = express.Router();
 
 // Kengaytirilgan xarajatlar ro'yxati
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, cacheMiddleware(180), async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -121,13 +122,21 @@ router.post('/', [auth, [
     
     await kassaEntry.save({ session });
     
+    // ✅ KASSA CACHE INVALIDATION - Xarajat qo'shilganda kassa ham yangilansin
+    SmartInvalidation.onCashChange();
+    
     await session.commitTransaction();
     
     const populatedExpense = await Kassa.findById(kassaEntry._id)
       .populate('vagon', 'vagonCode sending_place receiving_place')
       .populate('yaratuvchi', 'username');
     
-    res.status(201).json(populatedExpense);
+    console.log(`💰 XARAJAT → KASSA: ${xarajatTuri} - ${summa} ${valyuta} (ID: ${kassaEntry._id})`);
+    
+    res.status(201).json({
+      ...populatedExpense.toObject(),
+      message: '✅ Xarajat muvaffaqiyatli qo\'shildi va kassada ko\'rsatildi'
+    });
   } catch (error) {
     await session.abortTransaction();
     console.error('Advanced expense create error:', error);

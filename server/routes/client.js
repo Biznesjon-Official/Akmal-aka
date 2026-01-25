@@ -3,21 +3,82 @@ const router = express.Router();
 const Client = require('../models/Client');
 const auth = require('../middleware/auth');
 
-// Barcha mijozlar ro'yxati - OPTIMIZATSIYA
+// Barcha mijozlar ro'yxati (PAGINATION BILAN)
 router.get('/', auth, async (req, res) => {
   try {
-    const clients = await Client.find({ isDeleted: false })
-      .select('-__v') // __v ni chiqarib tashlash
-      .sort({ createdAt: -1 });
-      // .lean() ni olib tashladik - virtual field'lar kerak
+    const { 
+      search, 
+      hasDebt, 
+      page = 1, 
+      limit = 20 
+    } = req.query;
     
-    // Virtual field'larni qo'shish
+    const filter = { isDeleted: false };
+    
+    // Qidiruv filtri
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Qarzli mijozlar filtri - FIXED: Delivery qarzini ham hisobga olish
+    if (hasDebt === 'true') {
+      filter.$or = [
+        { $expr: { $gt: [{ $subtract: ['$usd_total_debt', '$usd_total_paid'] }, 0] } },
+        { $expr: { $gt: [{ $subtract: ['$rub_total_debt', '$rub_total_paid'] }, 0] } },
+        { $expr: { $gt: [{ $subtract: ['$delivery_total_debt', '$delivery_total_paid'] }, 0] } }
+      ];
+    }
+    
+    // Pagination parametrlari
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Jami soni
+    const total = await Client.countDocuments(filter);
+    
+    // Mijozlarni olish (faqat kerakli fieldlar)
+    const clients = await Client.find(filter)
+      .select('name phone address usd_total_debt usd_total_paid rub_total_debt rub_total_paid delivery_total_debt delivery_total_paid usd_total_received_volume rub_total_received_volume createdAt')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+    
+    // Virtual field'larni qo'shish - FIXED: Delivery qarzini ham hisoblash
     const clientsWithVirtuals = clients.map(client => {
       const obj = client.toObject({ virtuals: true });
+      
+      // DELIVERY QARZINI TO'G'RI HISOBLASH
+      const deliveryCurrentDebt = Math.max(0, (client.delivery_total_debt || 0) - (client.delivery_total_paid || 0));
+      obj.delivery_current_debt = deliveryCurrentDebt;
+      
+      // JAMI QARZ (USD ekvivalentida)
+      const usdDebt = Math.max(0, (client.usd_total_debt || 0) - (client.usd_total_paid || 0));
+      const rubDebtUsd = Math.max(0, (client.rub_total_debt || 0) - (client.rub_total_paid || 0)) * 0.011; // RUB to USD
+      obj.total_current_debt_usd = usdDebt + rubDebtUsd + deliveryCurrentDebt;
+      
       return obj;
     });
     
-    res.json(clientsWithVirtuals);
+    // Pagination ma'lumotlari
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+    
+    res.json({
+      clients: clientsWithVirtuals,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limitNum,
+        hasNextPage,
+        hasPrevPage
+      }
+    });
   } catch (error) {
     console.error('Client list error:', error);
     res.status(500).json({ message: 'Mijozlar ro\'yxatini olishda xatolik' });
@@ -38,6 +99,15 @@ router.get('/:id', auth, async (req, res) => {
     
     // Virtual field'lar bilan qaytarish
     const clientWithVirtuals = client.toObject({ virtuals: true });
+    
+    // DELIVERY QARZINI TO'G'RI HISOBLASH
+    const deliveryCurrentDebt = Math.max(0, (client.delivery_total_debt || 0) - (client.delivery_total_paid || 0));
+    clientWithVirtuals.delivery_current_debt = deliveryCurrentDebt;
+    
+    console.log(`📊 Mijoz ${client.name} ma'lumotlari:`);
+    console.log(`   USD qarz: ${client.usd_total_debt || 0} - ${client.usd_total_paid || 0} = ${Math.max(0, (client.usd_total_debt || 0) - (client.usd_total_paid || 0))}`);
+    console.log(`   RUB qarz: ${client.rub_total_debt || 0} - ${client.rub_total_paid || 0} = ${Math.max(0, (client.rub_total_debt || 0) - (client.rub_total_paid || 0))}`);
+    console.log(`   Delivery qarz: ${client.delivery_total_debt || 0} - ${client.delivery_total_paid || 0} = ${deliveryCurrentDebt}`);
     
     res.json(clientWithVirtuals);
   } catch (error) {
@@ -209,10 +279,20 @@ router.get('/:id/stats', auth, async (req, res) => {
 // Mijoz qarzini boshqarish (qo'shish/kamaytirish)
 router.post('/:id/debt', auth, async (req, res) => {
   const session = await require('mongoose').startSession();
-  session.startTransaction();
   
   try {
+    session.startTransaction();
+    
     const { amount, currency, description, type } = req.body;
+    
+    console.log(`🔍 Debt management request:`, {
+      clientId: req.params.id,
+      amount,
+      currency,
+      description,
+      type,
+      userId: req.user?.userId
+    });
     
     if (!amount || !currency || !type) {
       await session.abortTransaction();
@@ -231,7 +311,7 @@ router.post('/:id/debt', auth, async (req, res) => {
     const client = await Client.findOne({ 
       _id: req.params.id, 
       isDeleted: false 
-    }).session(session);
+    }).session(session).read('primary');
     
     if (!client) {
       await session.abortTransaction();
@@ -239,6 +319,7 @@ router.post('/:id/debt', auth, async (req, res) => {
     }
     
     const amountValue = Math.abs(amount);
+    console.log(`💰 Processing debt operation: ${type} ${amountValue} ${currency} for ${client.name}`);
     
     // Kassaga yozish
     const Cash = require('../models/Cash');
@@ -274,6 +355,8 @@ router.post('/:id/debt', auth, async (req, res) => {
       const currentDebt = currency === 'USD' ? 
         Math.max(0, client.usd_total_debt - client.usd_total_paid) : 
         Math.max(0, client.rub_total_debt - client.rub_total_paid);
+      
+      console.log(`🔍 Current debt check: ${currency} debt = ${currentDebt}, trying to reduce by ${amountValue}`);
       
       if (amountValue > currentDebt) {
         await session.abortTransaction();
@@ -311,6 +394,8 @@ router.post('/:id/debt', auth, async (req, res) => {
     const updatedClient = await Client.findById(client._id);
     const usdDebt = Math.max(0, updatedClient.usd_total_debt - updatedClient.usd_total_paid);
     const rubDebt = Math.max(0, updatedClient.rub_total_debt - updatedClient.rub_total_paid);
+    
+    console.log(`✅ Debt operation completed. New debt: USD ${usdDebt}, RUB ${rubDebt}`);
     
     res.json({ 
       message: `${type === 'debt_increase' ? 'Qarz qo\'shildi' : 'Qarz to\'landi'}`,

@@ -3,6 +3,7 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '@/utils/formatters';
 import { useLanguage } from '@/context/LanguageContext';
+import Icon from '@/components/Icon';
 
 interface ProfitData {
   _id: {
@@ -75,7 +76,7 @@ export default function ProfitTrendChart({ data }: Props) {
     return (
       <div className="h-64 flex items-center justify-center text-gray-500">
         <div className="text-center">
-          <div className="text-4xl mb-2">📈</div>
+          <Icon name="trending-up" className="h-16 w-16 text-gray-400 mx-auto mb-2" />
           <p>{t.dashboard.noProfitData}</p>
         </div>
       </div>

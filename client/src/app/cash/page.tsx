@@ -43,7 +43,9 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
     queryKey: ['clients-for-payment'],
     queryFn: async () => {
       const response = await axios.get('/client');
-      return response.data.filter((client: Client) => 
+      // Backend'dan pagination format kelishi mumkin
+      const clientsData = response.data.clients || response.data || [];
+      return clientsData.filter((client: Client) => 
         client.usd_current_debt > 0 || client.rub_current_debt > 0
       );
     }
@@ -336,7 +338,8 @@ export default function CashPage() {
     startDate: '',
     endDate: '',
     valyuta: '',
-    period: 'month'
+    period: 'month',
+    turi: ''
   });
   
   // Form data
@@ -359,6 +362,23 @@ export default function CashPage() {
     queryKey: ['cash-balance'],
     queryFn: async () => {
       const response = await axios.get('/kassa/balance');
+      return response.data;
+    }
+  });
+
+  // Kassa tranzaksiyalari ro'yxati
+  const { data: transactionsData, isLoading: transactionsLoading, refetch: refetchTransactions } = useQuery({
+    queryKey: ['kassa-transactions', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.turi) params.append('turi', filters.turi);
+      if (filters.valyuta) params.append('valyuta', filters.valyuta);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      params.append('page', '1');
+      params.append('limit', '50');
+      
+      const response = await axios.get(`/kassa?${params}`);
       return response.data;
     }
   });
@@ -399,7 +419,15 @@ export default function CashPage() {
       
       await axios.post(endpoint, submitData);
       
+      // ✅ Muvaffaqiyat xabari - kassa va xarajatlar integratsiyasi haqida
+      const successMessage = formData.turi === 'income' 
+        ? '✅ Kirim muvaffaqiyatli qo\'shildi!' 
+        : '✅ Xarajat muvaffaqiyatli qo\'shildi!\n💰 Bu xarajat xarajatlar bo\'limida ham ko\'rsatiladi.';
+      
+      alert(successMessage);
+      
       refetchReport();
+      refetchTransactions(); // Tranzaksiyalar ro'yxatini yangilash
       setShowModal(false);
       resetForm();
     } catch (error: any) {
@@ -415,6 +443,22 @@ export default function CashPage() {
       tavsif: '',
       sana: new Date().toISOString().split('T')[0]
     });
+  };
+
+  // Xarajat turi labelini olish
+  const getExpenseTypeLabel = (type: string) => {
+    const labels: { [key: string]: string } = {
+      'transport_kelish': 'Transport (Kelish)',
+      'transport_ketish': 'Transport (Ketish)',
+      'bojxona_kelish': 'Bojxona (Import)',
+      'bojxona_ketish': 'Bojxona (Export)',
+      'yuklash_tushirish': 'Yuklash/Tushirish',
+      'saqlanish': 'Ombor/Saqlanish',
+      'ishchilar': 'Ishchilar',
+      'qayta_ishlash': 'Qayta ishlash',
+      'boshqa': 'Boshqa'
+    };
+    return labels[type] || type;
   };
 
   if (authLoading) {
@@ -557,7 +601,79 @@ export default function CashPage() {
                 <span className="text-2xl mr-2">📋</span>
                 {t.kassa.recentTransactions}
               </h3>
-              <p className="text-gray-600">{t.kassa.recentTransactionsDescription}</p>
+              
+              {transactionsLoading ? (
+                <div className="space-y-3">
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} className="animate-pulse flex space-x-4 p-3 border rounded">
+                      <div className="rounded-full bg-gray-300 h-10 w-10"></div>
+                      <div className="flex-1 space-y-2 py-1">
+                        <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+                      </div>
+                      <div className="h-4 bg-gray-300 rounded w-20"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : transactionsData?.kassa?.length > 0 ? (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {transactionsData.kassa.slice(0, 10).map((transaction: any) => (
+                    <div key={transaction._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${
+                          transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' 
+                            ? 'bg-green-500' 
+                            : transaction.turi === 'rasxod' 
+                            ? 'bg-red-500' 
+                            : 'bg-blue-500'
+                        }`}>
+                          {transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' ? '💰' : 
+                           transaction.turi === 'rasxod' ? '💸' : '📦'}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {transaction.tavsif}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(transaction.sana).toLocaleDateString('uz-UZ')} • 
+                            {transaction.yaratuvchi?.username || 'Noma\'lum'}
+                            {transaction.xarajatTuri && (
+                              <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
+                                {getExpenseTypeLabel(transaction.xarajatTuri)}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-semibold ${
+                          transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                        }`}>
+                          {transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' ? '+' : '-'}
+                          {formatCurrency(transaction.summa, transaction.valyuta)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {transaction.valyuta}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {transactionsData.kassa.length > 10 && (
+                    <div className="text-center pt-3">
+                      <p className="text-sm text-gray-500">
+                        Va yana {transactionsData.kassa.length - 10} ta tranzaksiya...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">
+                  Hozircha tranzaksiyalar yo'q
+                </p>
+              )}
             </Card>
           </div>
         )}

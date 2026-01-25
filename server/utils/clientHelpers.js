@@ -4,10 +4,10 @@ const Delivery = require('../models/Delivery');
 const Cash = require('../models/Cash');
 
 /**
- * Mijozning barcha qarzlarini qayta hisoblash (VagonSale + Delivery)
+ * Mijozning barcha qarzlarini qayta hisoblash (AGGREGATION PIPELINE bilan optimizatsiya)
  */
 async function updateClientTotalDebts(clientId, session = null) {
-  console.log(`🔄 Mijoz ${clientId} ning barcha qarzlari qayta hisoblanmoqda...`);
+  console.log(`🔄 Mijoz ${clientId} ning barcha qarzlari qayta hisoblanmoqda (AGGREGATION)...`);
   
   try {
     // Mijozni topish
@@ -19,61 +19,103 @@ async function updateClientTotalDebts(clientId, session = null) {
       throw new Error(`Mijoz topilmadi: ${clientId}`);
     }
     
-    // 1. VAGON SALE QARZLARI
-    const vagonSales = session
-      ? await VagonSale.find({ client: clientId, isDeleted: false }).session(session)
-      : await VagonSale.find({ client: clientId, isDeleted: false });
+    // 1. VAGON SALE QARZLARI (Aggregation Pipeline)
+    const vagonSaleAggregation = [
+      {
+        $match: { 
+          client: clientId, 
+          isDeleted: false 
+        }
+      },
+      {
+        $group: {
+          _id: '$sale_currency',
+          totalDebt: { $sum: '$total_price' },
+          totalVolume: { 
+            $sum: { 
+              $ifNull: ['$client_received_volume_m3', '$warehouse_dispatched_volume_m3'] 
+            } 
+          }
+        }
+      }
+    ];
+    
+    const vagonSaleResults = session
+      ? await VagonSale.aggregate(vagonSaleAggregation).session(session)
+      : await VagonSale.aggregate(vagonSaleAggregation);
     
     let usdVagonDebt = 0;
     let rubVagonDebt = 0;
     let usdVagonVolume = 0;
     let rubVagonVolume = 0;
     
-    vagonSales.forEach(sale => {
-      if (sale.sale_currency === 'USD') {
-        usdVagonDebt += sale.total_price || 0;
-        usdVagonVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
-      } else if (sale.sale_currency === 'RUB') {
-        rubVagonDebt += sale.total_price || 0;
-        rubVagonVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+    vagonSaleResults.forEach(result => {
+      if (result._id === 'USD') {
+        usdVagonDebt = result.totalDebt || 0;
+        usdVagonVolume = result.totalVolume || 0;
+      } else if (result._id === 'RUB') {
+        rubVagonDebt = result.totalDebt || 0;
+        rubVagonVolume = result.totalVolume || 0;
       }
     });
     
-    // 2. DELIVERY QARZLARI
-    const deliveries = session
-      ? await Delivery.find({ client: clientId, isDeleted: false }).session(session)
-      : await Delivery.find({ client: clientId, isDeleted: false });
+    // 2. DELIVERY QARZLARI (Aggregation Pipeline)
+    const deliveryAggregation = [
+      {
+        $match: { 
+          client: clientId, 
+          isDeleted: false 
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalDebt: { $sum: '$totalTariff' }
+        }
+      }
+    ];
     
-    let deliveryDebt = 0;
+    const deliveryResults = session
+      ? await Delivery.aggregate(deliveryAggregation).session(session)
+      : await Delivery.aggregate(deliveryAggregation);
     
-    deliveries.forEach(delivery => {
-      deliveryDebt += delivery.totalTariff || 0;
-    });
+    const deliveryDebt = deliveryResults.length > 0 ? (deliveryResults[0].totalDebt || 0) : 0;
     
-    // 3. TO'LOVLAR
-    const payments = session
-      ? await Cash.find({
+    // 3. TO'LOVLAR (Aggregation Pipeline)
+    const paymentAggregation = [
+      {
+        $match: {
           client: clientId,
           type: { $in: ['client_payment', 'debt_payment', 'delivery_payment'] },
           isDeleted: false
-        }).session(session)
-      : await Cash.find({
-          client: clientId,
-          type: { $in: ['client_payment', 'debt_payment', 'delivery_payment'] },
-          isDeleted: false
-        });
+        }
+      },
+      {
+        $group: {
+          _id: {
+            type: '$type',
+            currency: '$currency'
+          },
+          totalPaid: { $sum: '$amount' }
+        }
+      }
+    ];
+    
+    const paymentResults = session
+      ? await Cash.aggregate(paymentAggregation).session(session)
+      : await Cash.aggregate(paymentAggregation);
     
     let usdVagonPaid = 0;
     let rubVagonPaid = 0;
     let deliveryPaid = 0;
     
-    payments.forEach(payment => {
-      if (payment.type === 'delivery_payment') {
-        deliveryPaid += payment.amount || 0;
-      } else if (payment.currency === 'USD') {
-        usdVagonPaid += payment.amount || 0;
-      } else if (payment.currency === 'RUB') {
-        rubVagonPaid += payment.amount || 0;
+    paymentResults.forEach(result => {
+      if (result._id.type === 'delivery_payment') {
+        deliveryPaid += result.totalPaid || 0;
+      } else if (result._id.currency === 'USD') {
+        usdVagonPaid += result.totalPaid || 0;
+      } else if (result._id.currency === 'RUB') {
+        rubVagonPaid += result.totalPaid || 0;
       }
     });
     

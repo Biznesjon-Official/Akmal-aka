@@ -7,7 +7,10 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "test": "NODE_ENV=test jest --detectOpenHandles --forceExit",
-    "test:watch": "NODE_ENV=test jest --watch"
+    "test:watch": "NODE_ENV=test jest --watch",
+    "clean-all": "node scripts/clean-all-data.js",
+    "check-admins": "node scripts/check-admins.js",
+    "create-admin": "node scripts/create-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -20,7 +23,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "node-cache": "^5.1.2"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

@@ -3,6 +3,7 @@
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/utils/formatters';
 import { useLanguage } from '@/context/LanguageContext';
+import Icon from '@/components/Icon';
 
 interface KassaData {
   _id: {
@@ -48,8 +49,11 @@ export default function CashFlowWidget({ data }: Props) {
     return (
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">💰 {t.dashboard.todayCash}</h3>
-          <div className="text-gray-400 text-2xl">💸</div>
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Icon name="dollar-sign" className="h-5 w-5 text-gray-600 mr-2" />
+            {t.dashboard.todayCash}
+          </h3>
+          <Icon name="trending-down" className="h-6 w-6 text-gray-400" />
         </div>
         <div className="text-center text-gray-500 py-4">
           <p>{t.dashboard.noTransactionsToday}</p>
@@ -67,19 +71,21 @@ export default function CashFlowWidget({ data }: Props) {
         return (
           <Card key={currency} className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                💰 {t.dashboard.todayCash} ({currency})
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Icon name="dollar-sign" className="h-5 w-5 text-gray-600 mr-2" />
+                {t.dashboard.todayCash} ({currency})
               </h3>
-              <div className={`text-2xl ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
-                {isPositive ? '📈' : '📉'}
-              </div>
+              <Icon 
+                name={isPositive ? "trending-up" : "trending-down"} 
+                className={`h-6 w-6 ${isPositive ? 'text-green-500' : 'text-red-500'}`} 
+              />
             </div>
             
             <div className="space-y-3">
               {/* Kirim */}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600 flex items-center">
-                  <span className="text-green-500 mr-2">⬆️</span>
+                  <Icon name="arrow-up" className="h-4 w-4 text-green-500 mr-2" />
                   {t.dashboard.income}
                 </span>
                 <span className="font-semibold text-green-600">
@@ -90,7 +96,7 @@ export default function CashFlowWidget({ data }: Props) {
               {/* Chiqim */}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600 flex items-center">
-                  <span className="text-red-500 mr-2">⬇️</span>
+                  <Icon name="arrow-down" className="h-4 w-4 text-red-500 mr-2" />
                   {t.dashboard.expense}
                 </span>
                 <span className="font-semibold text-red-600">

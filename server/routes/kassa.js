@@ -4,11 +4,12 @@ const mongoose = require('mongoose');
 const Kassa = require('../models/Kassa');
 const auth = require('../middleware/auth');
 const { createAuditLog } = require('../middleware/auditLog');
+const { cacheMiddleware, SmartInvalidation } = require('../utils/cacheManager');
 
 const router = express.Router();
 
 // Barcha kassa tranzaksiyalarini olish
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, cacheMiddleware(180), async (req, res) => {
   try {
     const { turi, valyuta, page = 1, limit = 10, startDate, endDate } = req.query;
     const filter = { isDeleted: false }; // Soft delete filter qo'shildi
@@ -72,6 +73,9 @@ router.post('/', [auth, [
 
     const kassa = await Kassa.create([kassaData], { session });
     
+    // Cache invalidation
+    SmartInvalidation.onCashChange();
+    
     // Audit log
     await createAuditLog(
       'create',
@@ -83,6 +87,8 @@ router.post('/', [auth, [
     );
     
     await session.commitTransaction();
+    
+    console.log(`💰 KASSA TRANZAKSIYA: ${kassaData.turi} - ${kassaData.summa} ${kassaData.valyuta}`);
     
     await kassa[0].populate([
       { path: 'woodLot', select: 'lotCode' },

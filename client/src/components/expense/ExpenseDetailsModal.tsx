@@ -60,47 +60,47 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
     const info: { [key: string]: { name: string; icon: string; description: string } } = {
       'transport_kelish': {
         name: 'Transport (Kelish)',
-        icon: '🚛➡️',
+        icon: 'truck',
         description: 'Rossiya → O\'zbekiston transport xarajatlari'
       },
       'transport_ketish': {
         name: 'Transport (Ketish)',
-        icon: '🚛⬅️',
+        icon: 'truck',
         description: 'O\'zbekiston → Rossiya transport xarajatlari'
       },
       'bojxona_kelish': {
         name: 'Bojxona (Import)',
-        icon: '🛃📥',
+        icon: 'building',
         description: 'Import bojxona to\'lovlari va rasmiylashtirish'
       },
       'bojxona_ketish': {
         name: 'Bojxona (Export)',
-        icon: '🛃📤',
+        icon: 'building',
         description: 'Export bojxona to\'lovlari va rasmiylashtirish'
       },
       'yuklash_tushirish': {
         name: 'Yuklash/Tushirish',
-        icon: '📦⬆️⬇️',
+        icon: 'package',
         description: 'Yog\'ochni yuklash va tushirish xizmatlari'
       },
       'saqlanish': {
         name: 'Ombor/Saqlanish',
-        icon: '🏢📦',
+        icon: 'building',
         description: 'Omborda saqlash va boshqa xarajatlar'
       },
       'ishchilar': {
         name: 'Ishchilar maoshi',
-        icon: '👷💰',
+        icon: 'users',
         description: 'Ishchilar maoshi va mehnat haqqi'
       },
       'qayta_ishlash': {
         name: 'Qayta ishlash',
-        icon: '⚙️🪚',
+        icon: 'settings',
         description: 'Yog\'ochni qayta ishlash, kesish va tayyorlash'
       },
       'boshqa': {
         name: 'Boshqa xarajatlar',
-        icon: '📝💸',
+        icon: 'clipboard',
         description: 'Boshqa turli xil xarajatlar'
       }
     };
@@ -117,7 +117,7 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-2xl font-bold flex items-center">
-                <span className="text-3xl mr-3">{typeInfo.icon}</span>
+                <Icon name={typeInfo.icon} className="h-8 w-8 text-blue-600 mr-3" />
                 Xarajat Tafsilotlari
               </h2>
               <p className="text-orange-100 mt-1">{typeInfo.name}</p>
@@ -146,7 +146,7 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <span className="text-gray-600">Xarajat turi:</span>
                   <span className="font-semibold flex items-center">
-                    <span className="mr-2">{typeInfo.icon}</span>
+                    <Icon name={typeInfo.icon} className="h-4 w-4 text-blue-600 mr-2" />
                     {typeInfo.name}
                   </span>
                 </div>
@@ -195,7 +195,7 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
             {/* Qo'shimcha ma'lumotlar */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">📝</span>
+                <Icon name="clipboard" className="h-5 w-5 text-blue-600 mr-2" />
                 Qo'shimcha Ma'lumotlar
               </h3>
               

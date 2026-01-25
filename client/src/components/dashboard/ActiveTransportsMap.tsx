@@ -2,6 +2,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { useLanguage } from '@/context/LanguageContext';
+import Icon from '@/components/Icon';
 
 interface Transport {
   _id: string;
@@ -28,14 +29,14 @@ export default function ActiveTransportsMap({ data }: Props) {
   const statusConfig = {
     transport_kelish: {
       title: 'Rossiya → O\'zbekiston',
-      icon: '🚛➡️',
+      icon: 'truck',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200'
     },
     transport_ketish: {
       title: 'O\'zbekiston → Rossiya',
-      icon: '🚛⬅️',
+      icon: 'truck',
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       borderColor: 'border-green-200'
@@ -50,7 +51,7 @@ export default function ActiveTransportsMap({ data }: Props) {
   if (!data || data.length === 0) {
     return (
       <div className="text-center text-gray-500 py-8">
-        <div className="text-4xl mb-2">🚛</div>
+        <Icon name="truck" className="h-16 w-16 text-gray-400 mx-auto mb-2" />
         <p>{t.dashboard.noActiveVagons}</p>
         <p className="text-sm mt-1">{t.dashboard.allLotsInPlace}</p>
       </div>
@@ -98,7 +99,7 @@ export default function ActiveTransportsMap({ data }: Props) {
             <Card key={status} className={`p-6 ${config.borderColor} border-2`}>
               <div className="flex items-center justify-between mb-4">
                 <h4 className={`font-semibold ${config.color} flex items-center`}>
-                  <span className="mr-2 text-xl">{config.icon}</span>
+                  <Icon name={config.icon} className="h-5 w-5 mr-2" />
                   {config.title}
                 </h4>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bgColor} ${config.color}`}>
@@ -123,7 +124,10 @@ export default function ActiveTransportsMap({ data }: Props) {
                           <div className="font-medium text-gray-900 flex items-center">
                             {transport.lotCode}
                             {isDelayed && (
-                              <span className="ml-2 text-red-500 text-sm">⚠️ {t.dashboard.delayed}</span>
+                              <span className="ml-2 text-red-500 text-sm flex items-center">
+                                <Icon name="alert-triangle" className="h-4 w-4 mr-1" />
+                                {t.dashboard.delayed}
+                              </span>
                             )}
                           </div>
                           <div className="text-sm text-gray-600">
@@ -174,12 +178,12 @@ export default function ActiveTransportsMap({ data }: Props) {
       {/* Xarita placeholder */}
       <Card className="p-6">
         <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
-          <span className="mr-2">🗺️</span>
+          <Icon name="dashboard" className="h-5 w-5 mr-2 text-blue-600" />
           Transport Xaritasi
         </h4>
         
         <div className="bg-gray-100 rounded-lg p-8 text-center">
-          <div className="text-4xl mb-4">🚛🗺️</div>
+          <Icon name="truck" className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-2">Interaktiv xarita</p>
           <p className="text-sm text-gray-500">
             Bu yerda vagonlarning real vaqtdagi joylashuvi ko'rsatiladi
@@ -200,7 +204,7 @@ export default function ActiveTransportsMap({ data }: Props) {
             <div className="flex-1 relative">
               <div className="h-1 bg-gray-300 rounded"></div>
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                🚛
+                <Icon name="truck" className="h-6 w-6 text-blue-600" />
               </div>
             </div>
             
