@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
+const { EXPENSE_TYPES } = require('../constants/expenseTypes');
 
 const kassaSchema = new mongoose.Schema({
   // Tranzaksiya turi
   turi: {
     type: String,
     enum: [
-      'prixod',           // Kirim (sotuv, klient to'lovi)
-      'rasxod',           // Chiqim (xarajatlar)
-      'otpr',             // Jo'natma (Rossiyaga)
-      'klent_prixod'      // Klientdan to'lov
+      'prixod',           // Kirim (vagon sotuvi)
+      'klent_prixod',     // Klientdan to'lov (qarz to'lovi)
+      'rasxod'            // Chiqim (xarajatlar)
     ],
     required: true
   },
@@ -16,17 +16,7 @@ const kassaSchema = new mongoose.Schema({
   // Xarajat turi (faqat rasxod uchun)
   xarajatTuri: {
     type: String,
-    enum: [
-      'transport_kelish',    // Rossiya → O'zbekiston
-      'transport_ketish',    // O'zbekiston → Rossiya
-      'bojxona_kelish',      // Bojxona (kelish)
-      'bojxona_ketish',      // Bojxona (ketish)
-      'yuklash_tushirish',   // Yuklash/Tushirish
-      'saqlanish',           // Ombor/Saqlanish
-      'ishchilar',           // Ishchilar maoshi
-      'qayta_ishlash',       // Qayta ishlash
-      'boshqa'               // Boshqa xarajatlar
-    ]
+    enum: EXPENSE_TYPES
   },
   
   // Summa va valyuta
@@ -55,30 +45,28 @@ const kassaSchema = new mongoose.Schema({
   },
   
   // Bog'langan ma'lumotlar
-  woodLot: {
+  vagonSale: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'VagonLot'  // VagonLot modeliga o'zgartirdik
+    ref: 'VagonSale'  // Vagon sotuvi
   },
   vagon: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vagon'
+    ref: 'Vagon'  // Vagon xarajatlari uchun
   },
-  purchase: {
+  client: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Purchase'
-  },
-  sale: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Sale'
-  },
-  expense: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Expense'
+    ref: 'Client' // Mijoz to'lovi uchun
   },
   
-  // Qarz ma'lumotlari
-  qarzBeruvchi: String, // kimga qarz berilgan
-  qarzOluvchi: String,  // kimdan qarz olingan
+  // To'lov usuli
+  paymentMethod: {
+    type: String,
+    enum: ['cash', 'bank_transfer', 'card', 'other'],
+    default: 'cash'
+  },
+  
+  // Qo'shimcha ma'lumotlar (JSON string)
+  qoshimchaMalumot: String,
   
   // Sana
   sana: {

@@ -79,6 +79,10 @@
     @apply relative overflow-hidden bg-gradient-to-r from-emerald-500 via-green-600 to-teal-600 hover:from-emerald-600 hover:via-green-700 hover:to-teal-700 text-white font-semibold py-2.5 px-5 sm:py-3.5 sm:px-7 rounded-xl sm:rounded-2xl shadow-lg shadow-green-500/30 hover:shadow-2xl hover:shadow-green-600/40 transition-all duration-300 transform hover:-translate-y-1 text-sm sm:text-base;
   }
   
+  .btn-warning {
+    @apply relative overflow-hidden bg-gradient-to-r from-amber-500 via-orange-600 to-yellow-600 hover:from-amber-600 hover:via-orange-700 hover:to-yellow-700 text-white font-semibold py-2.5 px-5 sm:py-3.5 sm:px-7 rounded-xl sm:rounded-2xl shadow-lg shadow-orange-500/30 hover:shadow-2xl hover:shadow-orange-600/40 transition-all duration-300 transform hover:-translate-y-1 text-sm sm:text-base;
+  }
+  
   .btn-danger {
     @apply relative overflow-hidden bg-gradient-to-r from-red-500 via-rose-600 to-pink-600 hover:from-red-600 hover:via-rose-700 hover:to-pink-700 text-white font-semibold py-2 px-4 sm:py-2.5 sm:px-5 rounded-xl shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-600/40 transition-all duration-300 transform hover:-translate-y-0.5 text-xs sm:text-sm;
   }

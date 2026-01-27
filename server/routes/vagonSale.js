@@ -25,6 +25,9 @@ async function updateClientDebtBackground(clientId) {
       isDeleted: false
     });
     
+    console.log(`   📊 Sotuvlar soni: ${allSales.length}`);
+    console.log(`   💰 To'lovlar soni: ${allPayments.length}`);
+    
     let usdTotalDebt = 0;
     let rubTotalDebt = 0;
     let usdTotalVolume = 0;
@@ -43,7 +46,7 @@ async function updateClientDebtBackground(clientId) {
       }
     });
     
-    // To'lovlar bo'yicha hisoblash
+    // To'lovlar bo'yicha hisoblash (Cash jadvalidan)
     allPayments.forEach(payment => {
       if (payment.currency === 'USD') {
         usdTotalPaid += payment.amount || 0;
@@ -52,8 +55,24 @@ async function updateClientDebtBackground(clientId) {
       }
     });
     
+    console.log(`   💵 USD: qarz=${usdTotalDebt}, to'langan=${usdTotalPaid}`);
+    console.log(`   💶 RUB: qarz=${rubTotalDebt}, to'langan=${rubTotalPaid}`);
+    
+    // MUHIM: Cash jadvalidagi to'lovlarni log qilish
+    if (allPayments.length > 0) {
+      console.log(`   📋 To'lovlar tafsiloti:`);
+      allPayments.forEach(payment => {
+        console.log(`      - ${payment.type}: ${payment.amount} ${payment.currency} (${new Date(payment.transaction_date).toLocaleDateString()})`);
+      });
+    }
+    
     const client = await Client.findById(clientId);
     if (client) {
+      const oldUsdDebt = client.usd_total_debt || 0;
+      const oldUsdPaid = client.usd_total_paid || 0;
+      const oldRubDebt = client.rub_total_debt || 0;
+      const oldRubPaid = client.rub_total_paid || 0;
+      
       client.usd_total_debt = usdTotalDebt;
       client.rub_total_debt = rubTotalDebt;
       client.usd_total_paid = usdTotalPaid;
@@ -62,7 +81,14 @@ async function updateClientDebtBackground(clientId) {
       client.rub_total_received_volume = rubTotalVolume;
       
       await client.save();
-      console.log(`✅ Background: Mijoz qarzi yangilandi`);
+      
+      console.log(`✅ Background: Mijoz qarzi yangilandi - ${client.name}`);
+      console.log(`   USD qarz: ${oldUsdDebt} → ${usdTotalDebt}`);
+      console.log(`   USD to'langan: ${oldUsdPaid} → ${usdTotalPaid}`);
+      console.log(`   RUB qarz: ${oldRubDebt} → ${rubTotalDebt}`);
+      console.log(`   RUB to'langan: ${oldRubPaid} → ${rubTotalPaid}`);
+    } else {
+      console.log(`❌ Background: Mijoz topilmadi: ${clientId}`);
     }
   } catch (error) {
     console.error(`❌ Background: Mijoz qarzi yangilashda xatolik:`, error);
@@ -77,9 +103,11 @@ async function createCashRecordsBackground(doc) {
     }
     
     console.log(`📝 Background: Cash yozuvlari yaratilmoqda: ${client.name}`);
+    console.log(`   Jami narx: ${doc.total_price} ${doc.sale_currency}`);
+    console.log(`   To'langan: ${doc.paid_amount || 0} ${doc.sale_currency}`);
     
     // 1. Qarzga sotuv yozuvi
-    await Cash.create({
+    const debtSaleRecord = await Cash.create({
       type: 'debt_sale',
       client: doc.client,
       vagon: doc.vagon,
@@ -90,9 +118,11 @@ async function createCashRecordsBackground(doc) {
       transaction_date: doc.sale_date || new Date()
     });
     
+    console.log(`✅ Kassaga kirim yozildi: ${doc.total_price} ${doc.sale_currency} (ID: ${debtSaleRecord._id})`);
+    
     // 2. Agar to'lov kiritilgan bo'lsa
     if (doc.paid_amount && doc.paid_amount > 0) {
-      await Cash.create({
+      const paymentRecord = await Cash.create({
         type: 'client_payment',
         client: doc.client,
         vagon: doc.vagon,
@@ -102,6 +132,10 @@ async function createCashRecordsBackground(doc) {
         description: `${client.name} tomonidan to'lov - ${doc.paid_amount} ${doc.sale_currency}`,
         transaction_date: doc.sale_date || new Date()
       });
+      
+      console.log(`✅ Kassaga to'lov yozildi: ${doc.paid_amount} ${doc.sale_currency} (ID: ${paymentRecord._id})`);
+    } else {
+      console.log(`ℹ️  To'lov yo'q yoki 0: ${doc.paid_amount || 0} ${doc.sale_currency}`);
     }
     
     console.log(`✅ Background: Cash yozuvlari yaratildi`);
@@ -385,13 +419,19 @@ router.get('/', auth, async (req, res) => {
           lot: '$lotInfo',
           client: '$clientInfo',
           warehouse_dispatched_volume_m3: 1,
+          sent_volume_m3: 1,
           client_received_volume_m3: 1,
+          accepted_volume_m3: 1,
+          sent_quantity: 1,
+          accepted_quantity: 1,
           transport_loss_m3: 1,
           sale_currency: 1,
           price_per_m3: 1,
+          price_per_piece: 1,
+          sale_unit: 1,
           total_price: 1,
           paid_amount: 1,
-          debt_amount: 1,
+          debt: 1,
           sale_date: 1,
           status: 1,
           createdAt: 1
@@ -436,6 +476,129 @@ router.get('/', auth, async (req, res) => {
   } catch (error) {
     console.error('VagonSale list error:', error);
     res.status(500).json({ message: 'Sotuvlar ro\'yxatini olishda xatolik' });
+  }
+});
+
+// ✅ SOTUVLAR TARIXI ENDPOINT (VAQTINCHA AUTH'SIZ)
+router.get('/history', async (req, res) => {
+  try {
+    console.log('📊 Sotuvlar tarixi so\'rovi:', req.query);
+    
+    const {
+      startDate,
+      endDate,
+      clientId,
+      vagonId,
+      minAmount,
+      maxAmount,
+      page = 1,
+      limit = 100
+    } = req.query;
+    
+    // Filter obyektini yaratish
+    const filter = { isDeleted: false };
+    
+    // Sana filtri
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999); // Kun oxirigacha
+        filter.createdAt.$lte = endDateTime;
+      }
+    }
+    
+    // Mijoz filtri
+    if (clientId) {
+      filter.client = clientId;
+    }
+    
+    // Vagon filtri
+    if (vagonId) {
+      filter.vagon = vagonId;
+    }
+    
+    // Summa filtri
+    if (minAmount || maxAmount) {
+      filter.total_price = {};
+      if (minAmount) {
+        filter.total_price.$gte = parseFloat(minAmount);
+      }
+      if (maxAmount) {
+        filter.total_price.$lte = parseFloat(maxAmount);
+      }
+    }
+    
+    console.log('🔍 Filter obyekti:', JSON.stringify(filter, null, 2));
+    
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Ma'lumotlarni olish - populate'siz test qilamiz
+    const sales = await VagonSale.find(filter)
+      .sort({ createdAt: -1 }) // Eng yangi birinchi
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+    
+    console.log(`✅ ${sales.length} ta tarixiy sotuv topildi (populate'siz)`);
+    
+    // Agar ma'lumotlar bor bo'lsa, populate qilamiz
+    let populatedSales = [];
+    if (sales.length > 0) {
+      try {
+        populatedSales = await VagonSale.find(filter)
+          .populate('client', 'name phone')
+          .populate('vagon', 'vagonCode status')
+          .populate('lot', 'dimensions')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean();
+        console.log(`✅ ${populatedSales.length} ta sotuv populate qilindi`);
+      } catch (populateError) {
+        console.error('❌ Populate xatoligi:', populateError);
+        // Populate xatolik bo'lsa, oddiy ma'lumotlarni qaytaramiz
+        populatedSales = sales;
+      }
+    }
+    
+    // Jami soni
+    const totalCount = await VagonSale.countDocuments(filter);
+    
+    console.log(`✅ Jami: ${totalCount} ta sotuv`);
+    
+    res.json({
+      success: true,
+      sales: populatedSales,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        totalItems: totalCount,
+        itemsPerPage: parseInt(limit),
+        hasNextPage: skip + populatedSales.length < totalCount,
+        hasPrevPage: parseInt(page) > 1
+      },
+      filters: {
+        startDate,
+        endDate,
+        clientId,
+        vagonId,
+        minAmount,
+        maxAmount
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Sotuvlar tarixini olishda xatolik:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Sotuvlar tarixini olishda xatolik yuz berdi',
+      error: error.message
+    });
   }
 });
 
@@ -491,7 +654,8 @@ router.post('/', auth, async (req, res) => {
       price_per_m3,
       price_per_piece,
       paid_amount,
-      notes
+      notes,
+      sale_date // YANGI: Sotuv sanasi
     } = req.body;
     
     // Validatsiya
@@ -521,7 +685,7 @@ router.post('/', auth, async (req, res) => {
         });
       }
     } else {
-      if (!dispatchedVolume || !price_per_m3) {
+      if (!dispatchedVolume || (!price_per_m3 && !finalPricePerM3)) {
         await session.abortTransaction();
         return res.status(400).json({ 
           message: 'Hajm bo\'yicha sotishda hajm va m³ narxi kiritilishi shart' 
@@ -544,6 +708,13 @@ router.post('/', auth, async (req, res) => {
     if (!lotDoc || lotDoc.isDeleted) {
       await session.abortTransaction();
       return res.status(404).json({ message: 'Lot topilmadi' });
+    }
+    
+    // Dona bo'yicha sotishda kub narxini avtomatik hisoblash
+    let finalPricePerM3 = price_per_m3;
+    if (sale_unit === 'pieces' && price_per_piece && !price_per_m3) {
+      const volumePerPiece = lotDoc.volume_m3 / lotDoc.quantity;
+      finalPricePerM3 = price_per_piece / volumePerPiece;
     }
     
     const vagonDoc = await Vagon.findById(lotDoc.vagon).session(session).read('primary');
@@ -655,9 +826,10 @@ router.post('/', auth, async (req, res) => {
         client_loss_responsible_person: transport_loss_responsible_person || client_loss_responsible_person,
         client_loss_reason: transport_loss_reason || client_loss_reason,
         sale_currency: sale_currency,
-        price_per_m3: price_per_m3,
+        price_per_m3: finalPricePerM3,
         price_per_piece: price_per_piece,
         paid_amount: paid_amount || 0,
+        sale_date: sale_date ? new Date(sale_date) : new Date(), // YANGI: Sotuv sanasi
         notes
       });
       
@@ -683,7 +855,7 @@ router.post('/', auth, async (req, res) => {
     } else {
       // Hajm bo'yicha sotishda dona sonini hisoblash
       const volumePerPiece = lotDoc.volume_m3 / lotDoc.quantity;
-      const soldPieces = Math.floor(finalDispatchedVolume / volumePerPiece);
+      const soldPieces = Math.round(finalDispatchedVolume / volumePerPiece); // Math.floor o'rniga Math.round
       lotDoc.remaining_quantity = Math.max(0, (lotDoc.remaining_quantity || lotDoc.quantity) - soldPieces);
     }
     
@@ -710,34 +882,27 @@ router.post('/', auth, async (req, res) => {
     await session.commitTransaction();
     console.log('✅ Transaction muvaffaqiyatli yakunlandi');
     
-    // DARHOL MIJOZ QARZINI YANGILASH (background'da emas!)
-    if (sale.total_price > 0) {
-      console.log(`💰 Mijoz qarzi darhol yangilanmoqda...`);
-      
-      try {
-        // Session'siz, lekin darhol yangilash
-        await updateClientDebtBackground(sale.client);
-        console.log(`✅ Mijoz qarzi darhol yangilandi`);
-        
-        // Cash yozuvlarini yaratish
-        if (!existingSale) {
-          await createCashRecordsBackground(sale);
-        } else if (paid_amount && parseFloat(paid_amount) > 0) {
-          await createPaymentRecordBackground(sale, parseFloat(paid_amount));
-        }
-        
-        // Cash yozuvlarini yaratish
-        if (!existingSale) {
-          await createCashRecordsBackground(sale);
-        } else if (paid_amount && parseFloat(paid_amount) > 0) {
-          await createPaymentRecordBackground(sale, parseFloat(paid_amount));
-        }
-        
-        console.log(`✅ Barcha background yangilanishlar tugallandi`);
-      } catch (bgError) {
-        console.error(`❌ Mijoz qarzi yangilashda xatolik:`, bgError);
-        // Bu xatolik response'ga ta'sir qilmaydi, chunki transaction allaqachon commit qilingan
+    // DARHOL CASH YOZUVLARINI YARATISH VA MIJOZ QARZINI YANGILASH
+    console.log(`💰 Cash yozuvlari va mijoz qarzi yangilanmoqda...`);
+    
+    try {
+      // 1. Cash yozuvlarini yaratish
+      if (!existingSale) {
+        await createCashRecordsBackground(sale);
+        console.log(`✅ Cash yozuvlari yaratildi`);
+      } else if (paid_amount && parseFloat(paid_amount) > 0) {
+        await createPaymentRecordBackground(sale, parseFloat(paid_amount));
+        console.log(`✅ Qo'shimcha to'lov yozildi`);
       }
+      
+      // 2. Mijoz qarzini darhol yangilash
+      await updateClientDebtBackground(sale.client);
+      console.log(`✅ Mijoz qarzi darhol yangilandi`);
+      
+      console.log(`✅ Barcha yangilanishlar tugallandi`);
+    } catch (bgError) {
+      console.error(`❌ Cash yozuvlari yoki mijoz qarzi yangilashda xatolik:`, bgError);
+      // Bu xatolik response'ga ta'sir qilmaydi, chunki transaction allaqachon commit qilingan
     }
     
     // Populate qilib qaytarish

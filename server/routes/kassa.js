@@ -47,9 +47,9 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
   }
 });
 
-// Yangi kassa tranzaksiyasi qo'shish - TRANSACTION bilan
+// Yangi kassa tranzaksiyasi qo'shish - KIRIM VA CHIQIM - TRANSACTION bilan
 router.post('/', [auth, [
-  body('turi').isIn(['otpr', 'prixod', 'rasxod', 'klent_prixod']).withMessage('Noto\'g\'ri tranzaksiya turi'),
+  body('turi').isIn(['prixod', 'klent_prixod', 'rasxod']).withMessage('Noto\'g\'ri tranzaksiya turi'),
   body('summa').isNumeric().withMessage('Summa raqam bo\'lishi kerak'),
   body('valyuta').isIn(['USD', 'RUB']).withMessage('Noto\'g\'ri valyuta'),
   body('summaRUB').isNumeric().withMessage('RUB summasi raqam bo\'lishi kerak'),
@@ -105,11 +105,11 @@ router.post('/', [auth, [
   }
 });
 
-// Kassa balansini hisoblash
+// Kassa balansini hisoblash - KIRIM VA CHIQIM
 router.get('/balance', auth, async (req, res) => {
   try {
     const { valyuta } = req.query;
-    const filter = { isDeleted: false }; // Soft delete filter qo'shildi
+    const filter = { isDeleted: false };
     if (valyuta) filter.valyuta = valyuta;
     
     const balanceData = await Kassa.aggregate([
@@ -117,43 +117,47 @@ router.get('/balance', auth, async (req, res) => {
       {
         $group: {
           _id: '$valyuta',
-          otpr: {
-            $sum: {
-              $cond: [{ $eq: ['$turi', 'otpr'] }, '$summa', 0]
-            }
-          },
-          prixod: {
+          vagonSotuvi: {
             $sum: {
               $cond: [{ $eq: ['$turi', 'prixod'] }, '$summa', 0]
             }
           },
-          rasxod: {
-            $sum: {
-              $cond: [{ $eq: ['$turi', 'rasxod'] }, '$summa', 0]
-            }
-          },
-          klentPrixod: {
+          mijozTolovi: {
             $sum: {
               $cond: [{ $eq: ['$turi', 'klent_prixod'] }, '$summa', 0]
+            }
+          },
+          xarajatlar: {
+            $sum: {
+              $cond: [{ $eq: ['$turi', 'rasxod'] }, '$summa', 0]
             }
           }
         }
       },
       {
         $addFields: {
-          chistiyPrixod: {
+          jamiKirim: {
+            $add: ['$vagonSotuvi', '$mijozTolovi']
+          },
+          sof: {
             $subtract: [
-              { $add: ['$otpr', '$prixod', '$klentPrixod'] },
-              '$rasxod'
+              { $add: ['$vagonSotuvi', '$mijozTolovi'] },
+              '$xarajatlar'
             ]
           }
         }
       }
     ]);
     
-    res.json(balanceData);
+    // Agar ma'lumot bo'lmasa, bo'sh array qaytarish
+    res.json(balanceData || []);
   } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
+    console.error('Balance calculation error:', error);
+    res.status(500).json({ 
+      message: 'Balansni hisoblashda xatolik', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -241,7 +245,7 @@ router.delete('/:id', [auth, auth.adminOnly], async (req, res) => {
   }
 });
 
-// Professional kassa hisoboti
+// Professional kassa hisoboti - KIRIM VA CHIQIM
 router.get('/advanced-report', auth, async (req, res) => {
   try {
     const { startDate, endDate, valyuta, period = 'month' } = req.query;
@@ -256,7 +260,7 @@ router.get('/advanced-report', auth, async (req, res) => {
     }
     if (valyuta) matchFilter.valyuta = valyuta;
     
-    // Kirim-chiqim bo'yicha umumiy statistika
+    // Kirim va chiqim bo'yicha umumiy statistika
     const summary = await Kassa.aggregate([
       { $match: matchFilter },
       {
@@ -300,88 +304,48 @@ router.get('/advanced-report', auth, async (req, res) => {
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
     ]);
     
-    // Xarajat turlari bo'yicha (faqat rasxod uchun)
-    const expenseTypes = await Kassa.aggregate([
-      { 
-        $match: { 
-          ...matchFilter,
-          turi: 'rasxod'
-        }
-      },
-      {
-        $group: {
-          _id: {
-            xarajatTuri: '$xarajatTuri',
-            valyuta: '$valyuta'
-          },
-          totalSumma: { $sum: '$summa' },
-          count: { $sum: 1 },
-          avgSumma: { $avg: '$summa' }
-        }
-      },
-      { $sort: { totalSumma: -1 } }
-    ]);
-    
-    // Foyda/zarar hisoblash
-    const profitLoss = summary.reduce((acc, item) => {
+    // Kirim manbalar bo'yicha
+    const incomeBySource = summary.reduce((acc, item) => {
       const { turi, valyuta } = item._id;
       
       if (!acc[valyuta]) {
         acc[valyuta] = {
-          kirim: 0,
-          chiqim: 0,
-          foyda: 0
+          vagonSotuvi: 0,
+          mijozTolovi: 0,
+          xarajatlar: 0,
+          jami: 0,
+          sof: 0
         };
       }
       
-      if (turi === 'prixod' || turi === 'klent_prixod') {
-        acc[valyuta].kirim += item.totalSumma;
-      } else if (turi === 'rasxod' || turi === 'otpr') {
-        acc[valyuta].chiqim += item.totalSumma;
+      if (turi === 'prixod') {
+        acc[valyuta].vagonSotuvi += item.totalSumma;
+      } else if (turi === 'klent_prixod') {
+        acc[valyuta].mijozTolovi += item.totalSumma;
+      } else if (turi === 'rasxod') {
+        acc[valyuta].xarajatlar += item.totalSumma;
       }
       
-      acc[valyuta].foyda = acc[valyuta].kirim - acc[valyuta].chiqim;
+      acc[valyuta].jami = acc[valyuta].vagonSotuvi + acc[valyuta].mijozTolovi;
+      acc[valyuta].sof = acc[valyuta].jami - acc[valyuta].xarajatlar;
       
       return acc;
     }, {});
-    
-    // Valyuta almashinuvi (oxirgi 30 kun)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const currencyExchange = await Kassa.aggregate([
-      {
-        $match: {
-          ...matchFilter,
-          createdAt: { $gte: thirtyDaysAgo },
-          valyuta: { $in: ['USD', 'RUB'] }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            valyuta: '$valyuta'
-          },
-          avgRate: { $avg: { $divide: ['$summaRUB', '$summa'] } },
-          totalVolume: { $sum: '$summa' }
-        }
-      },
-      { $sort: { '_id.date': 1 } }
-    ]);
     
     // Top tranzaksiyalar
     const topTransactions = await Kassa.find(matchFilter)
       .sort({ summa: -1 })
       .limit(10)
-      .populate('woodLot', 'lotCode')
+      .populate('vagonSale', 'saleNumber')
+      .populate('vagon', 'vagonCode')
+      .populate('client', 'name')
       .populate('yaratuvchi', 'username');
     
     res.json({
-      summary,
-      trend,
-      expenseTypes,
-      profitLoss,
-      currencyExchange,
-      topTransactions,
+      summary: summary || [],
+      trend: trend || [],
+      incomeBySource: incomeBySource || {},
+      topTransactions: topTransactions || [],
       period,
       dateRange: {
         startDate: startDate || 'Boshlanish yo\'q',
@@ -390,13 +354,17 @@ router.get('/advanced-report', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Advanced report error:', error);
-    res.status(500).json({ message: 'Hisobot yaratishda xatolik' });
+    res.status(500).json({ 
+      message: 'Hisobot yaratishda xatolik',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
-// Kirim qo'shish (mijozdan to'lov, boshqa manbalar)
-router.post('/income', [auth, [
-  body('turi').isIn(['prixod', 'klent_prixod']).withMessage('Noto\'g\'ri kirim turi'),
+// Vagon sotuvi kirimini qo'shish
+router.post('/vagon-sale-income', [auth, [
+  body('vagonSale').isMongoId().withMessage('Vagon sotuvi ID noto\'g\'ri'),
   body('summa').isNumeric().withMessage('Summa raqam bo\'lishi kerak'),
   body('valyuta').isIn(['USD', 'RUB']).withMessage('Noto\'g\'ri valyuta'),
   body('tavsif').notEmpty().withMessage('Tavsif kiritilishi shart')
@@ -407,173 +375,52 @@ router.post('/income', [auth, [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await session.abortTransaction();
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const {
-      turi,
-      summa,
-      valyuta,
-      summaRUB,
-      summaUSD,
-      tavsif,
-      manba, // Kirim manbai
-      mijozNomi,
-      hujjatRaqami,
-      sana
-    } = req.body;
+    const { vagonSale, summa, valyuta, tavsif, sana } = req.body;
     
     const kassaEntry = new Kassa({
-      turi,
+      turi: 'prixod',
       summa,
       valyuta,
-      summaRUB: summaRUB || summa,
-      summaUSD: summaUSD || 0,
-      tavsif: `${turi === 'klent_prixod' ? 'Mijoz to\'lovi' : 'Kirim'}: ${tavsif}`,
+      summaRUB: valyuta === 'RUB' ? summa : summa * 95.5,
+      summaUSD: valyuta === 'USD' ? summa : summa * 0.0105,
+      tavsif: `Vagon sotuvi: ${tavsif}`,
+      vagonSale,
       sana: sana ? new Date(sana) : new Date(),
-      yaratuvchi: req.user.userId,
-      // Qo'shimcha ma'lumotlar
-      qoshimchaMalumot: JSON.stringify({
-        manba,
-        mijozNomi,
-        hujjatRaqami
-      })
+      yaratuvchi: req.user.userId
     });
     
     await kassaEntry.save({ session });
     
+    // Cache invalidation
+    SmartInvalidation.onCashChange();
+    
     // Audit log
-    await createAuditLog(req.user.userId, 'CREATE', 'Kassa', kassaEntry._id, {
-      turi: 'KIRIM',
-      summa,
-      valyuta,
-      tavsif
-    }, session);
+    await createAuditLog(
+      'create',
+      'Kassa',
+      kassaEntry._id,
+      { after: kassaEntry.toObject() },
+      req.user.userId,
+      req
+    );
     
     await session.commitTransaction();
     
     res.status(201).json(kassaEntry);
   } catch (error) {
     await session.abortTransaction();
-    console.error('Income create error:', error);
+    console.error('Vagon sale income error:', error);
     res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
   }
 });
 
-// Chiqim qo'shish (xarajatlar, maosh, boshqa)
-router.post('/expense', [auth, [
-  body('turi').equals('rasxod').withMessage('Faqat rasxod turi'),
-  body('xarajatTuri').isIn([
-    'transport_kelish', 'transport_ketish', 'bojxona_kelish', 'bojxona_ketish',
-    'yuklash_tushirish', 'saqlanish', 'ishchilar', 'qayta_ishlash', 'maosh', 'boshqa'
-  ]).withMessage('Noto\'g\'ri xarajat turi'),
-  body('summa').isNumeric().withMessage('Summa raqam bo\'lishi kerak'),
-  body('valyuta').isIn(['USD', 'RUB']).withMessage('Noto\'g\'ri valyuta'),
-  body('tavsif').notEmpty().withMessage('Tavsif kiritilishi shart')
-]], async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    
-    const {
-      xarajatTuri,
-      summa,
-      valyuta,
-      summaRUB,
-      summaUSD,
-      tavsif,
-      javobgarShaxs,
-      hujjatRaqami,
-      sana,
-      woodLot
-    } = req.body;
-    
-    const kassaEntry = new Kassa({
-      turi: 'rasxod',
-      xarajatTuri,
-      summa,
-      valyuta,
-      summaRUB: summaRUB || summa,
-      summaUSD: summaUSD || 0,
-      tavsif: `${getExpenseTypeLabel(xarajatTuri)}: ${tavsif}`,
-      woodLot,
-      sana: sana ? new Date(sana) : new Date(),
-      yaratuvchi: req.user.userId,
-      // Qo'shimcha ma'lumotlar
-      qoshimchaMalumot: JSON.stringify({
-        javobgarShaxs,
-        hujjatRaqami
-      })
-    });
-    
-    await kassaEntry.save({ session });
-    
-    // Audit log
-    await createAuditLog(req.user.userId, 'CREATE', 'Kassa', kassaEntry._id, {
-      turi: 'CHIQIM',
-      xarajatTuri,
-      summa,
-      valyuta,
-      tavsif
-    }, session);
-    
-    await session.commitTransaction();
-    
-    res.status(201).json(kassaEntry);
-  } catch (error) {
-    await session.abortTransaction();
-    console.error('Expense create error:', error);
-    res.status(400).json({ message: error.message });
-  } finally {
-    session.endSession();
-  }
-});
 
-// Valyuta kurslari tarixi
-router.get('/exchange-rates', auth, async (req, res) => {
-  try {
-    const { days = 30 } = req.query;
-    const daysAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    
-    const rates = await Kassa.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: daysAgo },
-          valyuta: { $in: ['USD', 'RUB'] },
-          summa: { $gt: 0 },
-          summaRUB: { $gt: 0 },
-          isDeleted: false
-        }
-      },
-      {
-        $group: {
-          _id: {
-            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            valyuta: '$valyuta'
-          },
-          avgRate: { $avg: { $divide: ['$summaRUB', '$summa'] } },
-          minRate: { $min: { $divide: ['$summaRUB', '$summa'] } },
-          maxRate: { $max: { $divide: ['$summaRUB', '$summa'] } },
-          volume: { $sum: '$summa' },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { '_id.date': 1 } }
-    ]);
-    
-    res.json(rates);
-  } catch (error) {
-    console.error('Exchange rates error:', error);
-    res.status(500).json({ message: 'Valyuta kurslari tarixini olishda xatolik' });
-  }
-});
 
 // MIJOZ TO'LOVI - Yangi endpoint
 router.post('/client-payment', [auth, [
@@ -696,22 +543,5 @@ router.post('/client-payment', [auth, [
     session.endSession();
   }
 });
-
-// Helper functions
-function getExpenseTypeLabel(xarajatTuri) {
-  const labels = {
-    'transport_kelish': 'Transport (Kelish)',
-    'transport_ketish': 'Transport (Ketish)',
-    'bojxona_kelish': 'Bojxona (Import)',
-    'bojxona_ketish': 'Bojxona (Export)',
-    'yuklash_tushirish': 'Yuklash/Tushirish',
-    'saqlanish': 'Ombor/Saqlanish',
-    'ishchilar': 'Ishchilar',
-    'qayta_ishlash': 'Qayta ishlash',
-    'maosh': 'Maosh',
-    'boshqa': 'Boshqa'
-  };
-  return labels[xarajatTuri] || xarajatTuri;
-}
 
 module.exports = router;

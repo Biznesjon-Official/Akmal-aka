@@ -154,6 +154,100 @@ const vagonSchema = new mongoose.Schema({
     type: String
   },
   
+  // YANGI: Hajm tuzatishlari tarixi
+  volume_adjustments: [{
+    type: {
+      type: String,
+      enum: ['loss', 'correction'],
+      required: true,
+      comment: 'loss: brak/yo\'qotish, correction: tuzatish'
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+      comment: 'Tuzatish miqdori (m³)'
+    },
+    reason: {
+      type: String,
+      required: true,
+      comment: 'Tuzatish sababi'
+    },
+    responsible_person: {
+      type: String,
+      comment: 'Javobgar shaxs'
+    },
+    notes: {
+      type: String,
+      comment: 'Qo\'shimcha izoh'
+    },
+    adjusted_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      comment: 'Kim tuzatgan'
+    },
+    adjusted_at: {
+      type: Date,
+      default: Date.now,
+      comment: 'Tuzatilgan sana'
+    },
+    // Tuzatishdan oldingi qiymatlar
+    before_total_volume: {
+      type: Number,
+      comment: 'Tuzatishdan oldingi jami hajm'
+    },
+    before_available_volume: {
+      type: Number,
+      comment: 'Tuzatishdan oldingi mavjud hajm'
+    },
+    before_remaining_volume: {
+      type: Number,
+      comment: 'Tuzatishdan oldingi qolgan hajm'
+    },
+    // Tuzatishdan keyingi qiymatlar
+    after_total_volume: {
+      type: Number,
+      comment: 'Tuzatishdan keyingi jami hajm'
+    },
+    after_available_volume: {
+      type: Number,
+      comment: 'Tuzatishdan keyingi mavjud hajm'
+    },
+    after_remaining_volume: {
+      type: Number,
+      comment: 'Tuzatishdan keyingi qolgan hajm'
+    }
+  }],
+  
+  // Vagon xarajatlari (Chiqim kategoriyasidan)
+  expenses: {
+    USD: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'USD da jami xarajatlar'
+    },
+    RUB: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'RUB da jami xarajatlar'
+    },
+    details: [{
+      expenseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Kassa'
+      },
+      xarajatTuri: String,
+      summa: Number,
+      valyuta: String,
+      tavsif: String,
+      sana: Date,
+      javobgarShaxs: String
+    }]
+  },
+  
   // Soft delete
   isDeleted: {
     type: Boolean,
@@ -163,11 +257,16 @@ const vagonSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexlar (tezroq qidirish uchun)
+// ⚡ OPTIMIZATSIYA: MongoDB Indexlar (tezroq qidirish uchun)
 // vagonCode indexi unique: true orqali yaratilgan
 vagonSchema.index({ month: 1 });
 vagonSchema.index({ status: 1 });
 vagonSchema.index({ isDeleted: 1 });
+vagonSchema.index({ createdAt: -1 }); // Yangi qo'shildi - sana bo'yicha saralash uchun
+vagonSchema.index({ sending_place: 1 }); // Yangi qo'shildi - qidiruv uchun
+vagonSchema.index({ receiving_place: 1 }); // Yangi qo'shildi - qidiruv uchun
+// Compound index - ko'p ishlatiladigan filtrlar uchun
+vagonSchema.index({ status: 1, month: 1, createdAt: -1 });
 
 // Hajmlarni avtomatik hisoblash (save dan oldin)
 // ESLATMA: Hozir lotlar yo'q, shuning uchun faqat 0 ga o'rnatamiz

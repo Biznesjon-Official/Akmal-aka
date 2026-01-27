@@ -8,6 +8,7 @@ import { useDialog } from '@/context/DialogContext';
 import Layout from '@/components/Layout';
 import ClientTableSkeleton from '@/components/client/ClientTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
+import Pagination from '@/components/ui/Pagination'; // ⚡ PAGINATION IMPORT
 import Icon from '@/components/Icon';
 import axios from '@/lib/axios';
 
@@ -53,6 +54,11 @@ export default function ClientPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   
+  // ⚡ PAGINATION STATE
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [pagination, setPagination] = useState<any>(null);
+  
   // ✅ LOADING STATES
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDebtSubmitting, setIsDebtSubmitting] = useState(false);
@@ -83,15 +89,27 @@ export default function ClientPage() {
     if (user) {
       fetchClients();
     }
-  }, [user]);
+  }, [user, currentPage, itemsPerPage, searchTerm, filterBy]); // ⚡ PAGINATION DEPENDENCIES
 
   const fetchClients = async () => {
     try {
       console.log('🔄 Mijozlar ro\'yxati yangilanmoqda...');
-      const response = await axios.get('/client');
+      
+      // ⚡ PAGINATION PARAMS
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString()
+      });
+      
+      if (searchTerm) params.append('search', searchTerm);
+      if (filterBy !== 'all') params.append('hasDebt', filterBy === 'debt' ? 'true' : 'false');
+      
+      const response = await axios.get(`/client?${params}`);
+      
       // Backend'dan pagination format kelishi mumkin
       if (response.data.clients) {
         setClients(response.data.clients);
+        setPagination(response.data.pagination);
         console.log(`✅ ${response.data.clients.length} ta mijoz yuklandi`);
       } else {
         // Eski format (backward compatibility)
@@ -322,17 +340,30 @@ export default function ClientPage() {
             </h1>
             <p className="text-gray-500 mt-1">{t.client.appSubtitle}</p>
           </div>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}
-            className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2"
-          >
-            <Icon name="add" size="sm" />
-            <span className="hidden sm:inline">{t.client.addClient}</span>
-            <span className="sm:hidden">Qo'shish</span>
-          </button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => {
+                setLoading(true);
+                fetchClients();
+              }}
+              className="btn-secondary flex items-center justify-center gap-2 flex-1 sm:flex-initial"
+              title="Yangilash"
+            >
+              <Icon name="refresh-cw" size="sm" />
+              <span className="hidden sm:inline">Yangilash</span>
+            </button>
+            <button
+              onClick={() => {
+                resetForm();
+                setShowModal(true);
+              }}
+              className="btn-primary flex items-center justify-center gap-2 flex-1 sm:flex-initial"
+            >
+              <Icon name="add" size="sm" />
+              <span className="hidden sm:inline">{t.client.addClient}</span>
+              <span className="sm:hidden">Qo'shish</span>
+            </button>
+          </div>
         </div>
 
         {/* Filters and Search - Responsive */}
@@ -487,15 +518,24 @@ export default function ClientPage() {
                     <>
                       <div className="border-t pt-2 mt-2">
                         <div className="flex justify-between">
-                          <span className="text-purple-600 font-medium text-xs">🚚 {t.client.deliveryDebt}:</span>
+                          <span className="text-purple-600 font-medium text-xs flex items-center gap-1">
+                            <Icon name="truck" className="w-3 h-3" />
+                            {t.client.deliveryDebt}:
+                          </span>
                           <span className="font-semibold text-purple-600">${(client.delivery_total_debt || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-purple-600 text-xs">🚚 {t.client.totalPaid}:</span>
+                          <span className="text-purple-600 text-xs flex items-center gap-1">
+                            <Icon name="truck" className="w-3 h-3" />
+                            {t.client.totalPaid}:
+                          </span>
                           <span className="font-semibold text-green-600">${(client.delivery_total_paid || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-purple-600 font-semibold text-xs">🚚 Qolgan:</span>
+                          <span className="text-purple-600 font-semibold text-xs flex items-center gap-1">
+                            <Icon name="truck" className="w-3 h-3" />
+                            Qolgan:
+                          </span>
                           <span className={`font-bold ${(client.delivery_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                             ${Math.max(0, client.delivery_current_debt || 0).toLocaleString()}
                           </span>
@@ -526,7 +566,7 @@ export default function ClientPage() {
                     type="button"
                     style={{ pointerEvents: 'auto' }}
                   >
-                    💰
+                    <Icon name="dollar-sign" className="w-4 h-4" />
                     <span>{t.client.debt}</span>
                   </button>
                   <button
@@ -545,6 +585,27 @@ export default function ClientPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ⚡ PAGINATION COMPONENT */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="mt-8">
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              itemsPerPage={pagination.itemsPerPage}
+              hasNextPage={pagination.hasNextPage}
+              hasPrevPage={pagination.hasPrevPage}
+              onPageChange={(page) => setCurrentPage(page)}
+              onLimitChange={(limit) => {
+                setItemsPerPage(limit);
+                setCurrentPage(1); // Reset to first page
+              }}
+              showLimitSelector={true}
+              className="bg-white rounded-xl shadow-md p-6"
+            />
           </div>
         )}
 
@@ -615,6 +676,32 @@ export default function ClientPage() {
                       />
                     </div>
                   </div>
+                  
+                  {/* Mijoz uchun jami qarz ko'rsatish */}
+                  {editingClient && (
+                    <div className="mt-6 p-4 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-700 flex items-center">
+                          <Icon name="calculator" className="h-5 w-5 text-red-600 mr-2" />
+                          {t.common.grandTotal}
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 bg-green-100 rounded-lg">
+                          <div className="text-lg font-bold text-green-600">
+                            ${(editingClient.usd_current_debt || 0).toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-500">USD qarz</div>
+                        </div>
+                        <div className="text-center p-3 bg-blue-100 rounded-lg">
+                          <div className="text-lg font-bold text-blue-600">
+                            ₽{(editingClient.rub_current_debt || 0).toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-500">RUB qarz</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="modal-footer">
                     <div className="flex flex-col sm:flex-row gap-3">
@@ -731,6 +818,30 @@ export default function ClientPage() {
                             {Math.max(0, editingClient.rub_current_debt || 0).toLocaleString()} ₽
                           </span>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Qarz boshqaruv uchun jami summa */}
+                  <div className="mt-6 p-4 bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-200 rounded-xl">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-gray-700 flex items-center">
+                        <Icon name="calculator" className="h-5 w-5 text-orange-600 mr-2" />
+                        {t.common.grandTotal}
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-3 bg-green-100 rounded-lg">
+                        <div className="text-lg font-bold text-green-600">
+                          ${Math.max(0, editingClient.usd_current_debt || 0).toLocaleString()}
+                        </div>
+                        <div className="text-sm text-gray-500">USD qarz</div>
+                      </div>
+                      <div className="text-center p-3 bg-blue-100 rounded-lg">
+                        <div className="text-lg font-bold text-blue-600">
+                          ₽{Math.max(0, editingClient.rub_current_debt || 0).toLocaleString()}
+                        </div>
+                        <div className="text-sm text-gray-500">RUB qarz</div>
                       </div>
                     </div>
                   </div>

@@ -8,6 +8,7 @@
     "start": "node index.js",
     "test": "NODE_ENV=test jest --detectOpenHandles --forceExit",
     "test:watch": "NODE_ENV=test jest --watch",
+    "test:optimizations": "node scripts/test-optimizations.js",
     "clean-all": "node scripts/clean-all-data.js",
     "check-admins": "node scripts/check-admins.js",
     "create-admin": "node scripts/create-admin.js"

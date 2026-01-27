@@ -55,7 +55,7 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
         vagon: { $in: vagonIds }, 
         isDeleted: false 
       })
-      .select('vagon dimensions quantity volume_m3 loss_volume_m3 loss_responsible_person loss_reason loss_date warehouse_available_volume_m3 warehouse_dispatched_volume_m3 warehouse_remaining_volume_m3 purchase_currency purchase_amount total_investment realized_profit unrealized_value break_even_price_per_m3')
+      .select('vagon dimensions quantity volume_m3 loss_volume_m3 loss_responsible_person loss_reason loss_date warehouse_available_volume_m3 warehouse_dispatched_volume_m3 warehouse_remaining_volume_m3 purchase_currency purchase_amount total_investment realized_profit unrealized_value break_even_price_per_m3 remaining_quantity')
       .lean();
       
       // Map lots to vagons efficiently
@@ -393,6 +393,109 @@ router.patch('/:id/close', auth, async (req, res) => {
   } catch (error) {
     console.error('Vagon close error:', error);
     res.status(500).json({ message: 'Vagonni yopishda xatolik', error: error.message });
+  }
+});
+
+// YANGI: Vagon hajmini tuzatish (brak, yo'qotish, tuzatish)
+router.patch('/:id/adjust-volume', auth, async (req, res) => {
+  try {
+    const vagon = await Vagon.findOne({ 
+      _id: req.params.id, 
+      isDeleted: false 
+    });
+    
+    if (!vagon) {
+      return res.status(404).json({ message: 'Vagon topilmadi' });
+    }
+    
+    if (vagon.status === 'closed' || vagon.status === 'archived') {
+      return res.status(400).json({ message: 'Yopilgan yoki arxivlangan vagonni tuzatish mumkin emas' });
+    }
+    
+    const { 
+      adjustment_type, // 'loss' yoki 'correction'
+      adjustment_amount, 
+      adjustment_reason, 
+      responsible_person, 
+      notes 
+    } = req.body;
+    
+    // Validatsiya
+    if (!adjustment_type || !adjustment_amount || !adjustment_reason) {
+      return res.status(400).json({ 
+        message: 'Tuzatish turi, miqdori va sababi majburiy' 
+      });
+    }
+    
+    const adjustmentValue = parseFloat(adjustment_amount);
+    if (adjustmentValue <= 0) {
+      return res.status(400).json({ 
+        message: 'Tuzatish miqdori 0 dan katta bo\'lishi kerak' 
+      });
+    }
+    
+    // Brak bo'lsa, mavjud hajmdan katta bo'lmasligi kerak
+    if (adjustment_type === 'loss' && adjustmentValue > vagon.available_volume_m3) {
+      return res.status(400).json({ 
+        message: `Brak miqdori mavjud hajmdan (${vagon.available_volume_m3.toFixed(2)} m³) katta bo'lishi mumkin emas` 
+      });
+    }
+    
+    // Tuzatish tarixini saqlash
+    const adjustmentRecord = {
+      type: adjustment_type,
+      amount: adjustmentValue,
+      reason: adjustment_reason,
+      responsible_person: responsible_person || null,
+      notes: notes || null,
+      adjusted_by: req.user.userId,
+      adjusted_at: new Date(),
+      // Tuzatishdan oldingi qiymatlar
+      before_total_volume: vagon.total_volume_m3,
+      before_available_volume: vagon.available_volume_m3,
+      before_remaining_volume: vagon.remaining_volume_m3
+    };
+    
+    // Hajmlarni yangilash
+    if (adjustment_type === 'loss') {
+      // Brak - hajmni kamaytirish
+      vagon.total_loss_m3 = (vagon.total_loss_m3 || 0) + adjustmentValue;
+      vagon.available_volume_m3 = Math.max(0, vagon.available_volume_m3 - adjustmentValue);
+      vagon.remaining_volume_m3 = Math.max(0, vagon.remaining_volume_m3 - adjustmentValue);
+    } else if (adjustment_type === 'correction') {
+      // Tuzatish - hajmni o'zgartirish (musbat yoki manfiy bo'lishi mumkin)
+      // Bu yerda foydalanuvchi to'g'ri hajmni kiritadi
+      const correctionDiff = adjustmentValue - vagon.total_volume_m3;
+      vagon.total_volume_m3 = adjustmentValue;
+      vagon.available_volume_m3 = Math.max(0, vagon.available_volume_m3 + correctionDiff);
+      vagon.remaining_volume_m3 = Math.max(0, vagon.remaining_volume_m3 + correctionDiff);
+    }
+    
+    // Tuzatish tarixini qo'shish
+    if (!vagon.volume_adjustments) {
+      vagon.volume_adjustments = [];
+    }
+    vagon.volume_adjustments.push(adjustmentRecord);
+    
+    // Tuzatishdan keyingi qiymatlarni saqlash
+    adjustmentRecord.after_total_volume = vagon.total_volume_m3;
+    adjustmentRecord.after_available_volume = vagon.available_volume_m3;
+    adjustmentRecord.after_remaining_volume = vagon.remaining_volume_m3;
+    
+    await vagon.save();
+    
+    // Smart cache invalidation
+    SmartInvalidation.onVagonChange(vagon._id);
+    
+    const actionText = adjustment_type === 'loss' ? 'brak' : 'tuzatish';
+    res.json({ 
+      message: `Vagon hajmi muvaffaqiyatli tuzatildi (${actionText}: ${adjustmentValue} m³)`,
+      vagon,
+      adjustment: adjustmentRecord
+    });
+  } catch (error) {
+    console.error('Volume adjustment error:', error);
+    res.status(500).json({ message: 'Hajm tuzatishda xatolik', error: error.message });
   }
 });
 

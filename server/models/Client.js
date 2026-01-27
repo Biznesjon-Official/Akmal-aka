@@ -103,10 +103,16 @@ const clientSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index qo'shish (tezroq qidirish uchun)
+// ⚡ OPTIMIZATSIYA: MongoDB Indexlar (tezroq qidirish uchun)
 clientSchema.index({ name: 1 });
 clientSchema.index({ phone: 1 });
 clientSchema.index({ isDeleted: 1 });
+clientSchema.index({ createdAt: -1 }); // Yangi qo'shildi - sana bo'yicha saralash uchun
+// Text index - qidiruv uchun (name va phone bo'yicha)
+clientSchema.index({ name: 'text', phone: 'text' });
+// Compound index - qarzli mijozlarni tez topish uchun
+clientSchema.index({ usd_total_debt: 1, usd_total_paid: 1 });
+clientSchema.index({ rub_total_debt: 1, rub_total_paid: 1 });
 
 // Virtual fields - haqiqiy qarzlar (valyuta bo'yicha)
 clientSchema.virtual('usd_current_debt').get(function() {

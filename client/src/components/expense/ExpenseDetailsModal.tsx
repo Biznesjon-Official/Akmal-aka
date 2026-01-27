@@ -98,6 +98,21 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
         icon: 'settings',
         description: 'Yog\'ochni qayta ishlash, kesish va tayyorlash'
       },
+      'shaxsiy': {
+        name: 'Shaxsiy xarajatlar',
+        icon: 'user',
+        description: 'Biznesmen o\'zi uchun sarflagan pullar'
+      },
+      'qarzdorlik': {
+        name: 'Qarzdorlik xarajatlari',
+        icon: 'credit-card',
+        description: 'Mijozlarning qarzlari va qarzdorlik xarajatlari'
+      },
+      'chiqim': {
+        name: 'Chiqim',
+        icon: 'more-horizontal',
+        description: 'Boshqa barcha xarajatlar'
+      },
       'boshqa': {
         name: 'Boshqa xarajatlar',
         icon: 'clipboard',
@@ -138,7 +153,7 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
             {/* Asosiy ma'lumotlar */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">📋</span>
+                <Icon name="clipboard" className="h-5 w-5 text-blue-600 mr-2" />
                 Asosiy Ma'lumotlar
               </h3>
               
@@ -187,6 +202,33 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
                       {expense.woodLot.lotCode}
                     </span>
+                  </div>
+                )}
+                
+                {expense.vagon && (
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Bog'langan vagon:</span>
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
+                      {expense.vagon.vagonCode}
+                    </span>
+                  </div>
+                )}
+                
+                {expense.client && (
+                  <div className="py-2 border-b border-gray-100">
+                    <span className="text-gray-600 block mb-2">Bog'langan mijoz:</span>
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <div className="flex items-center mb-2">
+                        <Icon name="user" className="h-4 w-4 text-purple-600 mr-2" />
+                        <span className="font-semibold text-purple-900">{expense.client.name}</span>
+                      </div>
+                      <div className="text-sm text-purple-700">
+                        📞 {expense.client.phone}
+                      </div>
+                      <div className="text-sm text-purple-700 mt-1">
+                        💰 Qarz: ${expense.client.usd_current_debt?.toFixed(2) || 0} / ₽{expense.client.rub_current_debt?.toFixed(2) || 0}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -241,7 +283,7 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
             {/* Tavsif */}
             <Card className="p-6 lg:col-span-2">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">💬</span>
+                <Icon name="message-square" className="h-5 w-5 text-blue-600 mr-2" />
                 Tavsif
               </h3>
               
@@ -259,13 +301,38 @@ export default function ExpenseDetailsModal({ expenseId, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 flex justify-end">
-          <button
-            onClick={onClose}
-            className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600"
-          >
-            Yopish
-          </button>
+        <div className="bg-gray-50 border-t">
+          {/* Jami summa */}
+          <div className="px-6 py-4 bg-gradient-to-r from-orange-50 to-red-50 border-b">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-700 flex items-center">
+                <Icon name="calculator" className="h-5 w-5 text-orange-600 mr-2" />
+                Umumiy jami:
+              </h3>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(expense.summa, expense.valyuta)}
+                </div>
+                {expense.valyuta !== 'RUB' && (
+                  <div className="text-lg font-semibold text-blue-600">
+                    {formatCurrency(expense.summaRUB, 'RUB')}
+                  </div>
+                )}
+                <div className="text-sm text-gray-500 mt-1">
+                  Xarajat summasi
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="px-6 py-4 flex justify-end">
+            <button
+              onClick={onClose}
+              className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600"
+            >
+              Yopish
+            </button>
+          </div>
         </div>
       </div>
     </div>

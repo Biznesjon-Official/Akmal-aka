@@ -245,14 +245,29 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Helper function: Vagon jami ma'lumotlarini yangilash
-async function updateVagonTotals(vagonId) {
-  const lots = await VagonLot.find({ 
+async function updateVagonTotals(vagonId, session = null) {
+  const query = { 
     vagon: vagonId, 
     isDeleted: false 
-  });
+  };
   
-  const vagon = await Vagon.findById(vagonId);
-  if (!vagon) return;
+  // Agar session berilgan bo'lsa, uni ishlatamiz
+  const lots = session 
+    ? await VagonLot.find(query).session(session).read('primary')
+    : await VagonLot.find(query);
+  
+  // Vagonni olish
+  const vagon = session
+    ? await Vagon.findById(vagonId).session(session).read('primary')
+    : await Vagon.findById(vagonId);
+    
+  if (!vagon) {
+    console.log(`⚠️  Vagon topilmadi: ${vagonId}`);
+    return;
+  }
+  
+  console.log(`🔄 Vagon ${vagon.vagonCode} jami ma'lumotlari yangilanmoqda...`);
+  console.log(`   Lotlar soni: ${lots.length}`);
   
   // Hajmlar (yangi terminologiya bilan)
   vagon.total_volume_m3 = lots.reduce((sum, lot) => sum + (lot.volume_m3 || 0), 0);
@@ -260,6 +275,11 @@ async function updateVagonTotals(vagonId) {
   vagon.available_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_available_volume_m3 || lot.available_volume_m3 || 0), 0);
   vagon.sold_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_dispatched_volume_m3 || lot.sold_volume_m3 || 0), 0);
   vagon.remaining_volume_m3 = lots.reduce((sum, lot) => sum + (lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0), 0);
+  
+  console.log(`   Jami hajm: ${vagon.total_volume_m3} m³`);
+  console.log(`   Mavjud hajm: ${vagon.available_volume_m3} m³`);
+  console.log(`   Sotilgan hajm: ${vagon.sold_volume_m3} m³`);
+  console.log(`   Qolgan hajm: ${vagon.remaining_volume_m3} m³`);
   
   // USD (yangi terminologiya bilan)
   const usdLots = lots.filter(lot => lot.purchase_currency === 'USD');
@@ -273,7 +293,14 @@ async function updateVagonTotals(vagonId) {
   vagon.rub_total_revenue = rubLots.reduce((sum, lot) => sum + (lot.total_revenue || 0), 0);
   vagon.rub_profit = rubLots.reduce((sum, lot) => sum + (lot.realized_profit || lot.profit || 0), 0);
   
-  await vagon.save();
+  // Session bilan yoki session'siz saqlash
+  if (session) {
+    await vagon.save({ session });
+  } else {
+    await vagon.save();
+  }
+  
+  console.log(`✅ Vagon ${vagon.vagonCode} jami ma'lumotlari yangilandi`);
 }
 
 module.exports = router;

@@ -92,30 +92,30 @@ export default function Pagination({
 
       {/* Sahifa o'tish tugmalari */}
       {totalPages > 1 && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 order-1 sm:order-2">
           {/* Oldingi sahifa */}
           <Button
             variant="secondary"
             size="sm"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={!hasPrevPage}
-            className="px-2"
+            className="px-2 sm:px-3 min-w-[44px]"
           >
             <Icon name="chevron-left" className="w-4 h-4" />
           </Button>
 
-          {/* Sahifa raqamlari */}
+          {/* Sahifa raqamlari - mobilda kamroq ko'rsat */}
           <div className="flex items-center gap-1">
-            {getPageNumbers().map((page, index) => (
+            {getPageNumbers().slice(0, window.innerWidth < 640 ? 3 : undefined).map((page, index) => (
               <div key={index}>
                 {page === '...' ? (
-                  <span className="px-2 py-1 text-gray-400">...</span>
+                  <span className="px-2 py-1 text-gray-400 text-xs sm:text-sm">...</span>
                 ) : (
                   <Button
                     variant={page === currentPage ? 'primary' : 'secondary'}
                     size="sm"
                     onClick={() => onPageChange(page as number)}
-                    className="min-w-[32px] px-2"
+                    className="min-w-[36px] sm:min-w-[40px] px-2 sm:px-3 text-xs sm:text-sm"
                   >
                     {page}
                   </Button>
@@ -130,7 +130,7 @@ export default function Pagination({
             size="sm"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={!hasNextPage}
-            className="px-2"
+            className="px-2 sm:px-3 min-w-[44px]"
           >
             <Icon name="chevron-right" className="w-4 h-4" />
           </Button>

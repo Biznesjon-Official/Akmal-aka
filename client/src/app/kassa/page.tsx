@@ -422,7 +422,7 @@ function KassaContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">{t.kassa.currencyLabel} *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">{t.common.currency} *</label>
                   <select
                     className="input-field"
                     value={formData.valyuta}

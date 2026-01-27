@@ -6,9 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
-import CashSkeleton from '@/components/cash/CashSkeleton';
-import { formatCurrency, formatNumber } from '@/utils/formatters';
-import { Card } from '@/components/ui/Card';
+import { formatCurrency } from '@/utils/formatters';
 import Icon from '@/components/Icon';
 import axios from '@/lib/axios';
 
@@ -43,7 +41,6 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
     queryKey: ['clients-for-payment'],
     queryFn: async () => {
       const response = await axios.get('/client');
-      // Backend'dan pagination format kelishi mumkin
       const clientsData = response.data.clients || response.data || [];
       return clientsData.filter((client: Client) => 
         client.usd_current_debt > 0 || client.rub_current_debt > 0
@@ -51,7 +48,6 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
     }
   });
 
-  // Tanlangan mijoz ma'lumotlari
   const selectedClientData = clients?.find(c => c._id === selectedClient);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,7 +64,6 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
       return;
     }
 
-    // Qarz tekshiruvi
     const clientDebt = paymentCurrency === 'USD' 
       ? selectedClientData?.usd_current_debt || 0
       : selectedClientData?.rub_current_debt || 0;
@@ -91,12 +86,10 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
 
       alert(`✅ ${t.messages.paymentSuccessfullySaved}`);
       
-      // Formani tozalash
       setSelectedClient('');
       setPaymentAmount('');
       setNotes('');
       
-      // Parent komponentni yangilash
       onPaymentSuccess();
       
     } catch (error: any) {
@@ -108,18 +101,22 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
   };
 
   if (clientsLoading) {
-    return <div className="text-center py-4">{t.kassa.clientsLoading}</div>;
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">{t.kassa.clientsLoading}</span>
+      </div>
+    );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Mijoz tanlash */}
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label className="block text-sm font-medium mb-2">{t.kassa.selectClient}</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-3">{t.kassa.selectClient}</label>
         <select
           value={selectedClient}
           onChange={(e) => setSelectedClient(e.target.value)}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
           required
         >
           <option value="">{t.kassa.selectClientPlaceholder}</option>
@@ -131,121 +128,162 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
         </select>
       </div>
 
-      {/* Tanlangan mijoz ma'lumotlari */}
       {selectedClientData && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
-            <Icon name="details" className="mr-2" size="sm" />
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
+          <h4 className="font-bold text-blue-900 mb-4 flex items-center text-lg">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+              <Icon name="user" className="h-5 w-5 text-white" />
+            </div>
             {t.kassa.clientInfo}
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <div className="font-medium flex items-center">
-                <Icon name="clients" className="mr-1" size="sm" />
-                {selectedClientData.name}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Icon name="user" className="mr-2 h-4 w-4 text-blue-600" />
+                <span className="font-semibold text-gray-900">{selectedClientData.name}</span>
               </div>
-              <div className="text-gray-600 flex items-center">
-                <Icon name="phone" className="mr-1" size="sm" />
-                {selectedClientData.phone}
+              <div className="flex items-center">
+                <Icon name="phone" className="mr-2 h-4 w-4 text-blue-600" />
+                <span className="text-gray-700">{selectedClientData.phone}</span>
               </div>
             </div>
-            <div>
-              <div className="text-red-600">
-                <strong>{t.kassa.usdDebt}</strong> {formatCurrency(selectedClientData.usd_current_debt, 'USD')}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg border border-red-200">
+                <span className="font-semibold text-red-700">{t.kassa.usdDebtLabel}:</span>
+                <span className="font-bold text-red-600">{formatCurrency(selectedClientData.usd_current_debt, 'USD')}</span>
               </div>
-              <div className="text-red-600">
-                <strong>{t.kassa.rubDebt}</strong> {formatCurrency(selectedClientData.rub_current_debt, 'RUB')}
+              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg border border-red-200">
+                <span className="font-semibold text-red-700">{t.kassa.rubDebtLabel}:</span>
+                <span className="font-bold text-red-600">{formatCurrency(selectedClientData.rub_current_debt, 'RUB')}</span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* To'lov summasi va valyuta */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium mb-2">{t.kassa.paymentAmount}</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-3">{t.kassa.paymentAmount}</label>
           <input
             type="number"
             step="0.01"
             value={paymentAmount}
             onChange={(e) => setPaymentAmount(e.target.value)}
             placeholder="1000.00"
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
             required
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">{t.kassa.currencyLabel}</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-3">{t.common.currency}</label>
           <select
             value={paymentCurrency}
             onChange={(e) => setPaymentCurrency(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
           >
-            <option value="USD">💵 USD</option>
-            <option value="RUB">💶 RUB</option>
+            <option value="USD">USD</option>
+            <option value="RUB">RUB</option>
           </select>
         </div>
       </div>
 
-      {/* To'lov usuli */}
       <div>
-        <label className="block text-sm font-medium mb-2">{t.kassa.paymentMethod}</label>
-        <select
-          value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value)}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-        >
-          <option value="cash">{t.kassa.cash}</option>
-          <option value="bank_transfer">{t.kassa.bankTransfer}</option>
-          <option value="card">{t.kassa.card}</option>
-          <option value="other">{t.kassa.other}</option>
-        </select>
+        <label className="block text-sm font-semibold text-gray-700 mb-3">{t.kassa.paymentMethod}</label>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { value: 'cash', label: t.kassa.cash, icon: 'dollar-sign' },
+            { value: 'bank_transfer', label: t.kassa.bankTransfer, icon: 'building' },
+            { value: 'card', label: t.kassa.card, icon: 'credit-card' },
+            { value: 'other', label: t.kassa.other, icon: 'file-text' }
+          ].map((method) => (
+            <button
+              key={method.value}
+              type="button"
+              onClick={() => setPaymentMethod(method.value)}
+              className={`p-3 border-2 rounded-xl transition-all duration-200 ${
+                paymentMethod === method.value
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <div className="mb-1 flex justify-center">
+                <Icon name={method.icon} className="w-6 h-6" />
+              </div>
+              <div className="text-sm font-medium">{method.label}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Izoh */}
       <div>
-        <label className="block text-sm font-medium mb-2">{t.kassa.notesOptional}</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-3">{t.kassa.notesOptional}</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder={t.kassa.notesPlaceholder}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-          rows={2}
+          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+          rows={3}
         />
       </div>
 
-      {/* Hisoblash ko'rsatkichlari */}
       {selectedClientData && paymentAmount && (
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <h4 className="font-semibold text-green-800 mb-2 flex items-center">
-            <Icon name="cash" className="mr-2" size="sm" />
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border border-green-200">
+          <h4 className="font-bold text-green-900 mb-4 flex items-center text-lg">
+            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center mr-3">
+              <Icon name="calculator" className="h-5 w-5 text-white" />
+            </div>
             {t.kassa.afterPayment}
           </h4>
-          <div className="text-sm space-y-1">
+          <div className="space-y-3">
             {paymentCurrency === 'USD' ? (
               <>
-                <div>{t.kassa.usdDebt} {formatCurrency(selectedClientData.usd_current_debt, 'USD')} → {formatCurrency(Math.max(0, selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0')), 'USD')}</div>
-                <div className="text-green-600 font-medium flex items-center">
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                  <span className="text-gray-700">{t.kassa.usdDebtLabel}:</span>
+                  <span className="font-semibold">
+                    {formatCurrency(selectedClientData.usd_current_debt, 'USD')} → {formatCurrency(Math.max(0, selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0')), 'USD')}
+                  </span>
+                </div>
+                <div className={`flex items-center justify-center p-3 rounded-lg ${
+                  selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
                   <Icon 
-                    name={selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 ? 'success' : 'warning'} 
-                    className="mr-1" 
-                    size="sm" 
+                    name={selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 ? 'check-circle' : 'alert-circle'} 
+                    className="mr-2 h-5 w-5" 
                   />
-                  {selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 ? `USD ${t.kassa.debtWillBePaid}` : `USD ${t.kassa.debtWillRemain}`}
+                  <span className="font-semibold">
+                    {selectedClientData.usd_current_debt - parseFloat(paymentAmount || '0') <= 0 
+                      ? `USD ${t.kassa.debtWillBePaid}` 
+                      : `USD ${t.kassa.debtWillRemain}`
+                    }
+                  </span>
                 </div>
               </>
             ) : (
               <>
-                <div>{t.kassa.rubDebt} {formatCurrency(selectedClientData.rub_current_debt, 'RUB')} → {formatCurrency(Math.max(0, selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0')), 'RUB')}</div>
-                <div className="text-green-600 font-medium flex items-center">
+                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                  <span className="text-gray-700">{t.kassa.rubDebtLabel}:</span>
+                  <span className="font-semibold">
+                    {formatCurrency(selectedClientData.rub_current_debt, 'RUB')} → {formatCurrency(Math.max(0, selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0')), 'RUB')}
+                  </span>
+                </div>
+                <div className={`flex items-center justify-center p-3 rounded-lg ${
+                  selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
                   <Icon 
-                    name={selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 ? 'success' : 'warning'} 
-                    className="mr-1" 
-                    size="sm" 
+                    name={selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 ? 'check-circle' : 'alert-circle'} 
+                    className="mr-2 h-5 w-5" 
                   />
-                  {selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 ? `RUB ${t.kassa.debtWillBePaid}` : `RUB ${t.kassa.debtWillRemain}`}
+                  <span className="font-semibold">
+                    {selectedClientData.rub_current_debt - parseFloat(paymentAmount || '0') <= 0 
+                      ? `RUB ${t.kassa.debtWillBePaid}` 
+                      : `RUB ${t.kassa.debtWillRemain}`
+                    }
+                  </span>
                 </div>
               </>
             )}
@@ -253,20 +291,19 @@ function ClientPaymentForm({ onPaymentSuccess }: ClientPaymentFormProps) {
         </div>
       )}
 
-      {/* Submit tugma */}
       <button
         type="submit"
         disabled={isSubmitting || !selectedClient || !paymentAmount}
-        className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 px-4 rounded-lg hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold flex items-center justify-center"
+        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-xl"
       >
         {isSubmitting ? (
           <>
-            <Icon name="loading" className="mr-2 animate-spin" size="sm" />
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
             {t.kassa.saving}
           </>
         ) : (
           <>
-            <Icon name="save" className="mr-2" size="sm" />
+            <Icon name="save" className="mr-3 h-5 w-5" />
             {t.kassa.savePayment}
           </>
         )}
@@ -295,35 +332,15 @@ interface AdvancedCashReport {
     totalSumma: number;
     count: number;
   }>;
-  profitLoss: {
+  incomeBySource: {
     [currency: string]: {
-      kirim: number;
-      chiqim: number;
-      foyda: number;
+      vagonSotuvi: number;
+      mijozTolovi: number;
+      xarajatlar: number;
+      jami: number;
+      sof: number;
     };
   };
-  expenseTypes: Array<{
-    _id: {
-      xarajatTuri: string;
-      valyuta: string;
-    };
-    totalSumma: number;
-    count: number;
-    avgSumma: number;
-  }>;
-}
-
-interface TransactionFormData {
-  turi: 'income' | 'expense';
-  summa: string;
-  valyuta: string;
-  tavsif: string;
-  xarajatTuri?: string;
-  manba?: string;
-  mijozNomi?: string;
-  javobgarShaxs?: string;
-  hujjatRaqami?: string;
-  sana: string;
 }
 
 export default function CashPage() {
@@ -331,24 +348,13 @@ export default function CashPage() {
   const router = useRouter();
   const { t } = useLanguage();
   
-  // State
-  const [activeTab, setActiveTab] = useState<'overview' | 'income' | 'expense' | 'report'>('overview');
-  const [showModal, setShowModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'income' | 'report'>('overview');
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
     valyuta: '',
     period: 'month',
     turi: ''
-  });
-  
-  // Form data
-  const [formData, setFormData] = useState<TransactionFormData>({
-    turi: 'income',
-    summa: '',
-    valyuta: 'USD',
-    tavsif: '',
-    sana: new Date().toISOString().split('T')[0]
   });
 
   useEffect(() => {
@@ -357,7 +363,6 @@ export default function CashPage() {
     }
   }, [user, authLoading]);
 
-  // Data fetching
   const { data: balanceData } = useQuery({
     queryKey: ['cash-balance'],
     queryFn: async () => {
@@ -366,7 +371,6 @@ export default function CashPage() {
     }
   });
 
-  // Kassa tranzaksiyalari ro'yxati
   const { data: transactionsData, isLoading: transactionsLoading, refetch: refetchTransactions } = useQuery({
     queryKey: ['kassa-transactions', filters],
     queryFn: async () => {
@@ -397,75 +401,14 @@ export default function CashPage() {
     }
   });
 
-  const { data: exchangeRates } = useQuery({
-    queryKey: ['exchange-rates'],
-    queryFn: async () => {
-      const response = await axios.get('/kassa/exchange-rates?days=30');
-      return response.data;
-    }
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const endpoint = formData.turi === 'income' ? '/kassa/income' : '/kassa/expense';
-      const submitData = {
-        ...formData,
-        summa: parseFloat(formData.summa),
-        summaRUB: formData.valyuta === 'RUB' ? parseFloat(formData.summa) : parseFloat(formData.summa) * 95.5, // USD -> RUB
-        summaUSD: formData.valyuta === 'USD' ? parseFloat(formData.summa) : parseFloat(formData.summa) * 0.0105, // RUB -> USD
-        turi: formData.turi === 'income' ? 'prixod' : 'rasxod'
-      };
-      
-      await axios.post(endpoint, submitData);
-      
-      // ✅ Muvaffaqiyat xabari - kassa va xarajatlar integratsiyasi haqida
-      const successMessage = formData.turi === 'income' 
-        ? '✅ Kirim muvaffaqiyatli qo\'shildi!' 
-        : '✅ Xarajat muvaffaqiyatli qo\'shildi!\n💰 Bu xarajat xarajatlar bo\'limida ham ko\'rsatiladi.';
-      
-      alert(successMessage);
-      
-      refetchReport();
-      refetchTransactions(); // Tranzaksiyalar ro'yxatini yangilash
-      setShowModal(false);
-      resetForm();
-    } catch (error: any) {
-      alert(error.response?.data?.message || t.messages.errorSavingTransaction);
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      turi: 'income',
-      summa: '',
-      valyuta: 'USD',
-      tavsif: '',
-      sana: new Date().toISOString().split('T')[0]
-    });
-  };
-
-  // Xarajat turi labelini olish
-  const getExpenseTypeLabel = (type: string) => {
-    const labels: { [key: string]: string } = {
-      'transport_kelish': 'Transport (Kelish)',
-      'transport_ketish': 'Transport (Ketish)',
-      'bojxona_kelish': 'Bojxona (Import)',
-      'bojxona_ketish': 'Bojxona (Export)',
-      'yuklash_tushirish': 'Yuklash/Tushirish',
-      'saqlanish': 'Ombor/Saqlanish',
-      'ishchilar': 'Ishchilar',
-      'qayta_ishlash': 'Qayta ishlash',
-      'boshqa': 'Boshqa'
-    };
-    return labels[type] || type;
-  };
-
   if (authLoading) {
     return (
       <Layout>
-        <div className="container-full-desktop">
-          <CashSkeleton />
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">{t.common.loading}</p>
+          </div>
         </div>
       </Layout>
     );
@@ -476,534 +419,496 @@ export default function CashPage() {
   }
 
   const tabs = [
-    { id: 'overview', name: t.kassa.overview, icon: 'dashboard' },
-    { id: 'income', name: t.kassa.income, icon: 'cash' },
-    { id: 'expense', name: t.kassa.expense, icon: 'expenses' },
-    { id: 'report', name: t.kassa.report, icon: 'reports' }
+    { id: 'overview', name: t.kassa.overview, icon: 'dashboard', color: 'blue' },
+    { id: 'income', name: t.kassa.income, icon: 'trending-up', color: 'green' },
+    { id: 'report', name: t.kassa.report, icon: 'bar-chart', color: 'purple' }
   ];
 
   return (
     <Layout>
-      <div className="container-full-desktop">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center">
-              <Icon name="cash" className="mr-3 text-green-600" size="lg" />
-              {t.kassa.professionalKassa}
-            </h1>
-            <p className="text-gray-600 mt-1">{t.kassa.kassaDescription}</p>
-          </div>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}
-            className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg hover:from-green-600 hover:to-green-700 flex items-center shadow-lg"
-          >
-            <Icon name="add" className="mr-2" />
-            {t.kassa.newTransaction}
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
-          <div className="flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-4 px-2 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon name={tab.icon} className="mr-2" size="sm" />
-                {tab.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Content */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            {/* Balance Cards */}
-            {balanceData && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(balanceData).map(([currency, balance]) => (
-                  <Card key={currency} className="p-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-blue-100 text-sm">{currency} {t.kassa.balance}</p>
-                        <p className="text-3xl font-bold">
-                          {formatCurrency(balance as number, currency)}
-                        </p>
-                      </div>
-                      <div className="text-4xl opacity-80">
-                        <Icon name={currency === 'USD' ? 'usd' : 'rub'} className="text-white" size="xl" />
-                      </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        {/* Hero Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 text-white">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative px-6 py-12">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                <div className="mb-8 lg:mb-0">
+                  <h1 className="text-4xl lg:text-5xl font-bold mb-4 flex items-center">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
+                      <Icon name="dollar-sign" className="h-7 w-7" />
                     </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {/* Profit/Loss Summary */}
-            {reportData?.profitLoss && (
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center">
-                  <Icon name="statistics" className="mr-2" />
-                  {t.kassa.profitLossAnalysis}
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {Object.entries(reportData.profitLoss).map(([currency, data]) => (
-                    <div key={currency} className="border rounded-lg p-4">
-                      <h4 className="font-semibold text-lg mb-3 flex items-center">
-                        <Icon name={currency === 'USD' ? 'usd' : 'rub'} className="mr-2" />
-                        {currency}
-                      </h4>
-                      
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-green-600">{t.kassa.income}:</span>
-                          <span className="font-semibold text-green-600">
-                            +{formatCurrency(data.kirim, currency)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-red-600">{t.kassa.expense}:</span>
-                          <span className="font-semibold text-red-600">
-                            -{formatCurrency(data.chiqim, currency)}
-                          </span>
-                        </div>
-                        <hr />
-                        <div className="flex justify-between">
-                          <span className="font-bold">{t.dashboard.profit}:</span>
-                          <span className={`font-bold text-lg ${
-                            data.foyda >= 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {data.foyda >= 0 ? '+' : ''}{formatCurrency(data.foyda, currency)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {/* Recent Transactions */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">📋</span>
-                {t.kassa.recentTransactions}
-              </h3>
-              
-              {transactionsLoading ? (
-                <div className="space-y-3">
-                  {[1,2,3,4,5].map(i => (
-                    <div key={i} className="animate-pulse flex space-x-4 p-3 border rounded">
-                      <div className="rounded-full bg-gray-300 h-10 w-10"></div>
-                      <div className="flex-1 space-y-2 py-1">
-                        <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-300 rounded w-1/2"></div>
-                      </div>
-                      <div className="h-4 bg-gray-300 rounded w-20"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : transactionsData?.kassa?.length > 0 ? (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {transactionsData.kassa.slice(0, 10).map((transaction: any) => (
-                    <div key={transaction._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${
-                          transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' 
-                            ? 'bg-green-500' 
-                            : transaction.turi === 'rasxod' 
-                            ? 'bg-red-500' 
-                            : 'bg-blue-500'
-                        }`}>
-                          {transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' ? '💰' : 
-                           transaction.turi === 'rasxod' ? '💸' : '📦'}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {transaction.tavsif}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(transaction.sana).toLocaleDateString('uz-UZ')} • 
-                            {transaction.yaratuvchi?.username || 'Noma\'lum'}
-                            {transaction.xarajatTuri && (
-                              <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
-                                {getExpenseTypeLabel(transaction.xarajatTuri)}
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-semibold ${
-                          transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' 
-                            ? 'text-green-600' 
-                            : 'text-red-600'
-                        }`}>
-                          {transaction.turi === 'prixod' || transaction.turi === 'klent_prixod' ? '+' : '-'}
-                          {formatCurrency(transaction.summa, transaction.valyuta)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {transaction.valyuta}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {transactionsData.kassa.length > 10 && (
-                    <div className="text-center pt-3">
-                      <p className="text-sm text-gray-500">
-                        Va yana {transactionsData.kassa.length - 10} ta tranzaksiya...
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">
-                  Hozircha tranzaksiyalar yo'q
-                </p>
-              )}
-            </Card>
-          </div>
-        )}
-
-        {activeTab === 'income' && (
-          <div className="space-y-6">
-            {/* Mijoz To'lovi Section */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">👤</span>
-                {t.kassa.clientPayment}
-              </h3>
-              
-              <ClientPaymentForm onPaymentSuccess={() => refetchReport()} />
-            </Card>
-
-            {/* Boshqa Kirimlar Section */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">💰</span>
-                {t.kassa.otherIncome}
-              </h3>
-              <p className="text-gray-600">{t.kassa.otherIncomeDescription}</p>
-            </Card>
-          </div>
-        )}
-
-        {activeTab === 'expense' && (
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center">
-              <span className="text-2xl mr-2">💸</span>
-              {t.kassa.expenseTransactions}
-            </h3>
-            <p className="text-gray-600">{t.kassa.expenseTransactionsDescription}</p>
-          </Card>
-        )}
-
-        {activeTab === 'report' && (
-          <div className="space-y-6">
-            {/* Filters */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">🔍</span>
-                {t.kassa.reportFilters}
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">{t.kassa.startDate}</label>
-                  <input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(e) => setFilters({...filters, startDate: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-1">{t.kassa.endDate}</label>
-                  <input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(e) => setFilters({...filters, endDate: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-1">{t.kassa.currencyLabel}</label>
-                  <select
-                    value={filters.valyuta}
-                    onChange={(e) => setFilters({...filters, valyuta: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  >
-                    <option value="">{t.kassa.allCurrencies}</option>
-                    <option value="USD">💵 USD</option>
-                    <option value="RUB">💶 RUB</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-1">{t.kassa.period}</label>
-                  <select
-                    value={filters.period}
-                    onChange={(e) => setFilters({...filters, period: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  >
-                    <option value="day">{t.kassa.daily}</option>
-                    <option value="month">{t.kassa.monthly}</option>
-                  </select>
+                    {t.kassa.kassaManagement}
+                  </h1>
+                  <p className="text-xl opacity-90 mb-2">
+                    {t.kassa.kassaManagementSubtitle}
+                  </p>
+                  <p className="text-sm opacity-75">
+                    {t.kassa.kassaManagementDescription}
+                  </p>
                 </div>
               </div>
-            </Card>
-
-            {/* Report Charts */}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <span className="text-2xl mr-2">📊</span>
-                {t.kassa.financialReport}
-              </h3>
-              <p className="text-gray-600">{t.kassa.financialReportDescription}</p>
-            </Card>
-          </div>
-        )}
-
-        {/* Transaction Modal */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
-              <h2 className="text-2xl font-bold mb-6 flex items-center">
-                <span className="text-3xl mr-3">
-                  {formData.turi === 'income' ? '💰' : '💸'}
-                </span>
-                {formData.turi === 'income' ? t.kassa.addIncome : t.kassa.addExpense}
-              </h2>
-              
-              <form onSubmit={handleSubmit}>
-                <div className="space-y-4">
-                  {/* Transaction Type */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      {t.kassa.transactionType}
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, turi: 'income'})}
-                        className={`p-4 border-2 rounded-lg transition-all ${
-                          formData.turi === 'income'
-                            ? 'border-green-500 bg-green-50 text-green-700'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="text-2xl mb-2">💰</div>
-                        <div className="font-semibold">{t.kassa.incomeType}</div>
-                        <div className="text-xs text-gray-600">{t.kassa.incomeDescription}</div>
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, turi: 'expense'})}
-                        className={`p-4 border-2 rounded-lg transition-all ${
-                          formData.turi === 'expense'
-                            ? 'border-red-500 bg-red-50 text-red-700'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="text-2xl mb-2">💸</div>
-                        <div className="font-semibold">{t.kassa.expenseType}</div>
-                        <div className="text-xs text-gray-600">{t.kassa.expenseDescription}</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Amount and Currency */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        {t.kassa.amountLabel}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        value={formData.summa}
-                        onChange={(e) => setFormData({...formData, summa: e.target.value})}
-                        placeholder="1000"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        {t.kassa.currencyLabel}
-                      </label>
-                      <select
-                        required
-                        value={formData.valyuta}
-                        onChange={(e) => setFormData({...formData, valyuta: e.target.value})}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
-                      >
-                        <option value="USD">💵 USD</option>
-                        <option value="RUB">💶 RUB</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      {t.kassa.descriptionLabel}
-                    </label>
-                    <textarea
-                      required
-                      value={formData.tavsif}
-                      onChange={(e) => setFormData({...formData, tavsif: e.target.value})}
-                      placeholder={t.kassa.transactionDescription}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
-                      rows={3}
-                    />
-                  </div>
-
-                  {/* Expense Type (only for expenses) */}
-                  {formData.turi === 'expense' && (
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                        {t.kassa.expenseTypeLabel}
-                      </label>
-                      <select
-                        required
-                        value={formData.xarajatTuri || ''}
-                        onChange={(e) => setFormData({...formData, xarajatTuri: e.target.value})}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
-                      >
-                        <option value="">{t.kassa.selectExpenseType}</option>
-                        <option value="transport_kelish">🚛 {t.kassa.transportIncoming}</option>
-                        <option value="transport_ketish">🚛 {t.kassa.transportOutgoing}</option>
-                        <option value="bojxona_kelish">🛃 {t.kassa.customsImport}</option>
-                        <option value="bojxona_ketish">🛃 {t.kassa.customsExport}</option>
-                        <option value="yuklash_tushirish">📦 {t.kassa.loadingUnloading}</option>
-                        <option value="saqlanish">🏢 {t.kassa.warehouse}</option>
-                        <option value="ishchilar">👷 {t.kassa.workers}</option>
-                        <option value="maosh">💰 {t.kassa.salary}</option>
-                        <option value="boshqa">📝 {t.kassa.other}</option>
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Additional fields based on type */}
-                  <div className="grid grid-cols-2 gap-4">
-                    {formData.turi === 'income' ? (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {t.kassa.sourceOptional}
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.manba || ''}
-                            onChange={(e) => setFormData({...formData, manba: e.target.value})}
-                            placeholder={t.kassa.sourcePlaceholder}
-                            className="w-full px-3 py-2 border rounded-lg"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {t.kassa.clientNameOptional}
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.mijozNomi || ''}
-                            onChange={(e) => setFormData({...formData, mijozNomi: e.target.value})}
-                            placeholder={t.kassa.clientNamePlaceholder}
-                            className="w-full px-3 py-2 border rounded-lg"
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {t.kassa.responsibleOptional}
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.javobgarShaxs || ''}
-                            onChange={(e) => setFormData({...formData, javobgarShaxs: e.target.value})}
-                            placeholder={t.vagon.responsible}
-                            className="w-full px-3 py-2 border rounded-lg"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {t.kassa.documentOptional}
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.hujjatRaqami || ''}
-                            onChange={(e) => setFormData({...formData, hujjatRaqami: e.target.value})}
-                            placeholder="INV-001"
-                            className="w-full px-3 py-2 border rounded-lg"
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Date */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      {t.kassa.dateLabel}
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.sana}
-                      onChange={(e) => setFormData({...formData, sana: e.target.value})}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-8">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      resetForm();
-                    }}
-                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-400 font-semibold"
-                  >
-                    {t.kassa.cancel}
-                  </button>
-                  <button
-                    type="submit"
-                    className={`flex-1 text-white px-4 py-3 rounded-lg font-semibold ${
-                      formData.turi === 'income'
-                        ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
-                        : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
-                    }`}
-                  >
-                    {formData.turi === 'income' ? t.kassa.saveIncome : t.kassa.saveExpense}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
-        )}
+          
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Modern Tabs */}
+          <div className="mb-8">
+            <div className="flex space-x-2 bg-white p-2 rounded-2xl shadow-lg">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex-1 py-4 px-6 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center ${
+                    activeTab === tab.id
+                      ? `bg-gradient-to-r from-${tab.color}-500 to-${tab.color}-600 text-white shadow-lg`
+                      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name={tab.icon} className="mr-2 h-5 w-5" />
+                  {tab.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content */}
+          {activeTab === 'overview' && (
+            <div className="space-y-8">
+              {/* YANGI: Umumiy Statistika Kartalar - Kirim, Chiqim, Foyda */}
+              {balanceData && balanceData.length > 0 && (
+                <>
+                  {/* Asosiy 3 ta karta: Jami Kirim, Jami Chiqim, Sof Foyda */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Jami Kirim */}
+                    <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                      <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-600/5"></div>
+                      <div className="relative p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-14 h-14 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <Icon name="trending-up" className="h-7 w-7 text-white" />
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t.kassa.totalIncomeLabel}</div>
+                            <div className="text-xs text-green-600 font-semibold mt-1">💰 {t.kassa.totalIncomeDescription}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {balanceData.map((balance: any) => (
+                            <div key={balance._id} className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-gray-600">{balance._id}:</span>
+                              <span className="text-2xl font-bold text-green-600">
+                                {formatCurrency(balance.jamiKirim || 0, balance._id)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-xs text-gray-500 space-y-1">
+                            {balanceData.map((balance: any) => {
+                              const total = balance.jamiKirim || 0;
+                              const vagonPercent = total > 0 ? ((balance.vagonSotuvi || 0) / total * 100).toFixed(1) : 0;
+                              const clientPercent = total > 0 ? ((balance.mijozTolovi || 0) / total * 100).toFixed(1) : 0;
+                              return (
+                                <div key={balance._id} className="space-y-1">
+                                  <div className="flex justify-between items-center">
+                                    <span>🚛 {t.kassa.vagonSalePercent} ({balance._id}):</span>
+                                    <span className="font-semibold">{vagonPercent}%</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span>👤 {t.kassa.clientPaymentPercent} ({balance._id}):</span>
+                                    <span className="font-semibold">{clientPercent}%</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-emerald-600"></div>
+                      </div>
+                    </div>
+
+                    {/* Jami Chiqim */}
+                    <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                      <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-rose-600/5"></div>
+                      <div className="relative p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-14 h-14 bg-gradient-to-r from-red-500 to-rose-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <Icon name="trending-down" className="h-7 w-7 text-white" />
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t.kassa.totalExpenseLabel}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {balanceData.map((balance: any) => (
+                            <div key={balance._id} className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-gray-600">{balance._id}:</span>
+                              <span className="text-2xl font-bold text-red-600">
+                                {formatCurrency(balance.xarajatlar || 0, balance._id)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-xs text-gray-500">
+                            <div className="flex justify-between">
+                              <span>💸 {t.kassa.allExpensesLabel}</span>
+                              <span className="font-semibold text-red-600">
+                                {balanceData.map((b: any) => `${b._id}: ${formatCurrency(b.xarajatlar || 0, b._id)}`).join(' • ')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-rose-600"></div>
+                      </div>
+                    </div>
+
+                    {/* Sof Foyda */}
+                    <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-indigo-600/5"></div>
+                      <div className="relative p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-14 h-14 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <Icon name="dollar-sign" className="h-7 w-7 text-white" />
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t.kassa.netProfitLabel}</div>
+                            <div className="text-xs text-blue-600 font-semibold mt-1">💎 {t.kassa.netProfitDescription}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {balanceData.map((balance: any) => {
+                            const profit = (balance.sof || 0);
+                            const isPositive = profit >= 0;
+                            const profitMargin = balance.jamiKirim > 0 
+                              ? ((profit / balance.jamiKirim) * 100).toFixed(1) 
+                              : 0;
+                            return (
+                              <div key={balance._id}>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-medium text-gray-600">{balance._id}:</span>
+                                  <span className={`text-2xl font-bold ${isPositive ? 'text-blue-600' : 'text-orange-600'}`}>
+                                    {formatCurrency(profit, balance._id)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center mt-1">
+                                  <span className="text-xs text-gray-500">{t.kassa.profitMarginLabel}:</span>
+                                  <span className={`text-xs font-bold ${isPositive ? 'text-blue-600' : 'text-orange-600'}`}>
+                                    {profitMargin}%
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="text-xs text-gray-500">
+                            <div className="flex justify-between items-center">
+                              <span>📊 {t.kassa.formulaLabel}:</span>
+                              <span className="font-semibold">{t.kassa.incomeMinusExpense}</span>
+                            </div>
+                            {balanceData.map((balance: any) => (
+                              <div key={balance._id} className="flex justify-between items-center mt-1">
+                                <span>{balance._id}:</span>
+                                <span className="font-mono text-xs">
+                                  {formatCurrency(balance.jamiKirim || 0, balance._id)} - {formatCurrency(balance.xarajatlar || 0, balance._id)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Batafsil Balans Kartalar */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {balanceData.map((balance: any) => (
+                      <div key={balance._id} className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                        <div className={`absolute inset-0 bg-gradient-to-br ${balance._id === 'USD' ? 'from-green-500/5 to-emerald-600/5' : 'from-blue-500/5 to-indigo-600/5'}`}></div>
+                        <div className="relative p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className={`w-12 h-12 bg-gradient-to-r ${balance._id === 'USD' ? 'from-green-500 to-emerald-600' : 'from-blue-500 to-indigo-600'} rounded-xl flex items-center justify-center`}>
+                              <Icon name={balance._id === 'USD' ? 'dollar-sign' : 'ruble-sign'} className="h-6 w-6 text-white" />
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-600">{balance._id} {t.kassa.detailedBalanceLabel}</div>
+                            </div>
+                          </div>
+                          <div className="text-3xl font-bold text-gray-900 mb-4">
+                            {formatCurrency(balance.sof || 0, balance._id)}
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">🚛 {t.kassa.vagonSalePercent}:</span>
+                              <span className="font-semibold text-green-600">{formatCurrency(balance.vagonSotuvi || 0, balance._id)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">👤 {t.kassa.clientPaymentPercent}:</span>
+                              <span className="font-semibold text-blue-600">{formatCurrency(balance.mijozTolovi || 0, balance._id)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600">💸 {t.kassa.expensesLabel}:</span>
+                              <span className="font-semibold text-red-600">-{formatCurrency(balance.xarajatlar || 0, balance._id)}</span>
+                            </div>
+                            <div className="pt-2 border-t border-gray-200">
+                              <div className="flex justify-between text-sm font-bold">
+                                <span className="text-gray-700">{t.kassa.totalIncomeShort}:</span>
+                                <span className="text-green-700">{formatCurrency(balance.jamiKirim || 0, balance._id)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r ${balance._id === 'USD' ? 'from-green-500 to-emerald-600' : 'from-blue-500 to-indigo-600'}`}></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Income by Source */}
+              {reportData?.incomeBySource && Object.keys(reportData.incomeBySource).length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg p-8">
+                  <h3 className="text-2xl font-bold mb-6 flex items-center">
+                    <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4">
+                      <Icon name="trending-up" className="h-6 w-6 text-white" />
+                    </div>
+                    {t.kassa.financialAnalysis}
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {Object.entries(reportData.incomeBySource).map(([currency, data]: [string, any]) => (
+                      <div key={currency} className="border-2 border-gray-100 rounded-2xl p-6 hover:border-gray-200 transition-all duration-200">
+                        <h4 className="font-bold text-xl mb-4 flex items-center">
+                          <Icon name={currency === 'USD' ? 'dollar-sign' : 'ruble-sign'} className="mr-3 h-6 w-6 text-gray-600" />
+                          {currency}
+                        </h4>
+                        
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl">
+                            <span className="font-semibold text-green-700">🚛 {t.kassa.vagonSalePercent}:</span>
+                            <span className="font-bold text-green-600 text-lg">
+                              {formatCurrency(data.vagonSotuvi || 0, currency)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl">
+                            <span className="font-semibold text-blue-700">👤 {t.kassa.clientPaymentPercent}:</span>
+                            <span className="font-bold text-blue-600 text-lg">
+                              {formatCurrency(data.mijozTolovi || 0, currency)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center p-4 bg-red-50 rounded-xl">
+                            <span className="font-semibold text-red-700">💸 {t.kassa.expensesLabel}:</span>
+                            <span className="font-bold text-red-600 text-lg">
+                              -{formatCurrency(data.xarajatlar || 0, currency)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center p-4 bg-indigo-50 rounded-xl border-2 border-indigo-200">
+                            <span className="font-bold text-gray-800">💰 {t.kassa.totalIncomeShort}:</span>
+                            <span className="font-bold text-indigo-600 text-xl">
+                              {formatCurrency(data.jami || 0, currency)}
+                            </span>
+                          </div>
+                          <div className={`flex justify-between items-center p-4 rounded-xl border-2 ${
+                            (data.sof || 0) >= 0 ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
+                          }`}>
+                            <span className="font-bold text-gray-800">📊 {t.kassa.netBalance}:</span>
+                            <span className={`font-bold text-xl ${
+                              (data.sof || 0) >= 0 ? 'text-green-600' : 'text-orange-600'
+                            }`}>
+                              {formatCurrency(data.sof || 0, currency)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Transactions */}
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-2xl font-bold mb-6 flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+                    <Icon name="list" className="h-6 w-6 text-white" />
+                  </div>
+                  {t.kassa.recentTransactions}
+                </h3>
+                
+                {transactionsLoading ? (
+                  <div className="space-y-4">
+                    {[1,2,3,4,5].map(i => (
+                      <div key={i} className="animate-pulse flex space-x-4 p-4 border-2 border-gray-100 rounded-xl">
+                        <div className="rounded-full bg-gray-300 h-12 w-12"></div>
+                        <div className="flex-1 space-y-2 py-1">
+                          <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                          <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+                        </div>
+                        <div className="h-4 bg-gray-300 rounded w-20"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : transactionsData?.kassa?.length > 0 ? (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {transactionsData.kassa.slice(0, 10).map((transaction: any) => (
+                      <div key={transaction._id} className="flex items-center justify-between p-4 border-2 border-gray-100 rounded-xl hover:border-gray-200 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white ${
+                            transaction.turi === 'klent_prixod' 
+                              ? 'bg-gradient-to-r from-blue-500 to-indigo-600' 
+                              : 'bg-gradient-to-r from-green-500 to-emerald-600'
+                          }`}>
+                            {transaction.turi === 'klent_prixod' ? '👤' : '🚛'}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900 text-lg">
+                              {transaction.tavsif}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {new Date(transaction.sana).toLocaleDateString('uz-UZ')} • 
+                              {transaction.yaratuvchi?.username || t.kassa.unknown}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-xl text-green-600">
+                            +{formatCurrency(transaction.summa, transaction.valyuta)}
+                          </p>
+                          <p className="text-sm text-gray-500 font-medium">
+                            {transaction.valyuta}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {transactionsData.kassa.length > 10 && (
+                      <div className="text-center pt-4">
+                        <p className="text-gray-500">
+                          {t.kassa.andMore} {transactionsData.kassa.length - 10} {t.kassa.moreTransactions}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Icon name="inbox" className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 text-lg">{t.kassa.noTransactionsYet}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'income' && (
+            <div className="space-y-8">
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-2xl font-bold mb-6 flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mr-4">
+                    <Icon name="user" className="h-6 w-6 text-white" />
+                  </div>
+                  {t.kassa.clientPaymentTitle}
+                </h3>
+                
+                <ClientPaymentForm onPaymentSuccess={() => {
+                  refetchReport();
+                  refetchTransactions();
+                }} />
+              </div>
+
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-8 border-2 border-blue-200">
+                <h3 className="text-2xl font-bold mb-4 flex items-center text-blue-900">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4">
+                    <Icon name="info" className="h-6 w-6 text-white" />
+                  </div>
+                  {t.kassa.vagonSaleIncome}
+                </h3>
+                <p className="text-gray-700 text-lg">
+                  💡 {t.kassa.vagonSaleIncomeDescription}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'report' && (
+            <div className="space-y-8">
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-2xl font-bold mb-6 flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4">
+                    <Icon name="filter" className="h-6 w-6 text-white" />
+                  </div>
+                  {t.kassa.reportFiltersTitle}
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">{t.kassa.startDateLabel}</label>
+                    <input
+                      type="date"
+                      value={filters.startDate}
+                      onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">{t.kassa.endDateLabel}</label>
+                    <input
+                      type="date"
+                      value={filters.endDate}
+                      onChange={(e) => setFilters({...filters, endDate: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">{t.kassa.currencyLabel}</label>
+                    <select
+                      value={filters.valyuta}
+                      onChange={(e) => setFilters({...filters, valyuta: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      <option value="">{t.kassa.allCurrenciesLabel}</option>
+                      <option value="USD">💵 USD</option>
+                      <option value="RUB">💶 RUB</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">{t.kassa.periodLabel}</label>
+                    <select
+                      value={filters.period}
+                      onChange={(e) => setFilters({...filters, period: e.target.value})}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      <option value="day">{t.kassa.dailyLabel}</option>
+                      <option value="month">{t.kassa.monthlyLabel}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h3 className="text-2xl font-bold mb-4 flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+                    <Icon name="bar-chart" className="h-6 w-6 text-white" />
+                  </div>
+                  {t.kassa.financialReportTitle}
+                </h3>
+                <p className="text-gray-600 text-lg">{t.kassa.financialReportDescription}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+
       </div>
     </Layout>
   );

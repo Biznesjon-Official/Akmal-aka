@@ -5,12 +5,16 @@ require('dotenv').config();
 const User = require('../models/User');
 const Client = require('../models/Client');
 const Vagon = require('../models/Vagon');
+const VagonLot = require('../models/VagonLot');
 const VagonSale = require('../models/VagonSale');
 const Cash = require('../models/Cash');
 const Delivery = require('../models/Delivery');
 const Wood = require('../models/Wood');
 const Sale = require('../models/Sale');
 const Kassa = require('../models/Kassa');
+const Expense = require('../models/Expense');
+const ExchangeRate = require('../models/ExchangeRate');
+const AuditLog = require('../models/AuditLog');
 
 async function cleanAllData() {
   try {
@@ -39,6 +43,10 @@ async function cleanAllData() {
     const deletedClients = await Client.deleteMany({});
     console.log(`   👥 Mijozlar: ${deletedClients.deletedCount} ta`);
     
+    // Vagon Lotlar
+    const deletedVagonLots = await VagonLot.deleteMany({});
+    console.log(`   📦 Vagon Lotlar: ${deletedVagonLots.deletedCount} ta`);
+    
     // Vagonlar
     const deletedVagons = await Vagon.deleteMany({});
     console.log(`   🚛 Vagonlar: ${deletedVagons.deletedCount} ta`);
@@ -48,14 +56,29 @@ async function cleanAllData() {
     console.log(`   💰 Vagon sotuvlari: ${deletedVagonSales.deletedCount} ta`);
     
     // Kassa (yangi tizim)
-    const deletedCash = await Cash.deleteMany({});
-    console.log(`   💵 Kassa (yangi): ${deletedCash.deletedCount} ta`);
+    const deletedKassa = await Kassa.deleteMany({});
+    console.log(`   💵 Kassa: ${deletedKassa.deletedCount} ta`);
+    
+    // Xarajatlar
+    const deletedExpenses = await Expense.deleteMany({});
+    console.log(`   💸 Xarajatlar: ${deletedExpenses.deletedCount} ta`);
     
     // Olib kelib berish
     const deletedDeliveries = await Delivery.deleteMany({});
     console.log(`   🚚 Olib kelib berish: ${deletedDeliveries.deletedCount} ta`);
     
+    // Audit Loglar (admindan tashqari)
+    const deletedAuditLogs = await AuditLog.deleteMany({});
+    console.log(`   📝 Audit Loglar: ${deletedAuditLogs.deletedCount} ta`);
+    
     // Eski tizim ma'lumotlari (agar mavjud bo'lsa)
+    try {
+      const deletedCash = await Cash.deleteMany({});
+      console.log(`   💵 Cash (eski): ${deletedCash.deletedCount} ta`);
+    } catch (error) {
+      console.log(`   💵 Cash modeli topilmadi (normal)`);
+    }
+    
     try {
       const deletedWood = await Wood.deleteMany({});
       console.log(`   🌳 Yog'och (eski): ${deletedWood.deletedCount} ta`);
@@ -70,14 +93,19 @@ async function cleanAllData() {
       console.log(`   🛒 Sale modeli topilmadi (normal)`);
     }
     
+    // 4. VALYUTA KURSLARINI SAQLASH (faqat oxirgi kursni)
+    console.log('\n💱 VALYUTA KURSLARINI SAQLASH:');
     try {
-      const deletedKassa = await Kassa.deleteMany({});
-      console.log(`   💰 Kassa (eski): ${deletedKassa.deletedCount} ta`);
+      const latestRate = await ExchangeRate.findOne().sort({ date: -1 });
+      if (latestRate) {
+        await ExchangeRate.deleteMany({ _id: { $ne: latestRate._id } });
+        console.log(`   ✅ Oxirgi valyuta kursi saqlandi: ${latestRate.usdToRub} RUB/USD`);
+      }
     } catch (error) {
-      console.log(`   💰 Kassa (eski) modeli topilmadi (normal)`);
+      console.log(`   ⚠️  Valyuta kurslari topilmadi`);
     }
     
-    // 4. ADMIN USERLARNI YANGILASH (parollarni reset qilish)
+    // 5. ADMIN USERLARNI YANGILASH (parollarni reset qilish)
     console.log('\n👑 ADMIN USERLARNI YANGILASH:');
     for (const admin of adminUsers) {
       // Parolni "admin123" ga o'zgartirish
@@ -94,17 +122,23 @@ async function cleanAllData() {
       console.log(`   ✅ ${admin.username} paroli "admin123" ga o'zgartirildi`);
     }
     
-    // 5. STATISTIKA
+    // 6. STATISTIKA
     console.log('\n📈 YAKUNIY STATISTIKA:');
     const remainingUsers = await User.countDocuments();
     const remainingClients = await Client.countDocuments();
     const remainingVagons = await Vagon.countDocuments();
-    const remainingCash = await Cash.countDocuments();
+    const remainingVagonLots = await VagonLot.countDocuments();
+    const remainingKassa = await Kassa.countDocuments();
+    const remainingExpenses = await Expense.countDocuments();
+    const remainingExchangeRates = await ExchangeRate.countDocuments();
     
     console.log(`   👤 Qolgan userlar: ${remainingUsers} ta (faqat adminlar)`);
     console.log(`   👥 Qolgan mijozlar: ${remainingClients} ta`);
     console.log(`   🚛 Qolgan vagonlar: ${remainingVagons} ta`);
-    console.log(`   💵 Qolgan kassa yozuvlari: ${remainingCash} ta`);
+    console.log(`   📦 Qolgan vagon lotlar: ${remainingVagonLots} ta`);
+    console.log(`   💵 Qolgan kassa yozuvlari: ${remainingKassa} ta`);
+    console.log(`   💸 Qolgan xarajatlar: ${remainingExpenses} ta`);
+    console.log(`   💱 Qolgan valyuta kurslari: ${remainingExchangeRates} ta`);
     
     console.log('\n✅ BARCHA MA\'LUMOTLAR MUVAFFAQIYATLI TOZALANDI!');
     console.log('🔑 Admin login ma\'lumotlari:');
@@ -115,18 +149,24 @@ async function cleanAllData() {
       console.log('   ---');
     });
     
+    console.log('\n💡 KEYINGI QADAMLAR:');
+    console.log('   1. Tizimga admin sifatida kiring');
+    console.log('   2. Yangi mijozlar qo\'shing');
+    console.log('   3. Yangi vagonlar va lotlar yarating');
+    console.log('   4. Sotuvlarni boshlang!');
+    
   } catch (error) {
     console.error('❌ XATOLIK:', error);
   } finally {
     await mongoose.disconnect();
-    console.log('🔌 MongoDB ulanishi yopildi');
+    console.log('\n🔌 MongoDB ulanishi yopildi');
     process.exit(0);
   }
 }
 
 // Tasdiqlash
 console.log('⚠️  DIQQAT: Bu script barcha ma\'lumotlarni o\'chiradi!');
-console.log('⚠️  Faqat admin userlar va ularning parollari saqlanadi.');
+console.log('⚠️  Faqat admin userlar va oxirgi valyuta kursi saqlanadi.');
 console.log('⚠️  Bu amal qaytarib bo\'lmaydi!');
 console.log('');
 console.log('Davom etish uchun 5 sekund kuting...');

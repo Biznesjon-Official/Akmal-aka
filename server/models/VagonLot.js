@@ -205,9 +205,13 @@ const vagonLotSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexlar
+// ⚡ OPTIMIZATSIYA: MongoDB Indexlar (tezroq qidirish uchun)
 vagonLotSchema.index({ vagon: 1 });
 vagonLotSchema.index({ isDeleted: 1 });
+vagonLotSchema.index({ createdAt: -1 }); // Yangi qo'shildi
+vagonLotSchema.index({ dimensions: 1 }); // Yangi qo'shildi - o'lcham bo'yicha qidiruv
+// Compound index - vagon lotlari uchun
+vagonLotSchema.index({ vagon: 1, createdAt: -1 });
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonLotSchema.pre('save', async function(next) {
@@ -229,8 +233,13 @@ vagonLotSchema.pre('save', async function(next) {
     
     // 4. Qolgan soni (taxminiy)
     if (volume > 0 && this.quantity > 0) {
-      const remaining_percentage = this.warehouse_remaining_volume_m3 / volume;
-      this.remaining_quantity = Math.max(0, Math.floor(this.quantity * remaining_percentage));
+      // Agar hech qanday sotuv bo'lmagan bo'lsa, asl quantity ni qaytarish
+      if (dispatchedVolume === 0) {
+        this.remaining_quantity = this.quantity;
+      } else {
+        const remaining_percentage = this.warehouse_remaining_volume_m3 / volume;
+        this.remaining_quantity = Math.max(0, Math.round(this.quantity * remaining_percentage));
+      }
     } else {
       this.remaining_quantity = 0;
     }

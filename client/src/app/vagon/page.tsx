@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -9,9 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import VagonTableSkeleton from '@/components/vagon/VagonTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
-import Pagination from '@/components/ui/Pagination';
-import VirtualScrollTable from '@/components/ui/VirtualScrollTable';
 import VagonDetailsModal from '@/components/vagon/VagonDetailsModal';
+import Pagination from '@/components/ui/Pagination'; // ⚡ PAGINATION IMPORT
 import Icon from '@/components/Icon';
 import { useDebouncedSearch } from '@/hooks/useDebounce';
 import axios from '@/lib/axios';
@@ -105,30 +104,31 @@ export default function VagonPage() {
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedVagonId, setSelectedVagonId] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
   const [statusFilter, setStatusFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingVagon, setEditingVagon] = useState<Vagon | null>(null);
-  const [useVirtualScroll, setUseVirtualScroll] = useState(false);
+
+  // ⚡ PAGINATION STATE
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Debounced search
   const { searchValue, debouncedSearchValue, setSearchValue, clearSearch, isSearching } = useDebouncedSearch('', 300);
 
-  // Optimized data fetching with React Query
+  // ⚡ OPTIMIZED: Pagination bilan data fetching
   const {
     data: vagonData,
     isLoading,
     error,
     refetch
   } = useQuery({
-    queryKey: ['vagons', currentPage, itemsPerPage, statusFilter, monthFilter, debouncedSearchValue, useVirtualScroll],
+    queryKey: ['vagons', statusFilter, monthFilter, debouncedSearchValue, currentPage, itemsPerPage],
     queryFn: async () => {
       const params = new URLSearchParams({
-        page: useVirtualScroll ? '1' : currentPage.toString(),
-        limit: useVirtualScroll ? '1000' : itemsPerPage.toString(),
-        includeLots: useVirtualScroll ? 'false' : 'true'
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+        includeLots: 'true'
       });
       
       if (statusFilter) params.append('status', statusFilter);
@@ -145,32 +145,6 @@ export default function VagonPage() {
   });
 
   const vagons = vagonData?.vagons || [];
-  const pagination = vagonData?.pagination || {};
-
-  // Memoized filtered data for virtual scroll
-  const virtualScrollData = useMemo(() => {
-    if (!useVirtualScroll) return [];
-    
-    let filtered = vagons;
-    
-    // Client-side filtering for virtual scroll
-    if (statusFilter) {
-      filtered = filtered.filter((v: Vagon) => v.status === statusFilter);
-    }
-    if (monthFilter) {
-      filtered = filtered.filter((v: Vagon) => v.month.includes(monthFilter));
-    }
-    if (debouncedSearchValue) {
-      const search = debouncedSearchValue.toLowerCase();
-      filtered = filtered.filter((v: Vagon) => 
-        v.vagonCode.toLowerCase().includes(search) ||
-        v.sending_place.toLowerCase().includes(search) ||
-        v.receiving_place.toLowerCase().includes(search)
-      );
-    }
-    
-    return filtered;
-  }, [vagons, useVirtualScroll, statusFilter, monthFilter, debouncedSearchValue]);
   
   // Vagon ma'lumotlari
   const [vagonCode, setVagonCode] = useState('');
@@ -199,17 +173,6 @@ export default function VagonPage() {
       router.push('/login');
     }
   }, [user, authLoading]);
-
-  // Sahifa o'zgarganda
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  // Sahifa o'lchami o'zgarganda
-  const handleLimitChange = (limit: number) => {
-    setItemsPerPage(limit);
-    setCurrentPage(1); // Birinchi sahifaga qaytish
-  };
 
   const addLotRow = () => {
     setLots([...lots, { thickness: '', width: '', length: '', quantity: '', loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', currency: 'USD', purchase_amount: '' }]);
@@ -531,240 +494,202 @@ export default function VagonPage() {
 
   return (
     <Layout>
-      <div className="container-full-desktop">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">{t.vagon.title}</h1>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-          >
-            {t.vagon.addVagon}
-          </button>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        {/* Hero Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 text-white">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative px-6 py-12">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                <div className="mb-8 lg:mb-0">
+                  <h1 className="text-4xl lg:text-5xl font-bold mb-4 flex items-center">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
+                      <Icon name="truck" className="h-7 w-7" />
+                    </div>
+                    {t.vagon.title}
+                  </h1>
+                  <p className="text-xl opacity-90 mb-2">
+                    Professional vagon boshqaruv tizimi
+                  </p>
+                  <p className="text-sm opacity-75">
+                    Vagonlar, lotlar va hajm statistikasini kuzatib boring
+                  </p>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    resetForm();
+                    setShowModal(true);
+                  }}
+                  className="bg-white/20 backdrop-blur-sm text-white px-8 py-4 rounded-2xl hover:bg-white/30 flex items-center shadow-lg transition-all duration-200 font-semibold"
+                >
+                  <Icon name="plus" className="mr-3 h-6 w-6" />
+                  {t.vagon.addVagon}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
         </div>
 
-        {/* FILTERS */}
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">{t.vagon.statusFilterLabel}</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">{t.vagon.allStatuses}</option>
-                <option value="active">{t.vagon.activeVagon}</option>
-                <option value="closed">{t.vagon.closedVagon}</option>
-                <option value="archived">{t.vagon.archivedVagon}</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">{t.vagon.monthFilterLabel}</label>
-              <input
-                type="month"
-                value={monthFilter}
-                onChange={(e) => {
-                  setMonthFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">{t.vagon.searchLabel}</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  placeholder={t.vagon.searchPlaceholder}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {isSearching && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  </div>
-                )}
-                {searchValue && (
-                  <button
-                    onClick={clearSearch}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Modern Filters */}
+          <div className="mb-8">
+            <div className="bg-white rounded-2xl shadow-lg p-8">
+              <h3 className="text-2xl font-bold mb-6 flex items-center">
+                <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+                  <Icon name="filter" className="h-6 w-6 text-white" />
+                </div>
+                Filtrlar va Qidiruv
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.statusFilterLabel}</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                    }}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                   >
-                    ×
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex items-end gap-2">
-              <button
-                onClick={() => {
-                  setStatusFilter('');
-                  setMonthFilter('');
-                  clearSearch();
-                  setCurrentPage(1);
-                }}
-                className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
-              >
-                {t.vagon.clearFiltersButton}
-              </button>
-              <button
-                onClick={() => setUseVirtualScroll(!useVirtualScroll)}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
-                  useVirtualScroll 
-                    ? 'bg-green-500 text-white hover:bg-green-600' 
-                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                }`}
-                title={useVirtualScroll ? 'Virtual scroll yoqilgan' : 'Virtual scroll o\'chiriq'}
-              >
-                <Icon 
-                  name={useVirtualScroll ? "trending-up" : "clipboard"} 
-                  className="h-4 w-4" 
-                />
-                <span>{useVirtualScroll ? t.vagon.virtualView : t.vagon.regularView}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+                    <option value="">{t.vagon.allStatuses}</option>
+                    <option value="active">{t.vagon.activeVagon}</option>
+                    <option value="closed">{t.vagon.closedVagon}</option>
+                    <option value="archived">{t.vagon.archivedVagon}</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.monthFilterLabel}</label>
+                  <input
+                    type="month"
+                    value={monthFilter}
+                    onChange={(e) => {
+                      setMonthFilter(e.target.value);
+                    }}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  />
+                </div>
 
-        {isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-10 w-32" />
-            <VagonTableSkeleton />
-          </div>
-        ) : useVirtualScroll ? (
-          <VirtualScrollTable
-            data={virtualScrollData}
-            renderItem={(vagon: Vagon, index: number) => (
-              <div key={vagon._id} className="bg-white rounded-lg shadow-md overflow-hidden mb-4">
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-bold">{vagon.vagonCode}</h3>
-                      <p className="text-sm opacity-90">{vagon.month}</p>
-                      <p className="text-sm opacity-90">{vagon.sending_place} → {vagon.receiving_place}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold">{safeToFixed(vagon.total_volume_m3)} m³</div>
-                      <div className="text-sm opacity-90">{t.vagon.totalVolume}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="text-sm text-gray-600">{t.vagon.availableLabel}</div>
-                      <div className="text-lg font-bold text-orange-600">{safeToFixed(vagon.available_volume_m3)} m³</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm text-gray-600">{t.vagon.soldLabel}</div>
-                      <div className="text-lg font-bold text-green-600">{safeToFixed(vagon.sold_volume_m3)} m³</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm text-gray-600">{t.vagon.remainingLabel}</div>
-                      <div className="text-lg font-bold text-purple-600">{safeToFixed(vagon.remaining_volume_m3)} m³</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm text-gray-600">USD Foyda</div>
-                      <div className={`text-lg font-bold ${vagon.usd_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ${vagon.usd_profit.toLocaleString()}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.searchLabel}</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchValue}
+                      onChange={(e) => setSearchValue(e.target.value)}
+                      placeholder={t.vagon.searchPlaceholder}
+                      className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                    />
+                    {isSearching && (
+                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                        <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-between items-center">
-                    <div className="text-sm text-gray-600">
-                      Status: <span className={`font-semibold ${
-                        vagon.status === 'active' ? 'text-green-600' : 
-                        vagon.status === 'closing' ? 'text-yellow-600' : 'text-gray-600'
-                      }`}>
-                        {vagon.status === 'active' ? t.vagon.activeStatus : 
-                         vagon.status === 'closing' ? t.vagon.closingStatus : vagon.status}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
+                    )}
+                    {searchValue && !isSearching && (
                       <button
-                        onClick={() => openEditModal(vagon)}
-                        className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
+                        onClick={clearSearch}
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                       >
-                        {t.vagon.edit}
+                        <Icon name="x" className="h-5 w-5" />
                       </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
-            itemHeight={200}
-            containerHeight={600}
-            className="space-y-4"
-          />
+            </div>
+          </div>
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl shadow-lg p-6 animate-pulse">
+                  <div className="h-6 bg-gray-300 rounded mb-4"></div>
+                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-16 bg-gray-300 rounded"></div>
+                    <div className="h-16 bg-gray-300 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : vagons.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            {statusFilter || monthFilter ? t.vagon.noResultsFound : t.vagon.noVagons}
+          <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+            <div className="text-6xl mb-4">
+              <Icon name="package" className="w-16 h-16 mx-auto text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-700 mb-2">Vagonlar topilmadi</h3>
+            <p className="text-gray-500">Yangi vagon qo'shish uchun yuqoridagi tugmani bosing</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-            {vagons.map((vagon: Vagon) => (
-              <div key={vagon._id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4">
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {vagons.map((vagon: Vagon) => (
+              <div key={vagon._id} className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+                {/* Gradient Header */}
+                <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white p-6">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-xl font-bold">{vagon.vagonCode}</h3>
-                      <p className="text-sm opacity-90">{vagon.month}</p>
-                      <p className="text-sm opacity-90">{vagon.sending_place} → {vagon.receiving_place}</p>
+                      <h3 className="text-2xl font-bold mb-2">{vagon.vagonCode}</h3>
+                      <p className="text-sm opacity-90 mb-1">{vagon.month}</p>
+                      <p className="text-sm opacity-90 flex items-center">
+                        <Icon name="map-pin" className="h-4 w-4 mr-1" />
+                        {vagon.sending_place} → {vagon.receiving_place}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold">{safeToFixed(vagon.total_volume_m3)} m³</div>
-                      <div className="text-xs opacity-90">{t.vagon.totalVolumeLabel}</div>
+                      <div className="text-3xl font-bold">{safeToFixed(vagon.total_volume_m3)} m³</div>
+                      <div className="text-sm opacity-90">{t.vagon.totalVolumeLabel}</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Content */}
-                <div className="p-4">
-                  {/* Asosiy statistika */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <div className="text-lg font-bold text-green-600">{safeToFixed(vagon.sold_volume_m3)} m³</div>
-                      <div className="text-xs text-gray-600">{t.vagon.soldLabel}</div>
-                      <div className="text-xs text-gray-500">
+                <div className="p-6">
+                  {/* Main Statistics */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="text-center p-4 bg-green-50 rounded-xl border border-green-200 hover:bg-green-100 transition-colors">
+                      <div className="text-xl font-bold text-green-600" title="Barcha sotuvlar (dona va hajm) kub hisobida">
+                        {safeToFixed(vagon.sold_volume_m3)} m³
+                      </div>
+                      <div className="text-sm text-gray-600">{t.vagon.soldLabel}</div>
+                      <div className="text-xs text-gray-500 mt-1">
                         {(vagon.total_volume_m3 || 0) > 0 ? `${safeToFixed(((vagon.sold_volume_m3 || 0) / (vagon.total_volume_m3 || 1)) * 100, 1)}%` : '0%'}
                       </div>
                     </div>
-                    <div className="text-center p-3 bg-purple-50 rounded-lg">
-                      <div className="text-lg font-bold text-purple-600">{safeToFixed(vagon.remaining_volume_m3)} m³</div>
-                      <div className="text-xs text-gray-600">{t.vagon.remainingLabel}</div>
+                    <div className="text-center p-4 bg-purple-50 rounded-xl border border-purple-200 hover:bg-purple-100 transition-colors">
+                      <div className="text-xl font-bold text-purple-600">{safeToFixed(vagon.remaining_volume_m3)} m³</div>
+                      <div className="text-sm text-gray-600">{t.vagon.remainingLabel}</div>
                     </div>
                   </div>
 
-                  {/* Lotlar soni */}
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm text-gray-600">{t.vagon.lots}:</span>
-                    <span className="font-semibold">{vagon.lots?.length || 0} ta</span>
+                  {/* Lot Information */}
+                  <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded-lg">
+                    <span className="text-sm font-semibold text-gray-700">{t.vagon.lots}:</span>
+                    <span className="font-bold text-gray-900">{vagon.lots?.length || 0} ta</span>
                   </div>
 
-                  {/* Moliyaviy ma'lumotlar (qisqacha) */}
-                  <div className="space-y-2 mb-4 text-sm">
+                  {/* Financial Information */}
+                  <div className="space-y-3 mb-6">
                     {(vagon.usd_total_cost || 0) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">USD {t.vagon.vagonDetailsModal.profitLabel}</span>
-                        <span className={`font-semibold ${(vagon.usd_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                        <span className="text-sm font-semibold text-gray-700">USD {t.vagon.vagonDetailsModal.profitLabel}</span>
+                        <span className={`font-bold ${(vagon.usd_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           ${(vagon.usd_profit || 0).toLocaleString()}
                         </span>
                       </div>
                     )}
                     {(vagon.rub_total_cost || 0) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">RUB {t.vagon.vagonDetailsModal.profitLabel}</span>
-                        <span className={`font-semibold ${(vagon.rub_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <span className="text-sm font-semibold text-gray-700">RUB {t.vagon.vagonDetailsModal.profitLabel}</span>
+                        <span className={`font-bold ${(vagon.rub_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           ₽{(vagon.rub_profit || 0).toLocaleString()}
                         </span>
                       </div>
@@ -772,9 +697,9 @@ export default function VagonPage() {
                   </div>
 
                   {/* Status */}
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm text-gray-600">{t.common.status}:</span>
-                    <span className={`text-sm font-semibold px-2 py-1 rounded ${
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-sm font-semibold text-gray-700">{t.common.status}:</span>
+                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${
                       vagon.status === 'active' ? 'bg-green-100 text-green-700' : 
                       vagon.status === 'closed' ? 'bg-red-100 text-red-700' :
                       vagon.status === 'closing' ? 'bg-yellow-100 text-yellow-700' : 
@@ -787,120 +712,137 @@ export default function VagonPage() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={() => {
                         setSelectedVagonId(vagon._id);
                         setShowDetailsModal(true);
                       }}
-                      className="btn-success text-xs py-2 px-3 flex items-center justify-center gap-1"
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center"
                     >
-                      <Icon name="details" size="sm" />
+                      <Icon name="eye" className="mr-2 h-4 w-4" />
                       <span>{t.vagon.details}</span>
                     </button>
                     {vagon.status !== 'closed' && vagon.status !== 'archived' && (
                       <button
                         onClick={() => openEditModal(vagon)}
-                        className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-1"
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-4 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center"
                       >
-                        <Icon name="edit" size="sm" />
+                        <Icon name="edit" className="mr-2 h-4 w-4" />
                         <span>{t.vagon.edit}</span>
                       </button>
                     )}
                   </div>
                 </div>
+                
+                {/* Bottom gradient line */}
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600"></div>
               </div>
             ))}
-            
-            {/* PAGINATION - faqat oddiy rejimda */}
-            {!useVirtualScroll && (
-              <div className="mt-8">
-                <Pagination
-                  currentPage={pagination.currentPage || currentPage}
-                  totalPages={pagination.totalPages || 0}
-                  totalItems={pagination.totalItems || 0}
-                  itemsPerPage={pagination.itemsPerPage || itemsPerPage}
-                  hasNextPage={pagination.hasNextPage || false}
-                  hasPrevPage={pagination.hasPrevPage || false}
-                  onPageChange={handlePageChange}
-                  onLimitChange={handleLimitChange}
-                  showLimitSelector={true}
-                />
-              </div>
-            )}
           </div>
+
+          {/* ⚡ PAGINATION COMPONENT */}
+          {vagonData?.pagination && vagonData.pagination.totalPages > 1 && (
+            <div className="mt-8">
+              <Pagination
+                currentPage={vagonData.pagination.currentPage}
+                totalPages={vagonData.pagination.totalPages}
+                totalItems={vagonData.pagination.totalItems}
+                itemsPerPage={vagonData.pagination.itemsPerPage}
+                hasNextPage={vagonData.pagination.hasNextPage}
+                hasPrevPage={vagonData.pagination.hasPrevPage}
+                onPageChange={(page) => setCurrentPage(page)}
+                onLimitChange={(limit) => {
+                  setItemsPerPage(limit);
+                  setCurrentPage(1); // Reset to first page
+                }}
+                showLimitSelector={true}
+                className="bg-white rounded-2xl shadow-lg p-6"
+              />
+            </div>
+          )}
+        </>
         )}
+      </div>
 
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-lg p-6 w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-3xl font-bold flex items-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4">
+                    <Icon name="truck" className="h-7 w-7 text-white" />
+                  </div>
                   {editingVagon ? t.vagon.vagonModal.editVagonTitle : t.vagon.vagonModal.newVagonTitle}
                 </h2>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100 group"
+                  className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-3 rounded-xl hover:bg-gray-100 group"
                   aria-label={t.vagon.vagonModal.closeButton}
                 >
-                  <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+                  <Icon name="x" className="h-6 w-6 group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               </div>
               <form onSubmit={handleSubmit}>
                 {/* Vagon ma'lumotlari */}
-                <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                  <h3 className="font-semibold mb-3">{t.vagon.vagonModal.vagonInfoSection}</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl mb-8 border border-blue-200">
+                  <h3 className="font-bold text-xl mb-6 flex items-center text-blue-900">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                      <Icon name="info" className="h-5 w-5 text-white" />
+                    </div>
+                    {t.vagon.vagonModal.vagonInfoSection}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium mb-1">{t.vagon.vagonCodeLabel}</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.vagonCodeLabel}</label>
                       <input
                         type="text"
                         required
                         value={vagonCode}
                         onChange={(e) => setVagonCode(e.target.value)}
                         placeholder={t.vagon.vagonModal.vagonCodePlaceholder}
-                        className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                         disabled={!!editingVagon}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">{t.vagon.monthLabel}</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.monthLabel}</label>
                       <input
                         type="text"
                         required
                         value={month}
                         onChange={(e) => setMonth(e.target.value)}
                         placeholder={t.vagon.vagonModal.monthPlaceholder}
-                        className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">{t.vagon.sendingPlace}</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.sendingPlace}</label>
                       <input
                         type="text"
                         required
                         value={sendingPlace}
                         onChange={(e) => setSendingPlace(e.target.value)}
                         placeholder={t.vagon.vagonModal.sendingPlacePlaceholder}
-                        className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">{t.vagon.receivingPlace}</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.receivingPlace}</label>
                       <input
                         type="text"
                         required
                         value={receivingPlace}
                         onChange={(e) => setReceivingPlace(e.target.value)}
                         placeholder={t.vagon.vagonModal.receivingPlacePlaceholder}
-                        className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       />
                     </div>
                   </div>
                   {editingVagon && (
-                    <div className="mt-3 p-2 bg-blue-100 border border-blue-300 rounded text-sm text-blue-800">
-                      <Icon name="info" size="sm" className="inline mr-1" />
+                    <div className="mt-4 p-4 bg-blue-100 border border-blue-300 rounded-xl text-sm text-blue-800">
+                      <Icon name="info" className="inline mr-2 h-4 w-4" />
                       {t.vagon.vagonModal.editInfoMessage}
                     </div>
                   )}
@@ -908,35 +850,46 @@ export default function VagonPage() {
 
                 {/* Lotlar - yangi vagon yaratishda va tahrirlashda */}
                 <div className="mb-6">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="font-semibold">{t.vagon.vagonModal.lotsSection}</h3>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-orange-600">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-2xl font-bold flex items-center">
+                        <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center mr-3">
+                          <Icon name="package" className="h-6 w-6 text-white" />
+                        </div>
+                        {t.vagon.vagonModal.lotsSection}
+                      </h3>
+                      <div className="text-right bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-4 rounded-2xl border-2 border-orange-200">
+                        <div className="text-3xl font-bold text-orange-600">
                           {safeToFixed(calculateTotalVolume())} m³
                         </div>
-                        <div className="text-sm text-gray-600">{t.vagon.totalVolumeLabel}</div>
+                        <div className="text-sm text-gray-600 font-semibold">{t.vagon.totalVolumeLabel}</div>
                       </div>
                     </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {lots.map((lot, index) => (
-                      <div key={index} className="border-l-4 border-blue-500 pl-4 py-3 bg-gray-50 rounded">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="font-semibold text-lg">{t.vagon.vagonModal.lotNumber} {index + 1}</div>
+                      <div key={index} className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-200">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                              <span className="text-white font-bold text-lg">{index + 1}</span>
+                            </div>
+                            <div className="font-bold text-xl text-blue-900">{t.vagon.vagonModal.lotNumber} {index + 1}</div>
+                          </div>
                           <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="text-lg font-bold text-orange-600">
+                            <div className="text-right bg-white px-6 py-3 rounded-xl shadow-sm border-2 border-orange-200">
+                              <div className="text-2xl font-bold text-orange-600">
                                 {safeToFixed(calculateLotVolume(lot))} m³
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {lot.quantity && calculateLotVolume(lot) > 0 ? `${t.vagon.oneM3Equals} ${safeToFixed(parseInt(lot.quantity) / calculateLotVolume(lot), 0)} ${t.vagon.pieces}` : ''}
+                              <div className="text-xs text-gray-500 font-semibold mt-1">
+                                {lot.quantity && calculateLotVolume(lot) > 0 ? `1m³ = ${safeToFixed(parseInt(lot.quantity) / calculateLotVolume(lot), 0)} ${t.vagon.pieces}` : 'Hajm'}
                               </div>
                             </div>
                             {lots.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => removeLotRow(index)}
-                                className="text-red-600 hover:text-red-800"
+                                className="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 p-3 rounded-xl transition-all duration-200"
+                                title="Lotni o'chirish"
                               >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -946,105 +899,111 @@ export default function VagonPage() {
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-7 gap-3">
+                        <div className="grid grid-cols-7 gap-4">
                           <div>
-                            <label className="block text-xs font-medium mb-1">{t.vagon.thickness}</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.thickness} (mm)</label>
                             <input
                               type="number"
+                              step="0.01"
                               value={lot.thickness}
                               onChange={(e) => updateLot(index, 'thickness', e.target.value)}
                               placeholder={t.vagon.vagonModal.thicknessPlaceholder}
-                              className="w-full px-2 py-2 border rounded text-center font-semibold"
+                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">{t.vagon.width}</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.width} (mm)</label>
                             <input
                               type="number"
+                              step="0.01"
                               value={lot.width}
                               onChange={(e) => updateLot(index, 'width', e.target.value)}
                               placeholder={t.vagon.vagonModal.widthPlaceholder}
-                              className="w-full px-2 py-2 border rounded text-center font-semibold"
+                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">{t.vagon.length}</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.length} (m)</label>
                             <input
                               type="number"
+                              step="0.01"
                               value={lot.length}
                               onChange={(e) => updateLot(index, 'length', e.target.value)}
                               placeholder={t.vagon.vagonModal.lengthPlaceholder}
-                              className="w-full px-2 py-2 border rounded text-center font-semibold"
+                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">{t.vagon.quantity}</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.quantity} (dona)</label>
                             <input
                               type="number"
                               value={lot.quantity}
                               onChange={(e) => updateLot(index, 'quantity', e.target.value)}
                               placeholder={t.vagon.vagonModal.quantityPlaceholder}
-                              className="w-full px-2 py-2 border rounded text-center font-semibold"
+                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1 text-red-600">{t.vagon.brakVolume}</label>
+                            <label className="block text-xs font-bold text-red-600 mb-2">{t.vagon.brakVolume} (m³)</label>
                             <input
                               type="number"
                               step="0.0001"
                               value={lot.loss_volume_m3}
                               onChange={(e) => updateLot(index, 'loss_volume_m3', e.target.value)}
                               placeholder={t.vagon.vagonModal.brakVolumePlaceholder}
-                              className="w-full px-2 py-2 border border-red-300 rounded text-center font-semibold text-red-600"
+                              className="w-full px-3 py-3 border-2 border-red-300 rounded-xl text-center font-bold text-lg text-red-600 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">{t.vagon.currency}</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.vagonCurrency}</label>
                             <select
                               value={lot.currency}
                               onChange={(e) => updateLot(index, 'currency', e.target.value)}
-                              className="w-full px-2 py-2 border rounded font-semibold"
+                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                             >
-                              <option value="USD">USD</option>
-                              <option value="RUB">RUB</option>
+                              <option value="USD">USD $</option>
+                              <option value="RUB">RUB ₽</option>
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">{t.vagon.price}</label>
+                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.price}</label>
                             <input
                               type="number"
                               step="0.01"
                               value={lot.purchase_amount}
                               onChange={(e) => updateLot(index, 'purchase_amount', e.target.value)}
                               placeholder={t.vagon.vagonModal.pricePlaceholder}
-                              className="w-full px-2 py-2 border rounded text-center font-semibold"
+                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                             />
                           </div>
                         </div>
                         
                         {/* Brak ma'lumotlari (agar brak mavjud bo'lsa) */}
                         {parseFloat(lot.loss_volume_m3) > 0 && (
-                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
-                            <h5 className="text-sm font-semibold text-red-700 mb-2">{t.vagon.vagonModal.brakInfoSection}</h5>
-                            <div className="grid grid-cols-2 gap-3">
+                          <div className="mt-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-200 rounded-xl">
+                            <h5 className="text-sm font-bold text-red-700 mb-3 flex items-center">
+                              <Icon name="alert-triangle" className="h-4 w-4 mr-2" />
+                              {t.vagon.vagonModal.brakInfoSection}
+                            </h5>
+                            <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-xs font-medium mb-1 text-red-600">{t.vagon.responsiblePerson}</label>
+                                <label className="block text-xs font-bold text-red-600 mb-2">{t.vagon.responsiblePerson}</label>
                                 <input
                                   type="text"
                                   value={lot.loss_responsible_person}
                                   onChange={(e) => updateLot(index, 'loss_responsible_person', e.target.value)}
                                   placeholder={t.vagon.vagonModal.responsiblePersonPlaceholder}
-                                  className="w-full px-2 py-2 border border-red-300 rounded text-sm"
+                                  className="w-full px-3 py-2 border-2 border-red-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs font-medium mb-1 text-red-600">{t.vagon.brakReasonLabel}</label>
+                                <label className="block text-xs font-bold text-red-600 mb-2">{t.vagon.brakReasonLabel}</label>
                                 <input
                                   type="text"
                                   value={lot.loss_reason}
                                   onChange={(e) => updateLot(index, 'loss_reason', e.target.value)}
                                   placeholder={t.vagon.vagonModal.brakReasonPlaceholder}
-                                  className="w-full px-2 py-2 border border-red-300 rounded text-sm"
+                                  className="w-full px-3 py-2 border-2 border-red-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
                                 />
                               </div>
                             </div>
@@ -1057,42 +1016,46 @@ export default function VagonPage() {
                   <button
                     type="button"
                     onClick={addLotRow}
-                    className="mt-4 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                    className="mt-6 w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-4 rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 font-bold text-lg shadow-lg hover:shadow-xl flex items-center justify-center"
                   >
+                    <Icon name="plus" className="mr-3 h-5 w-5" />
                     {t.vagon.vagonModal.addLotButton}
                   </button>
                 </div>
 
-                <div className="flex gap-2 mt-6">
+                <div className="flex gap-4 mt-8">
                   <button
                     type="button"
                     onClick={() => {
                       setShowModal(false);
                       resetForm();
                     }}
-                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-4 rounded-xl hover:bg-gray-300 font-bold text-lg transition-all duration-200"
                   >
                     {t.vagon.vagonModal.cancelButton}
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center ${
+                    className={`flex-1 px-6 py-4 rounded-xl transition-all duration-200 flex items-center justify-center font-bold text-lg shadow-lg hover:shadow-xl ${
                       isSubmitting
                         ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
                     }`}
                   >
                     {isSubmitting ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin -ml-1 mr-3 h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                         {t.vagon.vagonModal.loadingText}...
                       </>
                     ) : (
-                      t.vagon.vagonModal.saveButton
+                      <>
+                        <Icon name="save" className="mr-3 h-5 w-5" />
+                        {t.vagon.vagonModal.saveButton}
+                      </>
                     )}
                   </button>
                 </div>
@@ -1111,6 +1074,7 @@ export default function VagonPage() {
             }}
           />
         )}
+
       </div>
     </Layout>
   );

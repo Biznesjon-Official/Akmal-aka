@@ -59,11 +59,13 @@ interface Props {
 export default function VagonDetailsModal({ vagonId, onClose }: Props) {
   const { t } = useLanguage();
   const [vagon, setVagon] = useState<Vagon | null>(null);
+  const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchVagonDetails();
+    fetchVagonExpenses();
   }, [vagonId]);
 
   const fetchVagonDetails = async () => {
@@ -76,6 +78,23 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
       setError(error.response?.data?.message || 'Vagon ma\'lumotlarini olishda xatolik');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVagonExpenses = async () => {
+    try {
+      // Vagon bilan bog'liq xarajatlarni olish - faqat chiqim kategoriyasi
+      const response = await axios.get(`/expense-advanced?vagon=${vagonId}&limit=100`);
+      const allExpenses = response.data?.expenses || [];
+      
+      // Faqat chiqim kategoriyasidagi xarajatlarni filtrlash
+      // (transport_kz, transport_uz, transport_kelish, bojxona_nds, yuklash_tushirish, saqlanish, ishchilar)
+      const chiqimTypes = ['transport_kz', 'transport_uz', 'transport_kelish', 'bojxona_nds', 'yuklash_tushirish', 'saqlanish', 'ishchilar'];
+      const filteredExpenses = allExpenses.filter((exp: any) => chiqimTypes.includes(exp.xarajatTuri));
+      
+      setExpenses(filteredExpenses);
+    } catch (error: any) {
+      console.error('Error fetching vagon expenses:', error);
     }
   };
 
@@ -250,54 +269,90 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
             {vagon.lots && vagon.lots.length > 0 ? (
               <div className="space-y-4">
                 {vagon.lots.map((lot: VagonLot, index: number) => (
-                  <div key={lot._id} className="border-l-4 border-blue-500 pl-4 py-4 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-start mb-3">
+                  <div key={lot._id} className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-200">
+                    <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
-                        <div className="font-semibold text-lg text-blue-600">
-                          {index + 1}. {lot.dimensions} mm × {lot.quantity} {t.vagon.pieces}
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">{index + 1}</span>
+                          </div>
+                          <div className="font-bold text-xl text-blue-900">
+                            {lot.dimensions} mm × {lot.quantity} {t.vagon.pieces}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-600 mt-1 space-y-1">
-                          <div>{t.vagon.vagonDetailsModal.totalVolumeText} {safeToFixed(lot.volume_m3)} m³</div>
-                          <div>{t.vagon.vagonDetailsModal.availableText} {safeToFixed((lot.warehouse_available_volume_m3 || 0) || ((lot.volume_m3 || 0) - (lot.loss_volume_m3 || 0)))} m³</div>
-                          <div className="text-green-600 font-semibold">{t.vagon.vagonDetailsModal.soldText} {safeToFixed(lot.warehouse_dispatched_volume_m3)} m³</div>
-                          <div>{t.vagon.vagonDetailsModal.remainingText} {safeToFixed((lot.warehouse_remaining_volume_m3 || 0) || (lot.remaining_volume_m3 || 0))} m³</div>
+                        
+                        {/* Hajm ma'lumotlari - yangi dizayn */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                          <div className="bg-white p-3 rounded-xl border-2 border-blue-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Jami hajm</div>
+                            <div className="text-lg font-bold text-blue-600">{safeToFixed(lot.volume_m3)} m³</div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border-2 border-orange-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Mavjud</div>
+                            <div className="text-lg font-bold text-orange-600">
+                              {safeToFixed((lot.warehouse_available_volume_m3 || 0) || ((lot.volume_m3 || 0) - (lot.loss_volume_m3 || 0)))} m³
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border-2 border-green-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Sotilgan</div>
+                            <div className="text-lg font-bold text-green-600">{safeToFixed(lot.warehouse_dispatched_volume_m3)} m³</div>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border-2 border-purple-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Qolgan</div>
+                            <div className="text-lg font-bold text-purple-600">
+                              {safeToFixed((lot.warehouse_remaining_volume_m3 || 0) || (lot.remaining_volume_m3 || 0))} m³
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg">
-                          {(lot.purchase_amount || 0).toLocaleString()} {getCurrencySymbol(lot.currency)}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          {lot.currency}
+                      <div className="text-right ml-4">
+                        <div className="bg-white px-6 py-3 rounded-xl shadow-sm border-2 border-green-200">
+                          <div className="font-bold text-2xl text-green-600">
+                            {(lot.purchase_amount || 0).toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-600 font-semibold">
+                            {getCurrencySymbol(lot.currency)} {lot.currency}
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Brak ma'lumotlari */}
                     {(lot.loss_volume_m3 || 0) > 0 && (
-                      <div className="mt-3 p-3 bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-200 rounded-xl">
-                        <div className="flex items-center gap-2 font-semibold text-red-700 mb-2">
-                          <Icon name="alert-triangle" className="h-4 w-4" />
+                      <div className="mt-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-200 rounded-xl">
+                        <div className="flex items-center gap-2 font-bold text-red-700 mb-3 text-lg">
+                          <Icon name="alert-triangle" className="h-5 w-5" />
                           {t.vagon.vagonDetailsModal.brakInfo} {safeToFixed(lot.loss_volume_m3)} m³
                         </div>
-                        {lot.loss_responsible_person && (
-                          <div className="flex items-center gap-2 text-red-600 text-sm">
-                            <Icon name="users" className="h-4 w-4" />
-                            {t.vagon.vagonDetailsModal.responsiblePerson} {lot.loss_responsible_person}
-                          </div>
-                        )}
-                        {lot.loss_reason && (
-                          <div className="flex items-center gap-2 text-red-600 text-sm">
-                            <Icon name="info" className="h-4 w-4" />
-                            {t.vagon.vagonDetailsModal.brakReason} {lot.loss_reason}
-                          </div>
-                        )}
-                        {lot.loss_date && (
-                          <div className="flex items-center gap-2 text-red-600 text-sm">
-                            <Icon name="calendar" className="h-4 w-4" />
-                            {t.vagon.vagonDetailsModal.brakDate} {new Date(lot.loss_date).toLocaleDateString('uz-UZ')}
-                          </div>
-                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {lot.loss_responsible_person && (
+                            <div className="flex items-center gap-2 text-red-600 text-sm bg-white p-2 rounded-lg">
+                              <Icon name="users" className="h-4 w-4" />
+                              <div>
+                                <div className="text-xs text-gray-500">Javobgar:</div>
+                                <div className="font-semibold">{lot.loss_responsible_person}</div>
+                              </div>
+                            </div>
+                          )}
+                          {lot.loss_reason && (
+                            <div className="flex items-center gap-2 text-red-600 text-sm bg-white p-2 rounded-lg">
+                              <Icon name="info" className="h-4 w-4" />
+                              <div>
+                                <div className="text-xs text-gray-500">Sabab:</div>
+                                <div className="font-semibold">{lot.loss_reason}</div>
+                              </div>
+                            </div>
+                          )}
+                          {lot.loss_date && (
+                            <div className="flex items-center gap-2 text-red-600 text-sm bg-white p-2 rounded-lg">
+                              <Icon name="calendar" className="h-4 w-4" />
+                              <div>
+                                <div className="text-xs text-gray-500">Sana:</div>
+                                <div className="font-semibold">{new Date(lot.loss_date).toLocaleDateString('uz-UZ')}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -310,6 +365,68 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
               </div>
             )}
           </div>
+
+          {/* Xarajatlar */}
+          {expenses && expenses.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-4 flex items-center">
+                <Icon name="trending-down" className="h-5 w-5 text-red-600 mr-2" />
+                Vagon xarajatlari ({expenses.length})
+              </h3>
+              
+              <div className="space-y-3">
+                {expenses.map((expense: any) => (
+                  <div key={expense._id} className="border-l-4 border-red-500 pl-4 py-3 bg-red-50 rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="font-semibold text-gray-800">
+                          {expense.tavsif}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs mr-2">
+                            {expense.xarajatTuri}
+                          </span>
+                          <span className="text-gray-500">
+                            {new Date(expense.createdAt).toLocaleDateString('uz-UZ')}
+                          </span>
+                        </div>
+                        {expense.yaratuvchi && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Yaratuvchi: {expense.yaratuvchi.username}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg text-red-600">
+                          {expense.summa.toLocaleString()} {expense.valyuta}
+                        </div>
+                        {expense.valyuta !== 'RUB' && expense.summaRUB && (
+                          <div className="text-sm text-gray-600">
+                            ≈ {expense.summaRUB.toLocaleString()} RUB
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Jami xarajatlar */}
+                <div className="border-t-2 border-red-300 pt-3 mt-4">
+                  <div className="flex justify-between items-center bg-red-100 p-3 rounded-lg">
+                    <span className="font-semibold text-gray-800">Jami xarajatlar:</span>
+                    <div className="text-right">
+                      <div className="font-bold text-xl text-red-600">
+                        {expenses.reduce((sum: number, exp: any) => sum + (exp.valyuta === 'USD' ? exp.summa : 0), 0).toLocaleString()} USD
+                      </div>
+                      <div className="font-semibold text-lg text-red-600">
+                        {expenses.reduce((sum: number, exp: any) => sum + (exp.valyuta === 'RUB' ? exp.summa : 0), 0).toLocaleString()} RUB
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Status ma'lumotlari */}
           {(vagon.status === 'closed' || vagon.status === 'archived') && (
@@ -343,14 +460,37 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="border-t p-6">
-          <div className="flex justify-end">
-            <button
-              onClick={onClose}
-              className="btn-secondary"
-            >
-              {t.vagon.vagonDetailsModal.closeButton}
-            </button>
+        <div className="border-t bg-gradient-to-r from-gray-50 to-blue-50/50">
+          {/* Jami summa */}
+          <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-700 flex items-center">
+                <Icon name="calculator" className="h-5 w-5 text-blue-600 mr-2" />
+                {t.common.grandTotal}
+              </h3>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-green-600">
+                  ${(vagon.usd_total_cost || 0).toLocaleString()} USD
+                </div>
+                <div className="text-lg font-semibold text-blue-600">
+                  ₽{(vagon.rub_total_cost || 0).toLocaleString()} RUB
+                </div>
+                <div className="text-sm text-gray-500 mt-1">
+                  {t.vagon.vagonDetailsModal.investmentLabel}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            <div className="flex justify-end">
+              <button
+                onClick={onClose}
+                className="btn-secondary"
+              >
+                {t.vagon.vagonDetailsModal.closeButton}
+              </button>
+            </div>
           </div>
         </div>
       </div>

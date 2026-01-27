@@ -146,7 +146,7 @@ function ExchangeRatesContent() {
           <ModalBody>
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">{t.exchangeRates.currency}</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">{t.common.currency}</label>
                 <select
                   className="input-field"
                   value={formData.currency}
@@ -248,7 +248,7 @@ function ExchangeRatesContent() {
           subtitle={`${t.common.total}: ${exchangeRates?.length || 0} ${t.exchangeRates.rates}`}
         >
           <TableHeader>
-            <TableHead>{t.exchangeRates.currency}</TableHead>
+            <TableHead>{t.common.currency}</TableHead>
             <TableHead>Kurs</TableHead>
             <TableHead>{t.exchangeRates.lastUpdated}</TableHead>
             <TableHead>{t.exchangeRates.updatedBy}</TableHead>

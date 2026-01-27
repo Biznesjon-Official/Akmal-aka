@@ -209,12 +209,18 @@ const vagonSaleSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexlar
+// ⚡ OPTIMIZATSIYA: MongoDB Indexlar (tezroq qidirish uchun)
 vagonSaleSchema.index({ vagon: 1 });
 vagonSaleSchema.index({ client: 1 });
+vagonSaleSchema.index({ lot: 1 }); // Yangi qo'shildi
 vagonSaleSchema.index({ status: 1 });
 vagonSaleSchema.index({ isDeleted: 1 });
 vagonSaleSchema.index({ sale_date: -1 });
+vagonSaleSchema.index({ createdAt: -1 }); // Yangi qo'shildi
+// Compound indexes - ko'p ishlatiladigan so'rovlar uchun
+vagonSaleSchema.index({ client: 1, sale_date: -1 }); // Mijoz sotuvlari
+vagonSaleSchema.index({ vagon: 1, createdAt: -1 }); // Vagon sotuvlari
+vagonSaleSchema.index({ status: 1, sale_date: -1 }); // Holat bo'yicha
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonSaleSchema.pre('save', function(next) {
@@ -286,18 +292,17 @@ vagonSaleSchema.pre('save', function(next) {
       
       // Agar xaridor brak uchun javobgar bo'lsa, uni ham to'lashi kerak (dona hisobida)
       if (this.brak_liability_distribution && this.brak_liability_distribution.buyer_must_pay_for_brak) {
-        // Brak hajmini donaga aylantirish (taxminiy)
-        // Bu yerda lot ma'lumotlari kerak bo'ladi, lekin pre-save hook da populate qilish mumkin emas
-        // Shuning uchun faqat hajm bo'yicha hisoblash
-        billableAmount = this.client_received_volume_m3 * (this.price_per_m3 || 0);
-        if (this.brak_liability_distribution.buyer_liable_volume_m3 > 0) {
-          billableAmount += this.brak_liability_distribution.buyer_liable_volume_m3 * (this.price_per_m3 || 0);
+        // Brak hajmini donaga aylantirish
+        if (this.sent_quantity && this.warehouse_dispatched_volume_m3) {
+          const volumePerPiece = this.warehouse_dispatched_volume_m3 / this.sent_quantity;
+          const brakQuantity = this.brak_liability_distribution.buyer_liable_volume_m3 / volumePerPiece;
+          billableQuantity += brakQuantity;
         }
-      } else {
-        // Faqat qabul qilingan dona uchun to'lov
-        const validPricePerPiece = isNaN(this.price_per_piece) || !isFinite(this.price_per_piece) ? 0 : this.price_per_piece;
-        billableAmount = billableQuantity * validPricePerPiece;
       }
+      
+      // Dona narxi bilan hisoblash
+      const validPricePerPiece = isNaN(this.price_per_piece) || !isFinite(this.price_per_piece) ? 0 : this.price_per_piece;
+      billableAmount = billableQuantity * validPricePerPiece;
     } else {
       // Hajm bo'yicha sotuv (eski logika)
       let billableVolume = this.client_received_volume_m3; // Asosiy qabul qilingan hajm
