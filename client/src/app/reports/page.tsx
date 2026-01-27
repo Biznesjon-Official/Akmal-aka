@@ -293,18 +293,18 @@ export default function ReportsPage() {
       <div className="container-full-desktop">
         {/* Header - Professional Design */}
         <div className="mb-8">
-          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-2xl p-8 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-2xl p-6 sm:p-8 shadow-xl">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                    <span className="text-4xl">📊</span>
+                  <div className="bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3">
+                    <span className="text-3xl sm:text-4xl">📊</span>
                   </div>
-                  <h1 className="text-4xl font-bold text-white">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">
                     {t.reports.professionalReports}
                   </h1>
                 </div>
-                <p className="text-blue-100 text-lg ml-16">{t.reports.advancedAnalytics}</p>
+                <p className="text-blue-100 text-sm sm:text-base lg:text-lg ml-0 sm:ml-16">{t.reports.advancedAnalytics}</p>
               </div>
               <div className="hidden lg:flex items-center gap-4">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl px-6 py-3 border border-white/20">
@@ -328,14 +328,15 @@ export default function ReportsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 ${
                     activeTab === tab.id
                       ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md transform scale-105'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }`}
                 >
                   <Icon name={tab.icon} size="sm" />
-                  <span>{tab.name}</span>
+                  <span className="hidden sm:inline">{tab.name}</span>
+                  <span className="sm:hidden">{tab.name.split(' ')[0]}</span>
                 </button>
               ))}
             </div>
@@ -408,7 +409,7 @@ export default function ReportsPage() {
                 </div>
               </div>
               
-              <div className="flex gap-3 mt-6">
+              <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 <button
                   onClick={() => setFilters({
                     startDate: '',

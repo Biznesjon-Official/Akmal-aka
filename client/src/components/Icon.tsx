@@ -173,6 +173,7 @@ const Icon: React.FC<IconProps> = ({ name, className = '', size = 'md' }) => {
           </svg>
         );
       
+      case 'plus':
       case 'add':
         return (
           <svg {...commonProps}>
