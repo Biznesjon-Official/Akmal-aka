@@ -47,8 +47,10 @@ export const formatInputNumber = (value: string): string => {
 /**
  * Valyuta formatlash
  */
-export const formatCurrency = (amount: number, currency: string = 'RUB'): string => {
-  const formatted = formatNumber(amount);
+export const formatCurrency = (amount: number | null | undefined, currency: string = 'RUB'): string => {
+  // Agar amount null yoki undefined bo'lsa, 0 ni ishlatamiz
+  const safeAmount = amount ?? 0;
+  const formatted = formatNumber(safeAmount);
   
   const currencySymbols: { [key: string]: string } = {
     'USD': '$',

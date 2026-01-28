@@ -437,7 +437,20 @@ export default function VagonSalePage() {
   };
 
   const getTotalSaleAmount = () => {
-    return saleItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    if (saleType === 'single_lot') {
+      // Single lot uchun
+      const lotInfo = getSelectedLotInfo();
+      if (!lotInfo) return 0;
+      
+      if (saleUnit === 'volume') {
+        return parseFloat(soldVolumeM3 || '0') * parseFloat(pricePerM3 || '0');
+      } else {
+        return parseInt(soldQuantity || '0') * parseFloat(pricePerPiece || '0');
+      }
+    } else {
+      // Multi-lot va multi-vagon uchun
+      return saleItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    }
   };
 
   const getTotalSaleVolume = () => {
@@ -2274,91 +2287,85 @@ export default function VagonSalePage() {
                     </>
                   )}
                 </div>
+                </form>
+              </div>
 
-                {/* Jami summa ko'rsatish */}
-                {(saleType === 'multi_lot' || saleType === 'multi_vagon') && saleItems.length > 0 && (
-                  <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-semibold text-gray-700 flex items-center">
-                        <Icon name="calculator" className="h-5 w-5 text-green-600 mr-2" />
-                        {t.common.grandTotal}
-                      </h3>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-green-600">
-                          {saleItems.reduce((total, item) => total + (item.totalPrice || 0), 0).toLocaleString()} {saleCurrency}
-                        </div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          {[...new Set(saleItems.map(item => item.lot))].length} ta lot, {saleItems.length} marta sotuv
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Yagona lot uchun jami summa */}
-                {saleType === 'single_lot' && getTotalSaleAmount() > 0 && (
-                  <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
+              {/* Footer with Total */}
+              <div className="border-t bg-gradient-to-r from-gray-50 to-blue-50/50">
+                {/* Jami summa */}
+                {((saleType === 'multi_lot' || saleType === 'multi_vagon') && saleItems.length > 0) || (saleType === 'single_lot' && getTotalSaleAmount() > 0) ? (
+                  <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
                     <div className="flex justify-between items-center">
                       <h3 className="text-lg font-semibold text-gray-700 flex items-center">
                         <Icon name="calculator" className="h-5 w-5 text-blue-600 mr-2" />
                         {t.common.grandTotal}
                       </h3>
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {getTotalSaleAmount().toLocaleString()} {saleCurrency}
+                        <div className="text-2xl font-bold text-green-600">
+                          {(saleType === 'single_lot' ? getTotalSaleAmount() : saleItems.reduce((total, item) => total + (item.totalPrice || 0), 0)).toLocaleString()} {saleCurrency}
                         </div>
                         <div className="text-sm text-gray-500 mt-1">
-                          1 ta lot
+                          {saleType === 'single_lot' 
+                            ? '1 ta lot' 
+                            : `${[...new Set(saleItems.map(item => item.lot))].length} ta lot, ${saleItems.length} marta sotuv`
+                          }
                         </div>
                       </div>
                     </div>
                   </div>
-                )}
-
-                  <div className="modal-footer">
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowModal(false);
-                          resetForm();
-                        }}
-                        className="btn-secondary order-2 sm:order-1"
-                      >
-                        {t.common.cancel}
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={saleType === 'single_lot' ? isSubmitting : isMultiSubmitting}
-                        className="btn-primary order-1 sm:order-2"
-                      >
-                        {(saleType === 'single_lot' ? isSubmitting : isMultiSubmitting) ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            {saleType === 'single_lot' ? 'Saqlanmoqda...' : 'Sotilmoqda...'}
-                          </>
-                        ) : (
-                          saleType === 'single_lot' 
-                            ? t.common.save 
-                            : saleType === 'multi_lot'
-                              ? `${[...new Set(saleItems.map(item => item.lot))].length} ta lot sotish (${saleItems.length} marta, 1 vagon)`
-                              : `${[...new Set(saleItems.map(item => item.lot))].length} ta lot sotish (${saleItems.length} marta, ${[...new Set(saleItems.map(item => item.vagonInfo?.vagonCode))].length} vagon)`
-                        )}
-                      </button>
-                    </div>
+                ) : null}
+                
+                <div className="p-6">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModal(false);
+                        resetForm();
+                      }}
+                      className="btn-secondary order-2 sm:order-1"
+                    >
+                      {t.common.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (saleType === 'single_lot') {
+                          handleSubmit(e);
+                        } else {
+                          handleMultiLotSubmit(e);
+                        }
+                      }}
+                      disabled={saleType === 'single_lot' ? isSubmitting : isMultiSubmitting}
+                      className="btn-primary order-1 sm:order-2"
+                    >
+                      {(saleType === 'single_lot' ? isSubmitting : isMultiSubmitting) ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          {saleType === 'single_lot' ? 'Saqlanmoqda...' : 'Sotilmoqda...'}
+                        </>
+                      ) : (
+                        saleType === 'single_lot' 
+                          ? t.common.save 
+                          : saleType === 'multi_lot'
+                            ? `${[...new Set(saleItems.map(item => item.lot))].length} ta lot sotish (${saleItems.length} marta, 1 vagon)`
+                            : `${[...new Set(saleItems.map(item => item.lot))].length} ta lot sotish (${saleItems.length} marta, ${[...new Set(saleItems.map(item => item.vagonInfo?.vagonCode))].length} vagon)`
+                      )}
+                    </button>
                   </div>
-                </form>
+                </div>
               </div>
             </div>
           </div>
         )}
-            </div>
-          ) : (
-            // HISTORY TAB CONTENT
-            <div className="space-y-8">
+        </div>
+      ) : (
+        // HISTORY TAB CONTENT
+        <div className="space-y-8">
               {/* History Filters */}
               <div className="bg-white rounded-2xl shadow-lg p-8">
                 <h3 className="text-2xl font-bold mb-6 flex items-center">

@@ -224,6 +224,7 @@ export default function ReportsPage() {
       if (filters.valyuta) params.append('valyuta', filters.valyuta);
       
       const response = await axios.get(`/reports/expense-reports?${params}`);
+      console.log('📊 Expense Data:', response.data);
       return response.data;
     },
     enabled: activeTab === 'expense'
@@ -238,6 +239,7 @@ export default function ReportsPage() {
       if (filters.valyuta) params.append('valyuta', filters.valyuta);
       
       const response = await axios.get(`/reports/cost-profitability?${params}`);
+      console.log('💰 Cost Data:', response.data);
       return response.data;
     },
     enabled: activeTab === 'cost'
@@ -281,11 +283,11 @@ export default function ReportsPage() {
   }
 
   const tabs = [
-    { id: 'profit-loss', name: t.vagonSale.profitLoss, icon: 'profit' },
+    { id: 'profit-loss', name: t.vagonSale.profitLoss, icon: 'statistics' },
     { id: 'vagon', name: t.vagonSale.vagonReports, icon: 'vagons' },
     { id: 'client', name: t.vagonSale.clientReports, icon: 'clients' },
     { id: 'expense', name: t.vagonSale.expenseReports, icon: 'expenses' },
-    { id: 'cost', name: t.vagonSale.costProfitability, icon: 'statistics' }
+    { id: 'cost', name: t.vagonSale.costProfitability, icon: 'profit' }
   ];
 
   return (
@@ -298,7 +300,7 @@ export default function ReportsPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3">
-                    <span className="text-3xl sm:text-4xl">📊</span>
+                    <Icon name="statistics" size="lg" className="text-white" />
                   </div>
                   <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">
                     {t.reports.professionalReports}
@@ -348,7 +350,7 @@ export default function ReportsPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                <span className="text-2xl">🔍</span>
+                <Icon name="search" size="sm" />
                 {t.reports.reportFilters}
               </h3>
             </div>
@@ -389,8 +391,8 @@ export default function ReportsPage() {
                     className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   >
                     <option value="">{t.reports.allCurrencies}</option>
-                    <option value="USD">💵 USD</option>
-                    <option value="RUB">💶 RUB</option>
+                    <option value="USD">USD</option>
+                    <option value="RUB">RUB</option>
                   </select>
                 </div>
                 
@@ -455,8 +457,8 @@ export default function ReportsPage() {
                           <div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/30">
                             <h4 className="text-xl font-bold text-white">{profit._id}</h4>
                           </div>
-                          <div className="text-4xl transform group-hover:scale-110 transition-transform duration-300">
-                            {profit.sof_foyda >= 0 ? '📈' : '📉'}
+                          <div className="transform group-hover:scale-110 transition-transform duration-300">
+                            <Icon name={profit.sof_foyda >= 0 ? 'profit' : 'expenses'} size="lg" className="text-white" />
                           </div>
                         </div>
                         
@@ -499,7 +501,7 @@ export default function ReportsPage() {
                   <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
                       <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                        <span className="text-2xl">📈</span>
+                        <Icon name="statistics" size="sm" />
                         {t.reports.profitTrend}
                       </h3>
                     </div>
@@ -545,7 +547,7 @@ export default function ReportsPage() {
                     <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                       <div className="bg-gradient-to-r from-red-50 to-orange-50 px-6 py-4 border-b border-gray-200">
                         <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                          <span className="text-2xl">💸</span>
+                          <Icon name="expenses" size="sm" />
                           {t.reports.expenseCategories}
                         </h3>
                       </div>
@@ -589,7 +591,7 @@ export default function ReportsPage() {
                     <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                       <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-gray-200">
                         <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                          <span className="text-2xl">💰</span>
+                          <Icon name="profit" size="sm" />
                           {t.reports.incomeSources}
                         </h3>
                       </div>
@@ -627,7 +629,7 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-16">
                 <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <span className="text-6xl">📊</span>
+                  <Icon name="statistics" size="xl" className="text-gray-400" />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">{t.reports.noDataFound}</p>
                 <p className="text-gray-400 text-sm mt-2">Filtrlarni o'zgartiring yoki boshqa davr tanlang</p>
@@ -654,7 +656,7 @@ export default function ReportsPage() {
                           <p className="text-4xl font-bold text-white">{vagonData.summary.totalVagons}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">🚛</span>
+                          <Icon name="vagons" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -670,7 +672,7 @@ export default function ReportsPage() {
                           <p className="text-blue-200 text-xs mt-1">m³</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📦</span>
+                          <Icon name="box" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -686,7 +688,7 @@ export default function ReportsPage() {
                           <p className="text-orange-200 text-xs mt-1">m³</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">💰</span>
+                          <Icon name="profit" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -702,7 +704,7 @@ export default function ReportsPage() {
                           <p className="text-purple-200 text-xs mt-1">m³</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📊</span>
+                          <Icon name="statistics" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -714,7 +716,7 @@ export default function ReportsPage() {
                   <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-gray-200">
                       <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                        <span className="text-2xl">📦</span>
+                        <Icon name="box" size="sm" />
                         {t.vagonSale.remainingVolumeByStatus}
                       </h3>
                     </div>
@@ -765,7 +767,10 @@ export default function ReportsPage() {
                 {/* Sotilgan hajm dinamikasi */}
                 {vagonData.soldVolume && vagonData.soldVolume.length > 0 && (
                   <Card className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">📈 {t.reports.soldVolumeDynamics}</h3>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Icon name="statistics" size="sm" />
+                      {t.reports.soldVolumeDynamics}
+                    </h3>
                     <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={vagonData.soldVolume}>
@@ -794,7 +799,7 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-16">
                 <div className="bg-gradient-to-br from-green-100 to-emerald-200 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <span className="text-6xl">🚛</span>
+                  <Icon name="vagons" size="xl" className="text-green-600" />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">{t.reports.vagonDataNotFound}</p>
                 <p className="text-gray-400 text-sm mt-2">Vagon ma'lumotlari topilmadi</p>
@@ -822,7 +827,7 @@ export default function ReportsPage() {
                           <p className="text-4xl font-bold text-white">{clientData.summary.totalClients}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">👥</span>
+                          <Icon name="clients" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -837,7 +842,7 @@ export default function ReportsPage() {
                           <p className="text-4xl font-bold text-white">{clientData.summary.clientsWithDebt}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">⚠️</span>
+                          <Icon name="alert" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -852,7 +857,7 @@ export default function ReportsPage() {
                           <p className="text-2xl font-bold text-white">{formatCurrency(clientData.summary.totalDebt, 'USD')}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">💸</span>
+                          <Icon name="expenses" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -867,7 +872,7 @@ export default function ReportsPage() {
                           <p className="text-3xl font-bold text-white">{(clientData.summary.avgPaymentRate * 100).toFixed(1)}%</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📊</span>
+                          <Icon name="statistics" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -878,7 +883,7 @@ export default function ReportsPage() {
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                   <div className="bg-gradient-to-r from-red-50 to-orange-50 px-6 py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                      <span className="text-2xl">💸</span>
+                      <Icon name="expenses" size="sm" />
                       {t.reports.debtList}
                     </h3>
                   </div>
@@ -937,7 +942,7 @@ export default function ReportsPage() {
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                   <div className="bg-gradient-to-r from-yellow-50 to-amber-50 px-6 py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                      <span className="text-2xl">🏆</span>
+                      <Icon name="profit" size="sm" />
                       {t.reports.topClients}
                     </h3>
                   </div>
@@ -1001,7 +1006,10 @@ export default function ReportsPage() {
                 {/* To'lov intizomi */}
                 {clientData.paymentDisciplineAnalysis && clientData.paymentDisciplineAnalysis.length > 0 && (
                   <Card className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">📊 {t.reports.paymentDiscipline}</h3>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Icon name="statistics" size="sm" />
+                      {t.reports.paymentDiscipline}
+                    </h3>
                     <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={clientData.paymentDisciplineAnalysis.slice(0, 10)}>
@@ -1029,7 +1037,7 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-16">
                 <div className="bg-gradient-to-br from-blue-100 to-indigo-200 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <span className="text-6xl">👥</span>
+                  <Icon name="clients" size="xl" className="text-blue-600" />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">{t.reports.clientDataNotFound}</p>
                 <p className="text-gray-400 text-sm mt-2">Mijoz ma'lumotlari topilmadi</p>
@@ -1044,7 +1052,7 @@ export default function ReportsPage() {
               <div className="text-center py-12">
                 <LoadingSpinner />
               </div>
-            ) : expenseData ? (
+            ) : expenseData && expenseData.summary && expenseData.summary.totalExpenses > 0 ? (
               <>
                 {/* Xarajat statistika kartochkalari - Enhanced */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1054,10 +1062,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-red-100 text-sm font-medium mb-1">{t.vagonSale.totalExpenses}</p>
-                          <p className="text-4xl font-bold text-white">{expenseData.summary.totalExpenses}</p>
+                          <p className="text-4xl font-bold text-white">{expenseData.summary?.totalExpenses || 0}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">💸</span>
+                          <Icon name="expenses" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1069,10 +1077,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-orange-100 text-sm font-medium mb-1">{t.reports.totalAmount}</p>
-                          <p className="text-2xl font-bold text-white">{formatCurrency(expenseData.summary.totalAmount, 'USD')}</p>
+                          <p className="text-2xl font-bold text-white">{formatCurrency(expenseData.summary?.totalAmount || 0, 'USD')}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">💰</span>
+                          <Icon name="profit" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1084,10 +1092,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-blue-100 text-sm font-medium mb-1">{t.reports.avgExpense}</p>
-                          <p className="text-2xl font-bold text-white">{formatCurrency(expenseData.summary.avgExpense, 'USD')}</p>
+                          <p className="text-2xl font-bold text-white">{formatCurrency(expenseData.summary?.avgExpense || 0, 'USD')}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📊</span>
+                          <Icon name="statistics" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1099,10 +1107,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-purple-100 text-sm font-medium mb-1">{t.reports.categories}</p>
-                          <p className="text-4xl font-bold text-white">{expenseData.summary.categoriesCount}</p>
+                          <p className="text-4xl font-bold text-white">{expenseData.summary?.categoriesCount || 0}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📋</span>
+                          <Icon name="list" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1110,10 +1118,13 @@ export default function ReportsPage() {
                 </div>
 
                 {/* {t.vagonSale.expensesByCategory} */}
-                {expenseData.expenseByCategory && expenseData.expenseByCategory.length > 0 && (
+                {expenseData.expenseByCategory && expenseData.expenseByCategory.length > 0 ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="p-6">
-                      <h3 className="text-lg font-semibold mb-4">📊 {t.vagonSale.expensesByCategory}</h3>
+                      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <Icon name="statistics" size="sm" />
+                        {t.vagonSale.expensesByCategory}
+                      </h3>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -1167,12 +1178,23 @@ export default function ReportsPage() {
                       </div>
                     </Card>
                   </div>
+                ) : (
+                  <div className="text-center py-16">
+                    <div className="bg-gradient-to-br from-red-100 to-orange-200 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-6 shadow-inner">
+                      <Icon name="expenses" size="xl" className="text-red-600" />
+                    </div>
+                    <p className="text-gray-500 text-lg font-medium">{t.reports.expenseDataNotFound}</p>
+                    <p className="text-gray-400 text-sm mt-2">Xarajat qo'shish uchun "Xarajatlar" sahifasiga o'ting</p>
+                  </div>
                 )}
 
                 {/* Oylik dinamika */}
                 {expenseData.monthlyDynamics && expenseData.monthlyDynamics.length > 0 && (
                   <Card className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">📈 {t.reports.monthlyExpenseDynamics}</h3>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Icon name="statistics" size="sm" />
+                      {t.reports.monthlyExpenseDynamics}
+                    </h3>
                     <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={expenseData.monthlyDynamics}>
@@ -1206,7 +1228,7 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-16">
                 <div className="bg-gradient-to-br from-red-100 to-orange-200 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <span className="text-6xl">💸</span>
+                  <Icon name="expenses" size="xl" className="text-red-600" />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">{t.reports.expenseDataNotFound}</p>
                 <p className="text-gray-400 text-sm mt-2">Xarajat ma'lumotlari topilmadi</p>
@@ -1231,10 +1253,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-green-100 text-sm font-medium mb-1">{t.reports.totalLots}</p>
-                          <p className="text-4xl font-bold text-white">{costData.summary.totalLots}</p>
+                          <p className="text-4xl font-bold text-white">{costData.summary?.totalVagons || 0}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📦</span>
+                          <Icon name="box" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1246,10 +1268,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-blue-100 text-sm font-medium mb-1">{t.reports.profitableLots}</p>
-                          <p className="text-4xl font-bold text-white">{costData.summary.profitableLots}</p>
+                          <p className="text-4xl font-bold text-white">{costData.summary?.profitableVagons || 0}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📈</span>
+                          <Icon name="statistics" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1261,10 +1283,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-orange-100 text-sm font-medium mb-1">{t.reports.avgProfitability}</p>
-                          <p className="text-3xl font-bold text-white">{costData.summary.avgProfitMargin.toFixed(1)}%</p>
+                          <p className="text-3xl font-bold text-white">{(costData.summary?.avgUsdProfitMargin || 0).toFixed(1)}%</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">📊</span>
+                          <Icon name="statistics" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1276,10 +1298,10 @@ export default function ReportsPage() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="text-purple-100 text-sm font-medium mb-1">{t.reports.totalProfit}</p>
-                          <p className="text-2xl font-bold text-white">{formatCurrency(costData.summary.totalGrossProfit, 'USD')}</p>
+                          <p className="text-2xl font-bold text-white">{formatCurrency((costData.summary?.totalUsdProfit || 0), 'USD')}</p>
                         </div>
                         <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:rotate-12 transition-transform duration-300">
-                          <span className="text-4xl">💰</span>
+                          <Icon name="profit" size="lg" className="text-white" />
                         </div>
                       </div>
                     </div>
@@ -1290,59 +1312,59 @@ export default function ReportsPage() {
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                      <span className="text-2xl">🏆</span>
+                      <Icon name="profit" size="sm" />
                       {t.reports.topProfitableLots}
                     </h3>
                   </div>
                   <div className="p-6">
-                    {costData.lotProfitability && costData.lotProfitability.length > 0 ? (
+                    {costData.vagonProfitability && costData.vagonProfitability.length > 0 ? (
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">{t.vagonSale.lotCode}</th>
-                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">{t.vagonSale.costPrice}</th>
-                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">{t.vagonSale.expenses}</th>
-                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">{t.vagonSale.revenue}</th>
-                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">{t.vagonSale.profit}</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Vagon raqami</th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">USD {t.vagonSale.costPrice}</th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">USD {t.vagonSale.expenses}</th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">USD {t.vagonSale.revenue}</th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">USD {t.vagonSale.profit}</th>
                               <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">{t.reports.profitability}</th>
                               <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">ROI</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
-                            {costData.lotProfitability.slice(0, 10).map((lot: any) => (
-                              <tr key={lot._id} className="hover:bg-green-50 transition-colors duration-150">
-                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{lot.lotCode}</td>
-                                <td className="px-6 py-4 text-sm text-right text-gray-700">{formatCurrency(lot.tannarx, 'USD')}</td>
+                            {costData.vagonProfitability.slice(0, 10).map((vagon: any) => (
+                              <tr key={vagon._id} className="hover:bg-green-50 transition-colors duration-150">
+                                <td className="px-6 py-4 text-sm font-bold text-gray-900">{vagon.vagonCode || 'N/A'}</td>
+                                <td className="px-6 py-4 text-sm text-right text-gray-700">{formatCurrency(vagon.usdTotalCost || 0, 'USD')}</td>
                                 <td className="px-6 py-4 text-sm text-right font-semibold text-red-600">
-                                  {formatCurrency(lot.totalExpenses, 'USD')}
+                                  {formatCurrency(vagon.usdExpenses || 0, 'USD')}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-right font-semibold text-green-600">
-                                  {formatCurrency(lot.totalRevenue, 'USD')}
+                                  {formatCurrency(vagon.usdRevenue || 0, 'USD')}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-right font-bold text-lg">
-                                  <span className={lot.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                    {formatCurrency(lot.grossProfit, 'USD')}
+                                  <span className={(vagon.usdGrossProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                    {formatCurrency(vagon.usdGrossProfit || 0, 'USD')}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-right">
                                   <span className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                                    lot.profitMargin > 20 ? 'bg-green-100 text-green-800 border border-green-200' : 
-                                    lot.profitMargin > 10 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 
-                                    lot.profitMargin > 0 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                                    (vagon.usdProfitMargin || 0) > 20 ? 'bg-green-100 text-green-800 border border-green-200' : 
+                                    (vagon.usdProfitMargin || 0) > 10 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 
+                                    (vagon.usdProfitMargin || 0) > 0 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                                     'bg-red-100 text-red-800 border border-red-200'
                                   }`}>
-                                    {lot.profitMargin.toFixed(1)}%
+                                    {(vagon.usdProfitMargin || 0).toFixed(1)}%
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-right">
                                   <span className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                                    lot.roi > 50 ? 'bg-green-100 text-green-800 border border-green-200' : 
-                                    lot.roi > 20 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 
-                                    lot.roi > 0 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                                    (vagon.usdROI || 0) > 50 ? 'bg-green-100 text-green-800 border border-green-200' : 
+                                    (vagon.usdROI || 0) > 20 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 
+                                    (vagon.usdROI || 0) > 0 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                                     'bg-red-100 text-red-800 border border-red-200'
                                   }`}>
-                                    {lot.roi.toFixed(1)}%
+                                    {(vagon.usdROI || 0).toFixed(1)}%
                                   </span>
                                 </td>
                               </tr>
@@ -1361,12 +1383,12 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* O'lchov bo'yicha rentabellik - Enhanced */}
-                {costData.dimensionProfitability && costData.dimensionProfitability.length > 0 && (
+                {/* O'lchov bo'yicha rentabellik - Hidden for now */}
+                {false && costData.dimensionProfitability && costData.dimensionProfitability.length > 0 && (
                   <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
                       <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                        <span className="text-2xl">📏</span>
+                        <Icon name="box" size="sm" />
                         {t.reports.dimensionProfitability}
                       </h3>
                     </div>
@@ -1432,7 +1454,7 @@ export default function ReportsPage() {
                   <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-b border-gray-200">
                       <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                        <span className="text-2xl">💱</span>
+                        <Icon name="profit" size="sm" />
                         Valyuta bo'yicha rentabellik
                       </h3>
                     </div>
@@ -1461,34 +1483,28 @@ export default function ReportsPage() {
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                                   <span className="text-gray-600 text-sm">Daromad:</span>
                                   <span className="font-bold text-green-600 text-lg">
-                                    {formatCurrency(currency.totalRevenue, currency._id)}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                                  <span className="text-gray-600 text-sm">{t.vagonSale.costPrice}:</span>
-                                  <span className="font-bold text-red-600 text-lg">
-                                    {formatCurrency(currency.totalCost, currency._id)}
+                                    {formatCurrency(currency.totalRevenue || 0, currency._id || 'USD')}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center py-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg px-3 -mx-1">
                                   <span className="text-gray-700 font-semibold text-sm">Foyda:</span>
                                   <span className={`font-bold text-xl ${
-                                    currency.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                                    (currency.grossProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                                   }`}>
-                                    {formatCurrency(currency.grossProfit, currency._id)}
+                                    {formatCurrency(currency.grossProfit || 0, currency._id || 'USD')}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                                   <span className="text-gray-600 text-sm">Rentabellik:</span>
                                   <span className={`font-bold text-lg ${
-                                    currency.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                                    (currency.profitMargin || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                                   }`}>
-                                    {currency.profitMargin.toFixed(1)}%
+                                    {(currency.profitMargin || 0).toFixed(1)}%
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center py-2">
                                   <span className="text-gray-600 text-sm">Sotuvlar:</span>
-                                  <span className="font-semibold text-gray-800">{currency.salesCount} ta</span>
+                                  <span className="font-semibold text-gray-800">{currency.salesCount || 0} ta</span>
                                 </div>
                               </div>
                             </div>
@@ -1502,7 +1518,7 @@ export default function ReportsPage() {
             ) : (
               <div className="text-center py-16">
                 <div className="bg-gradient-to-br from-purple-100 to-pink-200 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <span className="text-6xl">📊</span>
+                  <Icon name="statistics" size="xl" className="text-purple-600" />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">{t.vagonSale.costInfoNotFound}</p>
                 <p className="text-gray-400 text-sm mt-2">Rentabellik ma'lumotlari topilmadi</p>
