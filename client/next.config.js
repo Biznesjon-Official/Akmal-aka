@@ -1,11 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  // Turbopack for faster development
-  turbopack: {
-    root: process.cwd(),
-  },
-  
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // API rewrites only in development
   async rewrites() {
     if (process.env.NODE_ENV === 'development') {
@@ -62,4 +56,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
