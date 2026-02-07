@@ -1,17 +1,17 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const Kassa = require('../models/Kassa');
-const Wood = require('../models/Wood');
-const Sale = require('../models/Sale');
+const Cash = require('../models/Cash');
+// const Wood = require('../models/Wood'); // DEPRECATED - using Vagon system
+// const Sale = require('../models/Sale'); // DEPRECATED - using VagonSale
 const Client = require('../models/Client');
 const SystemSettings = require('../models/SystemSettings');
 const auth = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Import new models
 const Vagon = require('../models/Vagon');
 const VagonSale = require('../models/VagonSale');
-const Cash = require('../models/Cash');
-const Expense = require('../models/Expense');
+// const Expense = require('../models/Expense'); // DEPRECATED - using VagonExpense
 
 const router = express.Router();
 
@@ -334,7 +334,7 @@ router.get('/simple-dashboard', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Simple dashboard error:', error);
+    logger.error('Simple dashboard error:', error);
     res.status(500).json({ message: 'Dashboard ma\'lumotlarini olishda xatolik', error: error.message });
   }
 });
@@ -752,14 +752,14 @@ router.get('/vagon-reports', [auth, auth.adminOnly], async (req, res) => {
       if (startDate) salesFilter.sale_date.$gte = new Date(startDate);
       if (endDate) salesFilter.sale_date.$lte = new Date(endDate);
     }
-    if (valyuta) salesFilter.currency = valyuta;
+    if (valyuta) salesFilter.sale_currency = valyuta; // FIXED: currency -> sale_currency
     
     const soldVolume = await VagonSale.aggregate([
       { $match: salesFilter },
       {
         $lookup: {
           from: 'vagonlots',
-          localField: 'lot_id',
+          localField: 'lot',
           foreignField: '_id',
           as: 'lotInfo'
         }
@@ -768,11 +768,11 @@ router.get('/vagon-reports', [auth, auth.adminOnly], async (req, res) => {
       {
         $group: {
           _id: {
-            valyuta: '$currency',
+            valyuta: '$sale_currency', // FIXED: currency -> sale_currency
             month: { $month: '$sale_date' },
             year: { $year: '$sale_date' }
           },
-          totalSold: { $sum: '$volume_m3' },
+          totalSold: { $sum: '$client_received_volume_m3' }, // FIXED: volume_m3 -> client_received_volume_m3
           totalValue: { $sum: '$total_price' },
           avgPrice: { $avg: '$price_per_m3' },
           count: { $sum: 1 }
@@ -809,7 +809,7 @@ router.get('/vagon-reports', [auth, auth.adminOnly], async (req, res) => {
       {
         $lookup: {
           from: 'vagons',
-          localField: 'vagon_id',
+          localField: 'vagon', // FIXED: vagon_id -> vagon
           foreignField: '_id',
           as: 'vagonInfo'
         }
@@ -817,9 +817,9 @@ router.get('/vagon-reports', [auth, auth.adminOnly], async (req, res) => {
       { $unwind: { path: '$vagonInfo', preserveNullAndEmptyArrays: true } },
       {
         $group: {
-          _id: '$vagon_id',
+          _id: '$vagon', // FIXED: vagon_id -> vagon
           vagonNumber: { $first: '$vagonInfo.vagon_number' },
-          totalSold: { $sum: '$volume_m3' },
+          totalSold: { $sum: '$client_received_volume_m3' }, // FIXED: volume_m3 -> client_received_volume_m3
           salesCount: { $sum: 1 },
           firstSale: { $min: '$sale_date' },
           lastSale: { $max: '$sale_date' },
@@ -1239,7 +1239,7 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
           pipeline: [
             {
               $match: {
-                $expr: { $eq: ['$vagon_id', '$$vagonId'] },
+                $expr: { $eq: ['$vagon', '$$vagonId'] }, // FIXED: vagon_id -> vagon
                 isDeleted: false
               }
             }
@@ -1272,7 +1272,7 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
               $map: {
                 input: '$sales',
                 as: 'sale',
-                in: { $cond: [{ $eq: ['$$sale.currency', 'USD'] }, '$$sale.total_price', 0] }
+                in: { $cond: [{ $eq: ['$$sale.sale_currency', 'USD'] }, '$$sale.total_price', 0] } // FIXED: currency -> sale_currency
               }
             }
           },
@@ -1281,7 +1281,7 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
               $map: {
                 input: '$sales',
                 as: 'sale',
-                in: { $cond: [{ $eq: ['$$sale.currency', 'RUB'] }, '$$sale.total_price', 0] }
+                in: { $cond: [{ $eq: ['$$sale.sale_currency', 'RUB'] }, '$$sale.total_price', 0] } // FIXED: currency -> sale_currency
               }
             }
           }
@@ -1313,7 +1313,7 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
       },
       {
         $project: {
-          vagonCode: 1,
+          vagon_number: 1, // FIXED: vagonCode -> vagon_number
           status: 1,
           total_volume_m3: 1,
           sold_volume_m3: 1,
@@ -1348,13 +1348,13 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
               ...(endDate ? { $lte: new Date(endDate) } : {})
             }
           } : {}),
-          ...(valyuta ? { currency: valyuta } : {})
+          ...(valyuta ? { sale_currency: valyuta } : {}) // FIXED: currency -> sale_currency
         }
       },
       {
         $lookup: {
           from: 'vagonlots',
-          localField: 'lot_id',
+          localField: 'lot', // FIXED: lot_id -> lot
           foreignField: '_id',
           as: 'lotInfo'
         }
@@ -1363,7 +1363,7 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
       {
         $lookup: {
           from: 'vagons',
-          localField: 'vagon_id',
+          localField: 'vagon', // FIXED: vagon_id -> vagon
           foreignField: '_id',
           as: 'vagonInfo'
         }
@@ -1378,7 +1378,7 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
               '$lotInfo.cost_price_per_m3',
               {
                 $cond: [
-                  { $eq: ['$currency', 'USD'] },
+                  { $eq: ['$sale_currency', 'USD'] }, // FIXED: currency -> sale_currency
                   { $divide: ['$vagonInfo.usd_cost_price', { $ifNull: ['$vagonInfo.total_volume_m3', 1] }] },
                   { $divide: ['$vagonInfo.rub_cost_price', { $ifNull: ['$vagonInfo.total_volume_m3', 1] }] }
                 ]
@@ -1389,10 +1389,10 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
       },
       {
         $group: {
-          _id: '$currency',
+          _id: '$sale_currency', // FIXED: currency -> sale_currency
           totalRevenue: { $sum: '$total_price' },
-          totalCost: { $sum: { $multiply: ['$volume_m3', { $ifNull: ['$costPerM3', 0] }] } },
-          totalVolume: { $sum: '$volume_m3' },
+          totalCost: { $sum: { $multiply: ['$client_received_volume_m3', { $ifNull: ['$costPerM3', 0] }] } }, // FIXED: volume_m3 -> client_received_volume_m3
+          totalVolume: { $sum: '$client_received_volume_m3' }, // FIXED: volume_m3 -> client_received_volume_m3
           salesCount: { $sum: 1 },
           avgPrice: { $avg: '$price_per_m3' }
         }
@@ -1442,6 +1442,24 @@ router.get('/cost-profitability', [auth, auth.adminOnly], async (req, res) => {
   }
 });
 
+
+// Vagon bo'yicha moliyaviy hisobot (Kassa uchun)
+router.get('/vagon-financial', auth, async (req, res) => {
+  try {
+    console.log('📊 Vagon financial report request from user:', req.user?.username);
+    const reportService = require('../services/reportService');
+    const result = await reportService.getVagonFinancialReport(req.query);
+    console.log('✅ Vagon financial report generated:', {
+      totalVagons: result.summary.totalVagons,
+      totalExpenses: result.summary.totalExpenses,
+      totalRevenue: result.summary.totalRevenue
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Vagon financial report error:', error);
+    res.status(500).json({ message: 'Vagon moliyaviy hisobotida xatolik', error: error.message });
+  }
+});
 
 router.get('/dashboard-realtime', auth, async (req, res) => {
   try {

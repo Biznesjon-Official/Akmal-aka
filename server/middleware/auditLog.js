@@ -1,4 +1,5 @@
 const AuditLog = require('../models/AuditLog');
+const logger = require('../utils/logger');
 
 /**
  * Audit log yaratish funksiyasi
@@ -47,7 +48,7 @@ const createAuditLog = async (
 
     await AuditLog.createLog(logData);
   } catch (error) {
-    console.error('Audit log yaratishda xatolik:', error);
+    logger.error('Audit log yaratishda xatolik:', error);
     // Xatolik asosiy jarayonni to'xtatmasligi kerak
   }
 };

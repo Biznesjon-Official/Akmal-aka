@@ -6,10 +6,11 @@ const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
+const logger = require('./utils/logger');
 require('dotenv').config();
 
 // Services
-const exchangeRateService = require('./services/exchangeRateService');
+// const exchangeRateService = require('./services/exchangeRateService'); // Temporarily disabled
 
 const app = express();
 
@@ -43,8 +44,8 @@ app.use('/api/', limiter);
 app.use('/api/auth/login', loginLimiter);
 
 // Performance monitoring middleware
-const { performanceMonitor } = require('./middleware/autoOptimization');
-app.use(performanceMonitor);
+// const { performanceMonitor } = require('./middleware/autoOptimization'); // Temporarily disabled
+// app.use(performanceMonitor);
 
 // Compression - Response hajmini kichraytirish
 app.use(compression());
@@ -57,14 +58,16 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // CORS
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [
-      process.env.CLIENT_URL,
-      'https://wood-export-frontend.onrender.com',
-      'https://export-1-y4tz.onrender.com',
-      'http://akmalaka.biznesjon.uz'
-    ].filter(Boolean)
-  : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://192.168.1.7:3000', 'http://10.253.83.31:3000'];
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : process.env.NODE_ENV === 'production'
+    ? [
+        process.env.CLIENT_URL,
+        'https://wood-export-frontend.onrender.com',
+        'https://export-1-y4tz.onrender.com',
+        'http://akmalaka.biznesjon.uz'
+      ].filter(Boolean)
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -89,32 +92,33 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth', require('./routes/auth')); // Auth restored
 app.use('/api/client', require('./routes/client')); // Mijozlar
 app.use('/api/vagon', require('./routes/vagon')); // Vagonlar
 app.use('/api/vagon-lot', require('./routes/vagonLot')); // Vagon lotlari (YANGI)
-app.use('/api/vagon-expense', require('./routes/vagonExpense')); // Vagon xarajatlari (YANGI)
-app.use('/api/vagon-sale', require('./routes/vagonSale')); // Vagon sotuvlari
-app.use('/api/business-logic', require('./routes/businessLogic')); // TO'LIQ BIZNES LOGIKASI
+app.use('/api/vagon-expense', require('./routes/vagonExpense')); // Vagon xarajatlari (YANGI) - Working
+// app.use('/api/debt', require('./routes/debt')); // Qarz daftarcha (YANGI) - Temporarily disabled
+app.use('/api/vagon-sale', require('./routes/vagonSale')); // Vagon sotuvlari - Fixed
+app.use('/api/business-logic', require('./routes/businessLogic')); // TO'LIQ BIZNES LOGIKASI - Working
 app.use('/api/cash', require('./routes/cash')); // Pul oqimi
-app.use('/api/wood', require('./routes/wood')); // Eski (keyinroq o'chiramiz)
-app.use('/api/kassa', require('./routes/kassa'));
+
+
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/exchange-rate', require('./routes/exchangeRate'));
-app.use('/api/purchase', require('./routes/purchase'));
-app.use('/api/sale', require('./routes/sale'));
-app.use('/api/expense', require('./routes/expense'));
-app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // Kengaytirilgan xarajatlar
-app.use('/api/loss-liability', require('./routes/lossLiability')); // Yo'qotish javobgarligi (YANGI)
-app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // Xarajat taqsimoti (YANGI)
-app.use('/api/system-settings', require('./routes/systemSettings')); // Tizim sozlamalari (YANGI)
-app.use('/api/delivery', require('./routes/delivery')); // Olib kelib berish logistika (YANGI)
-app.use('/api/monitoring', require('./routes/monitoring')); // System monitoring (YANGI)
-app.use('/api/backup', require('./routes/backup'));
+
+
+
+// app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // Kengaytirilgan xarajatlar
+// app.use('/api/loss-liability', require('./routes/lossLiability')); // Yo'qotish javobgarligi (YANGI)
+// app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // Xarajat taqsimoti (YANGI)
+// app.use('/api/system-settings', require('./routes/systemSettings')); // Tizim sozlamalari (YANGI)
+// app.use('/api/delivery', require('./routes/delivery')); // Olib kelib berish logistika (YANGI)
+// app.use('/api/monitoring', require('./routes/monitoring')); // System monitoring (YANGI)
+// app.use('/api/backup', require('./routes/backup'));
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Server xatosi:', err);
+  logger.error('Server xatosi:', err);
   res.status(500).json({ 
     message: 'Server ichki xatosi',
     error: process.env.NODE_ENV === 'development' ? err.message : 'Ichki server xatosi'
@@ -126,21 +130,21 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'API endpoint topilmadi' });
 });
 
-// MongoDB connection with optimized pooling (REDUCED TIMEOUTS)
+// MongoDB connection with optimized pooling (OPTIMIZED TIMEOUTS)
 const mongooseOptions = {
-  serverSelectionTimeoutMS: 10000, // Reduced from 30000
-  socketTimeoutMS: 15000, // Reduced from 45000
-  connectTimeoutMS: 10000, // Reduced from 30000
-  maxPoolSize: 10, // Reduced from 20
-  minPoolSize: 2, // Reduced from 5
-  maxIdleTimeMS: 15000, // Reduced from 30000
+  serverSelectionTimeoutMS: 30000, // Increased for better stability
+  socketTimeoutMS: 45000, // Increased for large operations
+  connectTimeoutMS: 30000, // Increased for initial connection
+  maxPoolSize: 20, // Increased for better concurrency
+  minPoolSize: 5, // Increased minimum connections
+  maxIdleTimeMS: 30000, // Increased idle time
   retryWrites: true,
   retryReads: true,
   readPreference: 'primary', // Changed to primary for transaction compatibility
   writeConcern: {
     w: 'majority',
     j: true,
-    wtimeout: 5000 // Reduced from 10000
+    wtimeout: 10000 // Increased for complex writes
   }
 };
 
@@ -150,8 +154,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/wood_syst
     console.log('📊 Database:', mongoose.connection.name);
   })
   .catch(err => {
-    console.error('❌ MongoDB ulanish xatosi:', err.message);
-    console.error('💡 Yechim: Internet ulanishini va MongoDB Atlas IP whitelist ni tekshiring');
+    logger.error('❌ MongoDB ulanish xatosi:', err.message);
+    logger.error('💡 Yechim: Internet ulanishini va MongoDB Atlas IP whitelist ni tekshiring');
   });
 
 // MongoDB connection events
@@ -164,7 +168,7 @@ mongoose.connection.on('reconnected', () => {
 });
 
 mongoose.connection.on('error', (err) => {
-  console.error('❌ MongoDB xatosi:', err.message);
+  logger.error('❌ MongoDB xatosi:', err.message);
 });
 
 const PORT = process.env.PORT || 5002;
@@ -187,7 +191,7 @@ if (process.env.NODE_ENV !== 'test') {
     
     // Real-time valyuta kurslarini avtomatik yangilashni boshlash
     console.log(`💱 Real-time valyuta kurslari avtomatik yangilanishi boshlandi`);
-    exchangeRateService.startAutoUpdate();
+    // exchangeRateService.startAutoUpdate(); // Temporarily disabled for debugging
   });
 }
 

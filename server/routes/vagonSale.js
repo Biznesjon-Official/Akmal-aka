@@ -8,45 +8,51 @@ const auth = require('../middleware/auth');
 const { logUserAction } = require('../middleware/auditLog');
 const { updateVagonTotals } = require('../utils/vagonHelpers');
 const { SmartInvalidation } = require('../utils/cacheManager');
+const logger = require('../utils/logger');
+const { 
+  ClientNotFoundError, 
+  VagonNotFoundError, 
+  VagonLotNotFoundError,
+  InsufficientVolumeError,
+  handleCustomError 
+} = require('../utils/customErrors');
 
 // ✅ BACKGROUND HELPER FUNCTIONS (session'siz)
 async function updateClientDebtBackground(clientId) {
   try {
     console.log(`🔄 Background: Mijoz qarzi yangilanmoqda: ${clientId}`);
     
-    const allSales = await VagonSale.find({ 
-      client: clientId, 
-      isDeleted: false 
+    // MUHIM: Cash jadvalidan BARCHA qarz va to'lovlarni olish
+    const allDebtSales = await Cash.find({
+      client: clientId,
+      type: 'debt_sale', // Qarzga sotuvlar (VagonSale va qo'lda qo'shilgan)
+      isDeleted: false
     });
     
     const allPayments = await Cash.find({
       client: clientId,
-      type: { $in: ['client_payment', 'debt_payment'] },
+      type: { $in: ['client_payment', 'debt_payment'] }, // To'lovlar
       isDeleted: false
     });
     
-    console.log(`   📊 Sotuvlar soni: ${allSales.length}`);
+    console.log(`   📊 Qarzga sotuvlar soni: ${allDebtSales.length}`);
     console.log(`   💰 To'lovlar soni: ${allPayments.length}`);
     
     let usdTotalDebt = 0;
     let rubTotalDebt = 0;
-    let usdTotalVolume = 0;
-    let rubTotalVolume = 0;
     let usdTotalPaid = 0;
     let rubTotalPaid = 0;
     
-    // Sotuvlar bo'yicha hisoblash
-    allSales.forEach(sale => {
-      if (sale.sale_currency === 'USD') {
-        usdTotalDebt += sale.total_price || 0;
-        usdTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
-      } else if (sale.sale_currency === 'RUB') {
-        rubTotalDebt += sale.total_price || 0;
-        rubTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+    // Qarzlarni hisoblash (Cash jadvalidagi debt_sale yozuvlaridan)
+    allDebtSales.forEach(debtSale => {
+      if (debtSale.currency === 'USD') {
+        usdTotalDebt += debtSale.amount || 0;
+      } else if (debtSale.currency === 'RUB') {
+        rubTotalDebt += debtSale.amount || 0;
       }
     });
     
-    // To'lovlar bo'yicha hisoblash (Cash jadvalidan)
+    // To'lovlarni hisoblash (Cash jadvalidagi payment yozuvlaridan)
     allPayments.forEach(payment => {
       if (payment.currency === 'USD') {
         usdTotalPaid += payment.amount || 0;
@@ -58,13 +64,37 @@ async function updateClientDebtBackground(clientId) {
     console.log(`   💵 USD: qarz=${usdTotalDebt}, to'langan=${usdTotalPaid}`);
     console.log(`   💶 RUB: qarz=${rubTotalDebt}, to'langan=${rubTotalPaid}`);
     
-    // MUHIM: Cash jadvalidagi to'lovlarni log qilish
+    // MUHIM: Cash jadvalidagi yozuvlarni log qilish
+    if (allDebtSales.length > 0) {
+      console.log(`   📋 Qarzlar tafsiloti:`);
+      allDebtSales.forEach(debt => {
+        console.log(`      - ${debt.type}: ${debt.amount} ${debt.currency} (${new Date(debt.transaction_date).toLocaleDateString()})`);
+      });
+    }
+    
     if (allPayments.length > 0) {
       console.log(`   📋 To'lovlar tafsiloti:`);
       allPayments.forEach(payment => {
         console.log(`      - ${payment.type}: ${payment.amount} ${payment.currency} (${new Date(payment.transaction_date).toLocaleDateString()})`);
       });
     }
+    
+    // Hajmni VagonSale jadvalidan olish (faqat statistika uchun)
+    const allSales = await VagonSale.find({ 
+      client: clientId, 
+      isDeleted: false 
+    });
+    
+    let usdTotalVolume = 0;
+    let rubTotalVolume = 0;
+    
+    allSales.forEach(sale => {
+      if (sale.sale_currency === 'USD') {
+        usdTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+      } else if (sale.sale_currency === 'RUB') {
+        rubTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+      }
+    });
     
     const client = await Client.findById(clientId);
     if (client) {
@@ -91,7 +121,7 @@ async function updateClientDebtBackground(clientId) {
       console.log(`❌ Background: Mijoz topilmadi: ${clientId}`);
     }
   } catch (error) {
-    console.error(`❌ Background: Mijoz qarzi yangilashda xatolik:`, error);
+    logger.error(`❌ Background: Mijoz qarzi yangilashda xatolik:`, error);
   }
 }
 
@@ -99,12 +129,13 @@ async function createCashRecordsBackground(doc) {
   try {
     const client = await Client.findById(doc.client);
     if (!client) {
-      throw new Error(`Mijoz topilmadi: ${doc.client}`);
+      throw new ClientNotFoundError(doc.client);
     }
     
     console.log(`📝 Background: Cash yozuvlari yaratilmoqda: ${client.name}`);
     console.log(`   Jami narx: ${doc.total_price} ${doc.sale_currency}`);
     console.log(`   To'langan: ${doc.paid_amount || 0} ${doc.sale_currency}`);
+    console.log(`   Qarz: ${doc.debt || 0} ${doc.sale_currency}`);
     
     // 1. Qarzga sotuv yozuvi
     const debtSaleRecord = await Cash.create({
@@ -138,9 +169,33 @@ async function createCashRecordsBackground(doc) {
       console.log(`ℹ️  To'lov yo'q yoki 0: ${doc.paid_amount || 0} ${doc.sale_currency}`);
     }
     
-    console.log(`✅ Background: Cash yozuvlari yaratildi`);
+    // 3. MUHIM: Agar qarz bo'lsa (to'liq to'lanmagan), Debt jadvaliga yozuv qo'shish
+    if (doc.debt && doc.debt > 0) {
+      const Debt = require('../models/Debt');
+      const VagonLot = require('../models/VagonLot');
+      
+      const lot = await VagonLot.findById(doc.lot);
+      
+      const debtRecord = await Debt.create({
+        client: doc.client,
+        vagon: doc.vagon,
+        yogoch: doc.lot,
+        total_amount: doc.total_price,
+        paid_amount: doc.paid_amount || 0,
+        currency: doc.sale_currency,
+        sold_quantity: doc.sent_quantity || Math.floor(doc.warehouse_dispatched_volume_m3 || 0),
+        sale_date: doc.sale_date || new Date(),
+        notes: `VagonSale ID: ${doc._id} - ${lot ? lot.dimensions : 'N/A'}`
+      });
+      
+      console.log(`✅ Qarz daftarchaga yozildi: ${doc.debt} ${doc.sale_currency} (ID: ${debtRecord._id})`);
+    } else {
+      console.log(`ℹ️  Qarz yo'q - to'liq to'langan`);
+    }
+    
+    console.log(`✅ Background: Cash yozuvlari va qarz yaratildi`);
   } catch (error) {
-    console.error(`❌ Background: Cash yozuvlari yaratishda xatolik:`, error);
+    logger.error(`❌ Background: Cash yozuvlari yaratishda xatolik:`, error);
   }
 }
 
@@ -180,41 +235,37 @@ async function updateClientDebtWithSession(clientId, session) {
   
   console.log(`🔄 Mijoz qarzi yangilanmoqda: ${clientId}`);
   
-  // Session bilan barcha sotuvlarni olish
-  const allSales = await VagonSale.find({ 
-    client: clientId, 
-    isDeleted: false 
-  }).session(session).read('primary');
-  
-  // Session bilan barcha to'lovlarni olish
-  const allPayments = await Cash.find({
+  // MUHIM: Cash jadvalidan BARCHA qarz va to'lovlarni olish
+  const allDebtSales = await Cash.find({
     client: clientId,
-    type: { $in: ['client_payment', 'debt_payment'] },
+    type: 'debt_sale', // Qarzga sotuvlar (VagonSale va qo'lda qo'shilgan)
     isDeleted: false
   }).session(session).read('primary');
   
-  console.log(`   Sotuvlar: ${allSales.length} ta`);
+  const allPayments = await Cash.find({
+    client: clientId,
+    type: { $in: ['client_payment', 'debt_payment'] }, // To'lovlar
+    isDeleted: false
+  }).session(session).read('primary');
+  
+  console.log(`   Qarzga sotuvlar: ${allDebtSales.length} ta`);
   console.log(`   To'lovlar: ${allPayments.length} ta`);
   
   let usdTotalDebt = 0;
   let rubTotalDebt = 0;
-  let usdTotalVolume = 0;
-  let rubTotalVolume = 0;
   let usdTotalPaid = 0;
   let rubTotalPaid = 0;
   
-  // Sotuvlar bo'yicha hisoblash
-  allSales.forEach(sale => {
-    if (sale.sale_currency === 'USD') {
-      usdTotalDebt += sale.total_price || 0;
-      usdTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
-    } else if (sale.sale_currency === 'RUB') {
-      rubTotalDebt += sale.total_price || 0;
-      rubTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+  // Qarzlarni hisoblash (Cash jadvalidagi debt_sale yozuvlaridan)
+  allDebtSales.forEach(debtSale => {
+    if (debtSale.currency === 'USD') {
+      usdTotalDebt += debtSale.amount || 0;
+    } else if (debtSale.currency === 'RUB') {
+      rubTotalDebt += debtSale.amount || 0;
     }
   });
   
-  // To'lovlar bo'yicha hisoblash
+  // To'lovlarni hisoblash (Cash jadvalidagi payment yozuvlaridan)
   allPayments.forEach(payment => {
     if (payment.currency === 'USD') {
       usdTotalPaid += payment.amount || 0;
@@ -225,6 +276,23 @@ async function updateClientDebtWithSession(clientId, session) {
   
   console.log(`   USD qarz: ${usdTotalDebt}, to'langan: ${usdTotalPaid}`);
   console.log(`   RUB qarz: ${rubTotalDebt}, to'langan: ${rubTotalPaid}`);
+  
+  // Hajmni VagonSale jadvalidan olish (faqat statistika uchun)
+  const allSales = await VagonSale.find({ 
+    client: clientId, 
+    isDeleted: false 
+  }).session(session).read('primary');
+  
+  let usdTotalVolume = 0;
+  let rubTotalVolume = 0;
+  
+  allSales.forEach(sale => {
+    if (sale.sale_currency === 'USD') {
+      usdTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+    } else if (sale.sale_currency === 'RUB') {
+      rubTotalVolume += (sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0);
+    }
+  });
   
   // Session bilan mijoz ma'lumotlarini yangilash
   const client = await Client.findById(clientId).session(session).read('primary');
@@ -267,12 +335,13 @@ async function updateClientDebtWithSession(clientId, session) {
 async function createCashRecordsWithSession(doc, session) {
   const client = await Client.findById(doc.client).session(session).read('primary');
   if (!client) {
-    throw new Error(`Mijoz topilmadi: ${doc.client}`);
+    throw new ClientNotFoundError(doc.client);
   }
   
   console.log(`📝 Cash yozuvlari yaratilmoqda: ${client.name}`);
   console.log(`   Jami narx: ${doc.total_price} ${doc.sale_currency}`);
   console.log(`   To'langan: ${doc.paid_amount || 0} ${doc.sale_currency}`);
+  console.log(`   Qarz: ${doc.debt || 0} ${doc.sale_currency}`);
   
   try {
     // 1. Qarzga sotuv yozuvi (session bilan)
@@ -307,7 +376,31 @@ async function createCashRecordsWithSession(doc, session) {
       console.log(`ℹ️  To'lov yo'q yoki 0: ${doc.paid_amount || 0} ${doc.sale_currency}`);
     }
     
-    // 3. Yaratilgan yozuvlarni tekshirish
+    // 3. MUHIM: Agar qarz bo'lsa (to'liq to'lanmagan), Debt jadvaliga yozuv qo'shish
+    if (doc.debt && doc.debt > 0) {
+      const Debt = require('../models/Debt');
+      const VagonLot = require('../models/VagonLot');
+      
+      const lot = await VagonLot.findById(doc.lot).session(session).read('primary');
+      
+      const debtRecord = await Debt.create([{
+        client: doc.client,
+        vagon: doc.vagon,
+        yogoch: doc.lot,
+        total_amount: doc.total_price,
+        paid_amount: doc.paid_amount || 0,
+        currency: doc.sale_currency,
+        sold_quantity: doc.sent_quantity || Math.floor(doc.warehouse_dispatched_volume_m3 || 0),
+        sale_date: doc.sale_date || new Date(),
+        notes: `VagonSale ID: ${doc._id} - ${lot ? lot.dimensions : 'N/A'}`
+      }], { session });
+      
+      console.log(`✅ Qarz daftarchaga yozildi (transaction ichida): ${doc.debt} ${doc.sale_currency} (ID: ${debtRecord[0]._id})`);
+    } else {
+      console.log(`ℹ️  Qarz yo'q - to'liq to'langan`);
+    }
+    
+    // 4. Yaratilgan yozuvlarni tekshirish
     const createdRecords = await Cash.find({
       vagonSale: doc._id,
       isDeleted: false
@@ -387,7 +480,7 @@ router.get('/', auth, async (req, res) => {
       },
       { $unwind: { path: '$clientInfo', preserveNullAndEmptyArrays: true } },
       
-      // Lookup lot info
+      // Lookup lot info (sof foyda hisoblash uchun)
       {
         $lookup: {
           from: 'vagonlots',
@@ -395,7 +488,14 @@ router.get('/', auth, async (req, res) => {
           foreignField: '_id',
           as: 'lotInfo',
           pipeline: [
-            { $project: { dimensions: 1, purchase_currency: 1 } }
+            { $project: { 
+              dimensions: 1, 
+              purchase_currency: 1, 
+              cost_per_m3: 1,
+              purchase_amount: 1,
+              volume_m3: 1,
+              total_investment: 1
+            } }
           ]
         }
       },
@@ -412,7 +512,7 @@ router.get('/', auth, async (req, res) => {
         }
       }] : []),
       
-      // Project only needed fields
+      // Project only needed fields (sof foyda bilan)
       {
         $project: {
           vagon: '$vagonInfo',
@@ -434,7 +534,46 @@ router.get('/', auth, async (req, res) => {
           debt: 1,
           sale_date: 1,
           status: 1,
-          createdAt: 1
+          createdAt: 1,
+          // Sof foyda hisoblash
+          profit_analysis: {
+            $cond: {
+              if: { $and: [
+                { $ne: ['$lotInfo.cost_per_m3', null] },
+                { $gt: ['$warehouse_dispatched_volume_m3', 0] }
+              ]},
+              then: {
+                cost_per_m3: '$lotInfo.cost_per_m3',
+                sold_volume_m3: '$warehouse_dispatched_volume_m3',
+                cost_basis: { $multiply: ['$lotInfo.cost_per_m3', '$warehouse_dispatched_volume_m3'] },
+                revenue: '$total_price',
+                net_profit: { $subtract: ['$total_price', { $multiply: ['$lotInfo.cost_per_m3', '$warehouse_dispatched_volume_m3'] }] },
+                profit_margin_percentage: {
+                  $cond: {
+                    if: { $gt: ['$total_price', 0] },
+                    then: { 
+                      $multiply: [
+                        { $divide: [
+                          { $subtract: ['$total_price', { $multiply: ['$lotInfo.cost_per_m3', '$warehouse_dispatched_volume_m3'] }] },
+                          '$total_price'
+                        ]}, 
+                        100
+                      ]
+                    },
+                    else: 0
+                  }
+                },
+                currency: '$sale_currency'
+              },
+              else: {
+                net_profit: 0,
+                cost_basis: 0,
+                revenue: '$total_price',
+                profit_margin_percentage: 0,
+                note: 'Tan narx ma\'lumoti yo\'q'
+              }
+            }
+          }
         }
       },
       
@@ -474,13 +613,12 @@ router.get('/', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('VagonSale list error:', error);
-    res.status(500).json({ message: 'Sotuvlar ro\'yxatini olishda xatolik' });
+    return handleCustomError(error, res);
   }
 });
 
-// ✅ SOTUVLAR TARIXI ENDPOINT (VAQTINCHA AUTH'SIZ)
-router.get('/history', async (req, res) => {
+// ✅ SOTUVLAR TARIXI ENDPOINT
+router.get('/history', auth, async (req, res) => {
   try {
     console.log('📊 Sotuvlar tarixi so\'rovi:', req.query);
     
@@ -498,16 +636,16 @@ router.get('/history', async (req, res) => {
     // Filter obyektini yaratish
     const filter = { isDeleted: false };
     
-    // Sana filtri
+    // Sana filtri (sale_date bo'yicha)
     if (startDate || endDate) {
-      filter.createdAt = {};
+      filter.sale_date = {};
       if (startDate) {
-        filter.createdAt.$gte = new Date(startDate);
+        filter.sale_date.$gte = new Date(startDate);
       }
       if (endDate) {
         const endDateTime = new Date(endDate);
         endDateTime.setHours(23, 59, 59, 999); // Kun oxirigacha
-        filter.createdAt.$lte = endDateTime;
+        filter.sale_date.$lte = endDateTime;
       }
     }
     
@@ -539,7 +677,7 @@ router.get('/history', async (req, res) => {
     
     // Ma'lumotlarni olish - populate'siz test qilamiz
     const sales = await VagonSale.find(filter)
-      .sort({ createdAt: -1 }) // Eng yangi birinchi
+      .sort({ sale_date: -1, createdAt: -1 }) // sale_date bo'yicha, keyin createdAt
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
@@ -554,7 +692,7 @@ router.get('/history', async (req, res) => {
           .populate('client', 'name phone')
           .populate('vagon', 'vagonCode status')
           .populate('lot', 'dimensions')
-          .sort({ createdAt: -1 })
+          .sort({ sale_date: -1, createdAt: -1 }) // sale_date bo'yicha, keyin createdAt
           .skip(skip)
           .limit(parseInt(limit))
           .lean();
@@ -602,7 +740,7 @@ router.get('/history', async (req, res) => {
   }
 });
 
-// Bitta sotuv ma'lumotlari
+// Bitta sotuv ma'lumotlari (sof foyda bilan)
 router.get('/:id', auth, async (req, res) => {
   try {
     const sale = await VagonSale.findOne({ 
@@ -610,17 +748,25 @@ router.get('/:id', auth, async (req, res) => {
       isDeleted: false 
     })
       .populate('vagon')
-      .populate('lot')
+      .populate('lot') // Lot ma'lumotlarini olish (tan narx uchun)
       .populate('client');
     
     if (!sale) {
       return res.status(404).json({ message: 'Sotuv topilmadi' });
     }
     
-    res.json(sale);
+    // Sof foyda hisoblash
+    const profitInfo = await sale.calculateNetProfit();
+    
+    // Javobga sof foyda ma'lumotlarini qo'shish
+    const saleWithProfit = {
+      ...sale.toObject(),
+      profit_analysis: profitInfo
+    };
+    
+    res.json(saleWithProfit);
   } catch (error) {
-    console.error('VagonSale get error:', error);
-    res.status(500).json({ message: 'Sotuv ma\'lumotlarini olishda xatolik' });
+    return handleCustomError(error, res);
   }
 });
 
@@ -732,6 +878,14 @@ router.post('/', auth, async (req, res) => {
       });
     }
     
+    // Vagon arxivlangan bo'lsa
+    if (vagonDoc.status === 'archived') {
+      await session.abortTransaction();
+      return res.status(400).json({ 
+        message: 'Bu vagon arxivlangan. Sotuv qilish mumkin emas' 
+      });
+    }
+    
     const clientDoc = await Client.findById(client).session(session).read('primary');
     
     if (!clientDoc || clientDoc.isDeleted) {
@@ -748,11 +902,13 @@ router.post('/', auth, async (req, res) => {
       const volumePerPiece = lotDoc.volume_m3 / lotDoc.quantity;
       finalDispatchedVolume = sent_quantity * volumePerPiece;
       
-      // Dona tekshiruvi
-      if (sent_quantity > (lotDoc.remaining_quantity || 0)) {
+      // Dona tekshiruvi - Floating-point xatolarini oldini olish uchun toleransiya
+      const availableQuantity = lotDoc.remaining_quantity || 0;
+      
+      if (sent_quantity > availableQuantity) {
         await session.abortTransaction();
         return res.status(400).json({ 
-          message: `Lot da mavjud dona: ${lotDoc.remaining_quantity || 0}. Siz ${sent_quantity} dona jo'natmoqchisiz` 
+          message: `Lot da mavjud dona: ${availableQuantity}. Siz ${sent_quantity} dona jo'natmoqchisiz` 
         });
       }
     } else {
@@ -760,11 +916,16 @@ router.post('/', auth, async (req, res) => {
       const volumePerPiece = lotDoc.volume_m3 / lotDoc.quantity;
       finalSentQuantity = Math.floor(finalDispatchedVolume / volumePerPiece);
       
-      // Hajm tekshiruvi
-      if (finalDispatchedVolume > lotDoc.warehouse_remaining_volume_m3) {
+      // Hajm tekshiruvi - Floating point xatolari uchun kichik toleransiya
+      // Agar farq 0.0001 m³ dan kam bo'lsa, teng deb hisoblaymiz
+      const EPSILON = 0.0001; // 0.1 litr toleransiya
+      const availableVolume = lotDoc.warehouse_remaining_volume_m3 || 0;
+      
+      // Agar sotilayotgan hajm mavjud hajmdan sezilarli darajada ko'p bo'lsa
+      if (finalDispatchedVolume > availableVolume + EPSILON) {
         await session.abortTransaction();
         return res.status(400).json({ 
-          message: `Lot da mavjud hajm: ${lotDoc.warehouse_remaining_volume_m3} m³. Siz ${finalDispatchedVolume} m³ jo'natmoqchisiz` 
+          message: `Lot da mavjud hajm: ${availableVolume.toFixed(4)} m³. Siz ${finalDispatchedVolume.toFixed(4)} m³ jo'natmoqchisiz` 
         });
       }
     }
@@ -806,6 +967,11 @@ router.post('/', auth, async (req, res) => {
       sale = existingSale;
       
       console.log(`✅ Mavjud sotuv yangilandi: ${clientDoc.name} - ${lotDoc.dimensions}`);
+      console.log(`   Qo'shimcha hajm: ${finalDispatchedVolume} m³`);
+      console.log(`   Qo'shimcha dona: ${finalSentQuantity} ta`);
+      
+      // MUHIM: Mavjud sotuvga qo'shimcha kirim qilinganda ham lot ma'lumotlarini yangilash
+      // Bu qism pastda "Lotni yangilash" qismida bajariladi
     } else {
       // Yangi sotuv yaratish
       sale = new VagonSale({
@@ -845,9 +1011,16 @@ router.post('/', auth, async (req, res) => {
     // Lot ma'lumotlarini yangilash
     lotDoc.warehouse_dispatched_volume_m3 = (lotDoc.warehouse_dispatched_volume_m3 || 0) + finalDispatchedVolume;
     
-    // Qolgan hajmni hisoblash
+    // Qolgan hajmni hisoblash - Floating-point xatolarini oldini olish
     const totalAvailable = lotDoc.warehouse_available_volume_m3 || lotDoc.volume_m3 || 0;
-    lotDoc.warehouse_remaining_volume_m3 = Math.max(0, totalAvailable - lotDoc.warehouse_dispatched_volume_m3);
+    let calculatedRemaining = totalAvailable - lotDoc.warehouse_dispatched_volume_m3;
+    
+    // Agar juda kichik farq bo'lsa (< 0.001 m³), 0 deb hisoblash
+    if (Math.abs(calculatedRemaining) < 0.001) {
+      calculatedRemaining = 0;
+    }
+    
+    lotDoc.warehouse_remaining_volume_m3 = Math.max(0, calculatedRemaining);
     
     // Qolgan dona sonini hisoblash (agar dona bo'yicha sotuv bo'lsa)
     if (sale_unit === 'pieces') {
@@ -874,6 +1047,22 @@ router.post('/', auth, async (req, res) => {
     // MUHIM: Vagon ma'lumotlarini transaction ichida yangilash
     console.log(`🔄 Vagon jami ma'lumotlari yangilanmoqda (transaction ichida)...`);
     await updateVagonTotals(lotDoc.vagon, session);
+    
+    // ✅ Ombor/Saqlanish xarajatlarini yangilash
+    console.log(`📦 Ombor xarajatlari yangilanmoqda...`);
+    const StorageExpense = require('../models/StorageExpense');
+    const storageExpenses = await StorageExpense.find({
+      vagon: lotDoc.vagon,
+      status: { $in: ['active', 'partially_allocated'] },
+      isDeleted: false
+    }).session(session);
+    
+    if (storageExpenses.length > 0) {
+      for (const storageExp of storageExpenses) {
+        await storageExp.allocateForSale(soldVolume);
+        console.log(`📦 Ombor xarajat yangilandi: ${storageExp.allocated_cost.toFixed(2)} ${storageExp.currency} (${storageExp.status})`);
+      }
+    }
     
     // Cache invalidation
     SmartInvalidation.onVagonSaleChange(lotDoc.vagon, sale.client, sale._id);
@@ -912,8 +1101,7 @@ router.post('/', auth, async (req, res) => {
     
     res.status(201).json(sale);
   } catch (error) {
-    await session.abortTransaction();
-    console.error('VagonSale create error:', error);
+    logger.error('VagonSale create error:', error);
     
     // Error handling
     if (error.name === 'ValidationError') {
@@ -975,7 +1163,7 @@ router.put('/:id', auth, async (req, res) => {
     
     res.json(sale);
   } catch (error) {
-    console.error('VagonSale update error:', error);
+    logger.error('VagonSale update error:', error);
     res.status(400).json({ message: error.message });
   }
 });
@@ -1032,22 +1220,10 @@ router.delete('/:id', auth, async (req, res) => {
     res.json({ message: 'Sotuv o\'chirildi' });
   } catch (error) {
     await session.abortTransaction();
-    console.error('VagonSale delete error:', error);
-    res.status(500).json({ message: 'Sotuvni o\'chirishda xatolik' });
+    return handleCustomError(error, res);
   } finally {
     session.endSession();
   }
-});
-
-// To'lov qilish - DEPRECATED
-// Endi faqat /api/cash/client-payment ishlatiladi
-// Bu endpoint keyingi versiyada o'chiriladi
-router.post('/:id/payment', auth, async (req, res) => {
-  res.status(410).json({ 
-    message: 'Bu endpoint ishlatilmaydi. Iltimos /api/cash/client-payment ishlatting',
-    deprecated: true,
-    alternative: 'POST /api/cash/client-payment'
-  });
 });
 
 module.exports = router;

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Client = require('../models/Client');
 const auth = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Barcha mijozlar ro'yxati (PAGINATION BILAN)
 router.get('/', auth, async (req, res) => {
@@ -80,7 +81,7 @@ router.get('/', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Client list error:', error);
+    logger.error('Client list error:', error);
     res.status(500).json({ message: 'Mijozlar ro\'yxatini olishda xatolik' });
   }
 });
@@ -111,7 +112,7 @@ router.get('/:id', auth, async (req, res) => {
     
     res.json(clientWithVirtuals);
   } catch (error) {
-    console.error('Client get error:', error);
+    logger.error('Client get error:', error);
     res.status(500).json({ message: 'Mijoz ma\'lumotlarini olishda xatolik' });
   }
 });
@@ -152,7 +153,7 @@ router.post('/', auth, async (req, res) => {
     
     res.status(201).json(client);
   } catch (error) {
-    console.error('Client create error:', error);
+    logger.error('Client create error:', error);
     res.status(400).json({ message: error.message });
   }
 });
@@ -196,7 +197,7 @@ router.put('/:id', auth, async (req, res) => {
     
     res.json(client);
   } catch (error) {
-    console.error('Client update error:', error);
+    logger.error('Client update error:', error);
     res.status(400).json({ message: error.message });
   }
 });
@@ -242,7 +243,7 @@ router.delete('/:id', auth, async (req, res) => {
     
     res.json({ message: 'Mijoz o\'chirildi' });
   } catch (error) {
-    console.error('Client delete error:', error);
+    logger.error('Client delete error:', error);
     res.status(500).json({ message: 'Mijozni o\'chirishda xatolik' });
   }
 });
@@ -271,7 +272,7 @@ router.get('/:id/stats', auth, async (req, res) => {
     
     res.json(stats);
   } catch (error) {
-    console.error('Client stats error:', error);
+    logger.error('Client stats error:', error);
     res.status(500).json({ message: 'Statistikani olishda xatolik' });
   }
 });
@@ -412,7 +413,7 @@ router.post('/:id/debt', auth, async (req, res) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error('Client debt management error:', error);
+    logger.error('Client debt management error:', error);
     res.status(500).json({ message: 'Qarz boshqarishda xatolik', error: error.message });
   } finally {
     session.endSession();
@@ -423,8 +424,8 @@ module.exports = router;
 // Mijozning batafsil ma'lumotlari (sotuvlar, to'lovlar, qarzlar)
 router.get('/:id/details', auth, async (req, res) => {
   try {
-    const Sale = require('../models/Sale');
-    const Kassa = require('../models/Kassa');
+    // const Sale = require('../models/Sale'); // DEPRECATED - using VagonSale
+    const Cash = require('../models/Cash');
     
     const client = await Client.findOne({ 
       _id: req.params.id, 
@@ -531,7 +532,7 @@ router.get('/:id/details', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Client details error:', error);
+    logger.error('Client details error:', error);
     res.status(500).json({ message: 'Mijoz tafsilotlarini olishda xatolik' });
   }
 });
@@ -539,8 +540,8 @@ router.get('/:id/details', auth, async (req, res) => {
 // Mijozning sotib olgan lotlari
 router.get('/:id/lots', auth, async (req, res) => {
   try {
-    const Sale = require('../models/Sale');
-    const Wood = require('../models/Wood');
+    // const Sale = require('../models/Sale'); // DEPRECATED - using VagonSale
+    // const Wood = require('../models/Wood'); // DEPRECATED - using Vagon system
     
     const client = await Client.findOne({ 
       _id: req.params.id, 
@@ -599,7 +600,7 @@ router.get('/:id/lots', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Client lots error:', error);
+    logger.error('Client lots error:', error);
     res.status(500).json({ message: 'Mijoz lotlarini olishda xatolik' });
   }
 });
@@ -607,7 +608,7 @@ router.get('/:id/lots', auth, async (req, res) => {
 // Mijozning to'lov tarixi
 router.get('/:id/payments', auth, async (req, res) => {
   try {
-    const Kassa = require('../models/Kassa');
+    const Cash = require('../models/Cash');
     
     const client = await Client.findOne({ 
       _id: req.params.id, 
@@ -689,7 +690,7 @@ router.get('/:id/payments', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Client payments error:', error);
+    logger.error('Client payments error:', error);
     res.status(500).json({ message: 'To\'lov tarixini olishda xatolik' });
   }
 });

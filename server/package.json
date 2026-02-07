@@ -10,6 +10,9 @@
     "test:watch": "NODE_ENV=test jest --watch",
     "test:optimizations": "node scripts/test-optimizations.js",
     "clean-all": "node scripts/clean-all-data.js",
+    "seed": "node scripts/seed-database.js",
+    "seed:demo": "node scripts/seed-database.js --demo",
+    "seed:help": "node scripts/seed-database.js --help",
     "check-admins": "node scripts/check-admins.js",
     "create-admin": "node scripts/create-admin.js"
   },
@@ -26,11 +29,10 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "morgan": "^1.10.1",
-    "node-cache": "^5.1.2"
+    "node-cache": "^5.1.2",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/supertest": "^6.0.3",
     "jest": "^30.2.0",
     "nodemon": "^3.0.2",
     "supertest": "^7.2.2"

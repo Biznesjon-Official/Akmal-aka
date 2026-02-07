@@ -1,10 +1,12 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
-const Kassa = require('../models/Kassa');
+const Cash = require('../models/Cash');
 const auth = require('../middleware/auth');
 const { cacheMiddleware, SmartInvalidation } = require('../utils/cacheManager');
 const { EXPENSE_TYPES, EXPENSE_TYPE_LABELS, EXPENSE_TYPE_DETAILS } = require('../constants/expenseTypes');
+const { safeTransaction } = require('../utils/safeTransaction');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -23,12 +25,15 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
     } = req.query;
     
     const filter = { 
-      turi: 'rasxod',
+      type: 'expense',
       isDeleted: false 
     };
     
-    if (xarajatTuri) filter.xarajatTuri = xarajatTuri;
-    if (valyuta) filter.valyuta = valyuta;
+    // Cash model'da xarajatTuri field yo'q, shuning uchun description orqali filter qilamiz
+    if (xarajatTuri) {
+      filter.description = { $regex: xarajatTuri, $options: 'i' };
+    }
+    if (valyuta) filter.currency = valyuta;
     if (vagon) filter.vagon = vagon;
     
     if (startDate || endDate) {
@@ -38,18 +43,18 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
     }
     
     if (search) {
-      filter.tavsif = { $regex: search, $options: 'i' };
+      filter.description = { $regex: search, $options: 'i' };
     }
     
-    const expenses = await Kassa.find(filter)
-      .populate('yaratuvchi', 'username')
+    const expenses = await Cash.find(filter)
+      .populate('createdBy', 'username')
       .populate('vagon', 'vagonCode sending_place receiving_place')
       .populate('client', 'name phone usd_current_debt rub_current_debt')
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
     
-    const total = await Kassa.countDocuments(filter);
+    const total = await Cash.countDocuments(filter);
     
     res.json({
       expenses,
@@ -58,7 +63,7 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
       total
     });
   } catch (error) {
-    console.error('Advanced expense list error:', error);
+    logger.error('Advanced expense list error:', error);
     res.status(500).json({ message: 'Xarajatlar ro\'yxatini olishda xatolik' });
   }
 });
@@ -71,9 +76,6 @@ router.post('/', [auth, [
   body('tavsif').notEmpty().withMessage('Tavsif kiritilishi shart'),
   body('javobgarShaxs').notEmpty().withMessage('Javobgar shaxs kiritilishi shart')
 ]], async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -106,117 +108,164 @@ router.post('/', [auth, [
       return res.status(400).json({ message: 'Qarzdorlik xarajatlari uchun mijoz tanlanishi shart' });
     }
 
-    // Chiqim kategoriyasidagi xarajatlar uchun vagon majburiy
+    // Chiqim kategoriyasidagi xarajatlar uchun vagon ixtiyoriy (majburiy emas)
     const chiqimSubTypes = ['transport_kz', 'transport_uz', 'transport_kelish', 'bojxona_nds', 'yuklash_tushirish', 'saqlanish', 'ishchilar'];
-    if (chiqimSubTypes.includes(xarajatTuri) && !vagon) {
-      return res.status(400).json({ message: 'Chiqim xarajatlari uchun vagon tanlanishi shart' });
-    }
+    
+    // Firma xarajatlari uchun vagon va client majburiy emas
+    
+    // Safe transaction with automatic retry
+    const result = await safeTransaction(async (session) => {
 
-    // Kassa yozuvi yaratish
-    const kassaEntry = new Kassa({
-      turi: 'rasxod',
-      xarajatTuri,
-      summa,
-      valyuta,
-      summaRUB: summaRUB || summa,
-      summaUSD: summaUSD || 0,
-      tavsif: `${getExpenseTypeLabel(xarajatTuri)} - ${tavsif}`,
-      vagon: vagon || null,
-      client: client || null,
-      sana: xarajatSanasi ? new Date(xarajatSanasi) : new Date(),
-      yaratuvchi: req.user.userId,
-      qoshimchaMalumot: JSON.stringify({
-        javobgarShaxs,
-        tolovSanasi: tolovSanasi ? new Date(tolovSanasi) : null,
-        hujjatRaqami,
-        qoshimchaMalumot
-      })
-    });
-    
-    await kassaEntry.save({ session });
-    
-    // ✅ Vagon uchun xarajatni hisoblash va saqlash
-    if (vagon && chiqimSubTypes.includes(xarajatTuri)) {
-      const Vagon = require('../models/Vagon');
-      const vagonDoc = await Vagon.findById(vagon).session(session);
+      // Chiqim kategoriyasidagi xarajatlar uchun vagon majburiy
+      const chiqimSubTypes = ['transport_kz', 'transport_uz', 'transport_kelish', 'bojxona_nds', 'yuklash_tushirish', 'saqlanish', 'ishchilar'];
       
-      if (vagonDoc) {
-        // Vagon modelida xarajatlar maydonini yaratish (agar yo'q bo'lsa)
-        if (!vagonDoc.expenses) {
-          vagonDoc.expenses = {
-            USD: 0,
-            RUB: 0,
-            details: []
-          };
-        }
-        
-        // Xarajatni qo'shish
-        if (valyuta === 'USD') {
-          vagonDoc.expenses.USD = (vagonDoc.expenses.USD || 0) + summa;
-        } else if (valyuta === 'RUB') {
-          vagonDoc.expenses.RUB = (vagonDoc.expenses.RUB || 0) + summa;
-        }
-        
-        // Xarajat tafsilotlarini saqlash
-        if (!vagonDoc.expenses.details) {
-          vagonDoc.expenses.details = [];
-        }
-        
-        vagonDoc.expenses.details.push({
-          expenseId: kassaEntry._id,
-          xarajatTuri,
-          summa,
-          valyuta,
-          tavsif,
-          sana: kassaEntry.sana,
-          javobgarShaxs
-        });
-        
-        await vagonDoc.save({ session });
-        
-        console.log(`🚛 VAGON XARAJAT: ${vagonDoc.vagonCode} - ${summa} ${valyuta} (${xarajatTuri})`);
-      }
-    }
-    
-    // ✅ Qarzdorlik xarajatlari uchun mijozning qarziga qo'shish
-    if (xarajatTuri === 'qarzdorlik' && client) {
-      const Client = require('../models/Client');
-      const clientDoc = await Client.findById(client).session(session);
+      // Cash yozuvi yaratish
+      const cashEntry = new Cash({
+        type: 'expense',
+        amount: summa,
+        currency: valyuta,
+        description: `${getExpenseTypeLabel(xarajatTuri)} - ${tavsif}`,
+        vagon: vagon || null,
+        client: client || null,
+        transaction_date: xarajatSanasi ? new Date(xarajatSanasi) : new Date(),
+        createdBy: req.user.userId
+      });
       
-      if (clientDoc) {
-        if (valyuta === 'USD') {
-          clientDoc.usd_total_debt += summa;
-        } else if (valyuta === 'RUB') {
-          clientDoc.rub_total_debt += summa;
+      await cashEntry.save({ session });
+      
+      // ✅ Vagon uchun xarajatni hisoblash va saqlash
+      if (vagon && chiqimSubTypes.includes(xarajatTuri)) {
+        const Vagon = require('../models/Vagon');
+        const vagonDoc = await Vagon.findById(vagon).session(session);
+        
+        if (vagonDoc) {
+          // Vagon modelida xarajatlar maydonini yaratish (agar yo'q bo'lsa)
+          if (!vagonDoc.expenses) {
+            vagonDoc.expenses = {
+              USD: 0,
+              RUB: 0,
+              details: []
+            };
+          }
+          
+          // Xarajatni qo'shish
+          if (valyuta === 'USD') {
+            vagonDoc.expenses.USD = (vagonDoc.expenses.USD || 0) + summa;
+          } else if (valyuta === 'RUB') {
+            vagonDoc.expenses.RUB = (vagonDoc.expenses.RUB || 0) + summa;
+          }
+          
+          // Xarajat tafsilotlarini saqlash
+          if (!vagonDoc.expenses.details) {
+            vagonDoc.expenses.details = [];
+          }
+          
+          vagonDoc.expenses.details.push({
+            expenseId: cashEntry._id,
+            xarajatTuri,
+            summa,
+            valyuta,
+            tavsif,
+            sana: cashEntry.transaction_date,
+            javobgarShaxs
+          });
+          
+          await vagonDoc.save({ session });
+          
+          console.log(`🚛 VAGON XARAJAT: ${vagonDoc.vagonCode} - ${summa} ${valyuta} (${xarajatTuri})`);
         }
-        
-        await clientDoc.save({ session });
-        
-        console.log(`💳 QARZDORLIK: ${clientDoc.name} ga ${summa} ${valyuta} qarz berildi`);
       }
+      
+      // ✅ Qarzdorlik xarajatlari uchun mijozning qarziga qo'shish
+      if (xarajatTuri === 'qarzdorlik' && client) {
+        const Client = require('../models/Client');
+        const clientDoc = await Client.findById(client).session(session);
+        
+        if (clientDoc) {
+          if (valyuta === 'USD') {
+            clientDoc.usd_total_debt += summa;
+          } else if (valyuta === 'RUB') {
+            clientDoc.rub_total_debt += summa;
+          }
+          
+          await clientDoc.save({ session });
+          
+          console.log(`💳 QARZDORLIK: ${clientDoc.name} ga ${summa} ${valyuta} qarz berildi`);
+        }
+      }
+      
+      // ✅ Ombor/Saqlanish xarajatlari uchun StorageExpense yaratish
+      if (xarajatTuri === 'saqlanish' && vagon) {
+        const StorageExpense = require('../models/StorageExpense');
+        const Vagon = require('../models/Vagon');
+        
+        const vagonDoc = await Vagon.findById(vagon).session(session);
+        
+        if (vagonDoc) {
+          // Vagonning jami hajmini hisoblash
+          const totalVolume = (vagonDoc.lots && Array.isArray(vagonDoc.lots)) 
+            ? vagonDoc.lots.reduce((sum, lot) => sum + (lot.volume_m3 || 0), 0)
+            : 0;
+          
+          // StorageExpense yaratish
+          const storageExpense = new StorageExpense({
+            vagon: vagon,
+            expense: cashEntry._id,
+            total_storage_cost: summa,
+            currency: valyuta,
+            total_vagon_volume_m3: totalVolume,
+            remaining_volume_m3: totalVolume,
+            remaining_cost: summa,
+            description: tavsif,
+            created_by: req.user.userId
+          });
+          
+          await storageExpense.save({ session });
+          
+          console.log(`📦 OMBOR XARAJAT: ${vagonDoc.vagonCode} - ${summa} ${valyuta} (${totalVolume.toFixed(2)} m³)`);
+        }
+      }
+      
+      SmartInvalidation.onCashChange();
+      
+      const populatedExpense = await Cash.findById(cashEntry._id)
+        .session(session)
+        .populate('vagon', 'vagonCode sending_place receiving_place')
+        .populate('client', 'name phone usd_current_debt rub_current_debt')
+        .populate('createdBy', 'username');
+      
+      console.log(`💰 XARAJAT → KASSA: ${xarajatTuri} - ${summa} ${valyuta} (ID: ${cashEntry._id})`);
+      
+      return {
+        ...populatedExpense.toObject(),
+        message: '✅ Xarajat muvaffaqiyatli qo\'shildi'
+      };
+  }, {
+    maxRetries: 5,
+    onRetry: (attempt) => {
+      console.log(`🔄 Xarajat qo'shish qayta urinilmoqda (${attempt}-marta)...`);
     }
+  });
+  
+  res.status(201).json(result);
     
-    SmartInvalidation.onCashChange();
-    
-    await session.commitTransaction();
-    
-    const populatedExpense = await Kassa.findById(kassaEntry._id)
-      .populate('vagon', 'vagonCode sending_place receiving_place')
-      .populate('client', 'name phone usd_current_debt rub_current_debt')
-      .populate('yaratuvchi', 'username');
-    
-    console.log(`💰 XARAJAT → KASSA: ${xarajatTuri} - ${summa} ${valyuta} (ID: ${kassaEntry._id})`);
-    
-    res.status(201).json({
-      ...populatedExpense.toObject(),
-      message: '✅ Xarajat muvaffaqiyatli qo\'shildi va vagon xarajatlariga qo\'shildi'
-    });
   } catch (error) {
-    await session.abortTransaction();
-    console.error('Advanced expense create error:', error);
+    logger.error('Advanced expense create error:', error);
+    
+    // Write conflict xatoligini tekshirish
+    const isWriteConflict = 
+      error.code === 112 || 
+      error.codeName === 'WriteConflict' ||
+      (error.message && error.message.includes('Write conflict'));
+    
+    if (isWriteConflict) {
+      return res.status(409).json({ 
+        message: 'Tizim band, iltimos bir oz kuting va qayta urinib ko\'ring.',
+        code: 'WRITE_CONFLICT'
+      });
+    }
+    
     res.status(400).json({ message: error.message });
-  } finally {
-    session.endSession();
   }
 });
 
@@ -226,7 +275,7 @@ router.get('/stats/advanced', auth, async (req, res) => {
     const { startDate, endDate, valyuta } = req.query;
     
     const matchFilter = { 
-      turi: 'rasxod',
+      type: 'expense',
       isDeleted: false 
     };
     
@@ -235,47 +284,45 @@ router.get('/stats/advanced', auth, async (req, res) => {
       if (startDate) matchFilter.createdAt.$gte = new Date(startDate);
       if (endDate) matchFilter.createdAt.$lte = new Date(endDate);
     }
-    if (valyuta) matchFilter.valyuta = valyuta;
+    if (valyuta) matchFilter.currency = valyuta;
     
-    // Xarajat turi bo'yicha statistika
-    const byExpenseType = await Kassa.aggregate([
+    // Xarajat turi bo'yicha statistika (description orqali)
+    const byExpenseType = await Cash.aggregate([
       { $match: matchFilter },
       {
         $group: {
-          _id: '$xarajatTuri',
-          totalSumma: { $sum: '$summa' },
-          totalSummaRUB: { $sum: '$summaRUB' },
+          _id: '$description',
+          totalSumma: { $sum: '$amount' },
           count: { $sum: 1 },
-          avgSumma: { $avg: '$summa' }
+          avgSumma: { $avg: '$amount' }
         }
       },
       { $sort: { totalSumma: -1 } }
     ]);
     
     // Valyuta bo'yicha statistika
-    const byCurrency = await Kassa.aggregate([
+    const byCurrency = await Cash.aggregate([
       { $match: matchFilter },
       {
         $group: {
-          _id: '$valyuta',
-          totalSumma: { $sum: '$summa' },
+          _id: '$currency',
+          totalSumma: { $sum: '$amount' },
           count: { $sum: 1 }
         }
       }
     ]);
     
     // Oylik trend
-    const monthlyTrend = await Kassa.aggregate([
+    const monthlyTrend = await Cash.aggregate([
       { $match: matchFilter },
       {
         $group: {
           _id: {
             year: { $year: '$createdAt' },
             month: { $month: '$createdAt' },
-            valyuta: '$valyuta',
-            xarajatTuri: '$xarajatTuri'
+            currency: '$currency'
           },
-          totalSumma: { $sum: '$summa' },
+          totalSumma: { $sum: '$amount' },
           count: { $sum: 1 }
         }
       },
@@ -284,7 +331,7 @@ router.get('/stats/advanced', auth, async (req, res) => {
     
     // Kunlik trend (oxirgi 30 kun)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const dailyTrend = await Kassa.aggregate([
+    const dailyTrend = await Cash.aggregate([
       { 
         $match: { 
           ...matchFilter,
@@ -295,9 +342,9 @@ router.get('/stats/advanced', auth, async (req, res) => {
         $group: {
           _id: {
             date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            valyuta: '$valyuta'
+            currency: '$currency'
           },
-          totalSumma: { $sum: '$summa' },
+          totalSumma: { $sum: '$amount' },
           count: { $sum: 1 }
         }
       },
@@ -305,11 +352,11 @@ router.get('/stats/advanced', auth, async (req, res) => {
     ]);
     
     // Top xarajatlar
-    const topExpenses = await Kassa.find(matchFilter)
-      .sort({ summa: -1 })
+    const topExpenses = await Cash.find(matchFilter)
+      .sort({ amount: -1 })
       .limit(10)
       .populate('vagon', 'vagonCode sending_place receiving_place')
-      .populate('yaratuvchi', 'username');
+      .populate('createdBy', 'username');
     
     res.json({
       byExpenseType,
@@ -324,7 +371,7 @@ router.get('/stats/advanced', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Advanced expense stats error:', error);
+    logger.error('Advanced expense stats error:', error);
     res.status(500).json({ message: 'Statistikani olishda xatolik' });
   }
 });
@@ -332,7 +379,7 @@ router.get('/stats/advanced', auth, async (req, res) => {
 // Xarajat tafsilotlari
 router.get('/:id/details', auth, async (req, res) => {
   try {
-    const expense = await Kassa.findById(req.params.id)
+    const expense = await Cash.findById(req.params.id)
       .populate('vagon', 'vagonCode sending_place receiving_place')
       .populate('client', 'name phone usd_current_debt rub_current_debt')
       .populate('yaratuvchi', 'username');
@@ -356,7 +403,7 @@ router.get('/:id/details', auth, async (req, res) => {
       additionalInfo
     });
   } catch (error) {
-    console.error('Expense details error:', error);
+    logger.error('Expense details error:', error);
     res.status(500).json({ message: 'Xarajat tafsilotlarini olishda xatolik' });
   }
 });
@@ -364,9 +411,10 @@ router.get('/:id/details', auth, async (req, res) => {
 // Xarajat turlarini olish
 router.get('/types/list', auth, async (req, res) => {
   try {
+    // Tarjima kerak emas, chunki nomlar to'g'ridan-to'g'ri kiritilgan
     res.json(EXPENSE_TYPE_DETAILS);
   } catch (error) {
-    console.error('Expense types error:', error);
+    logger.error('Expense types error:', error);
     res.status(500).json({ message: 'Xarajat turlarini olishda xatolik' });
   }
 });
@@ -393,25 +441,25 @@ router.get('/summary/business', auth, async (req, res) => {
       }
     ]);
 
-    // Jami xarajatlar (Kassa dan)
-    const totalExpensesResult = await Kassa.aggregate([
-      { $match: { turi: 'rasxod', isDeleted: false } },
+    // Jami xarajatlar (Cash dan)
+    const totalExpensesResult = await Cash.aggregate([
+      { $match: { type: 'expense', isDeleted: false } },
       {
         $group: {
-          _id: '$valyuta',
-          totalExpenses: { $sum: '$summa' },
+          _id: '$currency',
+          totalExpenses: { $sum: '$amount' },
           count: { $sum: 1 }
         }
       }
     ]);
 
-    // Jami to'lovlar (Kassa dan)
-    const totalPaymentsResult = await Kassa.aggregate([
-      { $match: { turi: 'kirim', isDeleted: false } },
+    // Jami to'lovlar (Cash dan)
+    const totalPaymentsResult = await Cash.aggregate([
+      { $match: { type: { $in: ['client_payment', 'debt_payment', 'vagon_sale'] }, isDeleted: false } },
       {
         $group: {
-          _id: '$valyuta',
-          totalPayments: { $sum: '$summa' },
+          _id: '$currency',
+          totalPayments: { $sum: '$amount' },
           count: { $sum: 1 }
         }
       }
@@ -490,7 +538,7 @@ router.get('/summary/business', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Business summary error:', error);
+    logger.error('Business summary error:', error);
     res.status(500).json({ message: 'Biznes hisobotini olishda xatolik' });
   }
 });
@@ -508,13 +556,13 @@ router.get('/vagon/:vagonId/expenses', auth, async (req, res) => {
     }
     
     // Vagon xarajatlarini olish
-    const expenses = await Kassa.find({
+    const expenses = await Cash.find({
       vagon: vagonId,
-      turi: 'rasxod',
+      type: 'expense',
       isDeleted: false
     })
-      .populate('yaratuvchi', 'username')
-      .sort({ sana: -1 });
+      .populate('createdBy', 'username')
+      .sort({ transaction_date: -1 });
     
     // Jami xarajatlarni hisoblash
     const totalExpenses = {
@@ -534,7 +582,7 @@ router.get('/vagon/:vagonId/expenses', auth, async (req, res) => {
       expenseDetails: vagon.expenses?.details || []
     });
   } catch (error) {
-    console.error('Vagon expenses error:', error);
+    logger.error('Vagon expenses error:', error);
     res.status(500).json({ message: 'Vagon xarajatlarini olishda xatolik' });
   }
 });

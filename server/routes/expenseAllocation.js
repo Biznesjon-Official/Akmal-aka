@@ -1,7 +1,7 @@
 const express = require('express');
 const ExpenseAllocation = require('../models/ExpenseAllocation');
 const VagonLot = require('../models/VagonLot');
-const Kassa = require('../models/Kassa');
+const Cash = require('../models/Cash');
 const auth = require('../middleware/auth');
 const { auditMiddleware, logUserAction } = require('../middleware/auditLog');
 

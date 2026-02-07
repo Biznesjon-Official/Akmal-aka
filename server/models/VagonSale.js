@@ -10,12 +10,24 @@ const vagonSaleSchema = new mongoose.Schema({
   lot: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'VagonLot',
-    required: [true, 'Lot tanlanishi shart']
+    required: [true, 'Yog\'och tanlanishi shart']
   },
   client: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Client',
-    required: [true, 'Mijoz tanlanishi shart']
+    ref: 'Client'
+    // required ni olib tashladik - bir martalik mijoz uchun ixtiyoriy
+  },
+  
+  // Bir martalik mijoz ma'lumotlari
+  one_time_client_name: {
+    type: String,
+    trim: true,
+    comment: 'Bir martalik mijoz ismi'
+  },
+  one_time_client_phone: {
+    type: String,
+    trim: true,
+    comment: 'Bir martalik mijoz telefoni'
   },
   
   // ANIQ HAJM MA'LUMOTLARI (Yangi terminologiya)
@@ -115,35 +127,6 @@ const vagonSaleSchema = new mongoose.Schema({
     }
   },
   
-  // ESKI FIELD'LAR (Backward compatibility)
-  sent_volume_m3: {
-    type: Number,
-    required: [true, 'Jo\'natilgan hajm kiritilishi shart'],
-    min: [0.01, 'Hajm 0 dan katta bo\'lishi kerak'],
-    comment: 'DEPRECATED: warehouse_dispatched_volume_m3 ishlatiladi'
-  },
-  client_loss_m3: {
-    type: Number,
-    default: 0,
-    min: [0, 'Yo\'qotish 0 dan kichik bo\'lishi mumkin emas'],
-    comment: 'DEPRECATED: transport_loss_m3 ishlatiladi'
-  },
-  client_loss_responsible_person: {
-    type: String,
-    trim: true,
-    comment: 'DEPRECATED: transport_loss_responsible_person ishlatiladi'
-  },
-  client_loss_reason: {
-    type: String,
-    trim: true,
-    comment: 'DEPRECATED: transport_loss_reason ishlatiladi'
-  },
-  accepted_volume_m3: {
-    type: Number,
-    min: 0,
-    comment: 'DEPRECATED: client_received_volume_m3 ishlatiladi'
-  },
-  
   // Narx ma'lumotlari
   sale_currency: {
     type: String,
@@ -225,6 +208,11 @@ vagonSaleSchema.index({ status: 1, sale_date: -1 }); // Holat bo'yicha
 // Avtomatik hisoblashlar (save dan oldin)
 vagonSaleSchema.pre('save', function(next) {
   try {
+    // Mijoz validatsiyasi - client yoki one_time_client_name dan biri bo'lishi kerak
+    if (!this.client && (!this.one_time_client_name || !this.one_time_client_phone)) {
+      return next(new Error('Mijoz (client) yoki bir martalik mijoz ma\'lumotlari (one_time_client_name va one_time_client_phone) kiritilishi shart'));
+    }
+    
     // YANGI TERMINOLOGIYA BILAN HISOBLASH
     
     // 1. Yangi field'larni eski field'lardan to'ldirish (agar yangi field'lar bo'sh bo'lsa)
@@ -363,6 +351,37 @@ vagonSaleSchema.virtual('billable_volume_breakdown').get(function() {
     buyer_liable_brak: buyerBrak,
     total_billable: received + buyerBrak,
     brak_payment_required: buyerBrak > 0
+  };
+});
+
+// YANGI VIRTUAL FIELD - SOF FOYDA
+vagonSaleSchema.virtual('net_profit_info').get(function() {
+  // Bu virtual field faqat populate qilingan lot bilan ishlaydi
+  if (!this.lot || !this.lot.cost_per_m3) {
+    return {
+      net_profit: 0,
+      cost_basis: 0,
+      revenue: this.total_price || 0,
+      profit_margin_percentage: 0,
+      note: 'Lot ma\'lumoti yuklanmagan'
+    };
+  }
+  
+  const costPerM3 = this.lot.cost_per_m3 || 0;
+  const soldVolume = this.warehouse_dispatched_volume_m3 || 0;
+  const totalCostBasis = costPerM3 * soldVolume;
+  const revenue = this.total_price || 0;
+  const netProfit = revenue - totalCostBasis;
+  const profitMarginPercentage = revenue > 0 ? ((netProfit / revenue) * 100) : 0;
+  
+  return {
+    net_profit: netProfit,
+    cost_basis: totalCostBasis,
+    revenue: revenue,
+    profit_margin_percentage: profitMarginPercentage,
+    cost_per_m3: costPerM3,
+    sold_volume_m3: soldVolume,
+    currency: this.sale_currency || 'USD'
   };
 });
 
@@ -535,7 +554,58 @@ vagonSaleSchema.methods.getPaymentBreakdown = function() {
   };
 };
 
-// Instance method: Transport yo'qotishi uchun javobgarlik yaratish
+// Instance method: Sof foyda hisoblash (tan narx asosida)
+vagonSaleSchema.methods.calculateNetProfit = async function() {
+  try {
+    // Lot ma'lumotlarini olish
+    const VagonLot = require('./VagonLot');
+    const lot = await VagonLot.findById(this.lot);
+    
+    if (!lot) {
+      return {
+        error: 'Yog\'och ma\'lumoti topilmadi',
+        net_profit: 0,
+        cost_basis: 0,
+        revenue: 0,
+        profit_margin_percentage: 0
+      };
+    }
+    
+    // Tan narx hisoblash (lot dan)
+    const costPerM3 = lot.cost_per_m3 || 0; // Tan narx m³ uchun
+    const soldVolume = this.warehouse_dispatched_volume_m3 || 0;
+    const totalCostBasis = costPerM3 * soldVolume; // Sotilgan hajm uchun tan narx
+    
+    // Daromad (sotuv narxi)
+    const revenue = this.total_price || 0;
+    
+    // Sof foyda = Daromad - Tan narx
+    const netProfit = revenue - totalCostBasis;
+    
+    // Foyda marjasi (foiz)
+    const profitMarginPercentage = revenue > 0 ? ((netProfit / revenue) * 100) : 0;
+    
+    return {
+      net_profit: netProfit,
+      cost_basis: totalCostBasis,
+      revenue: revenue,
+      profit_margin_percentage: profitMarginPercentage,
+      cost_per_m3: costPerM3,
+      sold_volume_m3: soldVolume,
+      currency: this.sale_currency || 'USD'
+    };
+    
+  } catch (error) {
+    console.error('❌ Sof foyda hisoblashda xatolik:', error);
+    return {
+      error: error.message,
+      net_profit: 0,
+      cost_basis: 0,
+      revenue: 0,
+      profit_margin_percentage: 0
+    };
+  }
+};
 vagonSaleSchema.methods.createTransportLossLiability = async function(
   responsiblePerson,
   lossType,

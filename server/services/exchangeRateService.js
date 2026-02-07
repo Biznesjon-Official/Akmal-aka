@@ -21,7 +21,9 @@ class ExchangeRateService {
       if (response.data && response.data.rates) {
         return {
           USD_TO_RUB: response.data.rates.RUB || null,
+          USD_TO_UZS: response.data.rates.UZS || null,
           RUB_TO_USD: response.data.rates.RUB ? (1 / response.data.rates.RUB) : null,
+          UZS_TO_USD: response.data.rates.UZS ? (1 / response.data.rates.UZS) : null,
           lastUpdated: new Date(response.data.date || Date.now())
         };
       }
@@ -39,7 +41,9 @@ class ExchangeRateService {
         if (fallbackResponse.data && fallbackResponse.data.rates) {
           return {
             USD_TO_RUB: fallbackResponse.data.rates.RUB || null,
+            USD_TO_UZS: fallbackResponse.data.rates.UZS || null,
             RUB_TO_USD: fallbackResponse.data.rates.RUB ? (1 / fallbackResponse.data.rates.RUB) : null,
+            UZS_TO_USD: fallbackResponse.data.rates.UZS ? (1 / fallbackResponse.data.rates.UZS) : null,
             lastUpdated: new Date(fallbackResponse.data.date || Date.now())
           };
         }
@@ -90,10 +94,27 @@ class ExchangeRateService {
         );
       }
 
+      // UZS kursi (1 USD = X UZS)
+      if (realTimeRates.USD_TO_UZS) {
+        updates.push(
+          ExchangeRate.findOneAndUpdate(
+            { currency: 'UZS' },
+            {
+              rate: realTimeRates.USD_TO_UZS,
+              lastUpdated: realTimeRates.lastUpdated,
+              updatedBy: adminUserId,
+              isRealTime: true
+            },
+            { upsert: true, new: true }
+          )
+        );
+      }
+
       await Promise.all(updates);
       console.log('✅ Real-time kurslar yangilandi:', {
         USD_TO_RUB: realTimeRates.USD_TO_RUB,
-        RUB_TO_USD: realTimeRates.RUB_TO_USD
+        RUB_TO_USD: realTimeRates.RUB_TO_USD,
+        USD_TO_UZS: realTimeRates.USD_TO_UZS
       });
 
       return true;

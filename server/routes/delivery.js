@@ -5,6 +5,7 @@ const Cash = require('../models/Cash');
 const Client = require('../models/Client');
 const { updateClientDeliveryDebt } = require('../utils/clientHelpers');
 const auth = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Oy bo'yicha hisobot (bu route birinchi bo'lishi kerak, chunki /reports/monthly /:id bilan conflict qiladi)
 router.get('/reports/monthly', auth, async (req, res) => {
@@ -33,7 +34,7 @@ router.get('/reports/monthly', auth, async (req, res) => {
     
     res.json(report);
   } catch (error) {
-    console.error('Hisobot olishda xatolik:', error);
+    logger.error('Hisobot olishda xatolik:', error);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
@@ -68,7 +69,7 @@ router.get('/', auth, async (req, res) => {
     
     res.json(deliveries);
   } catch (error) {
-    console.error('Delivery olishda xatolik:', error);
+    logger.error('Delivery olishda xatolik:', error);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
@@ -90,7 +91,7 @@ router.get('/:id', auth, async (req, res) => {
     
     res.json(delivery);
   } catch (error) {
-    console.error('Delivery olishda xatolik:', error);
+    logger.error('Delivery olishda xatolik:', error);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
@@ -172,7 +173,7 @@ router.post('/', auth, async (req, res) => {
         await updateClientDeliveryDebt(client);
         console.log(`✅ Mijoz ${client} qarzi darhol yangilandi`);
       } catch (error) {
-        console.error(`❌ Mijoz ${client} qarzini yangilashda xatolik:`, error);
+        logger.error(`❌ Mijoz ${client} qarzini yangilashda xatolik:`, error);
         // Bu xatolik response'ga ta'sir qilmaydi
       }
     } else {
@@ -211,9 +212,9 @@ router.post('/', auth, async (req, res) => {
     
     res.status(201).json(populatedDelivery);
   } catch (error) {
-    console.error('Delivery yaratishda xatolik:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Request body:', req.body);
+    logger.error('Delivery yaratishda xatolik:', error);
+    logger.error('Error stack:', error.stack);
+    logger.error('Request body:', req.body);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
@@ -347,7 +348,7 @@ router.put('/:id', auth, async (req, res) => {
     
     res.json(populatedDelivery);
   } catch (error) {
-    console.error('Delivery yangilashda xatolik:', error);
+    logger.error('Delivery yangilashda xatolik:', error);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
@@ -375,7 +376,7 @@ router.delete('/:id', auth, async (req, res) => {
     
     res.json({ message: 'Delivery muvaffaqiyatli o\'chirildi' });
   } catch (error) {
-    console.error('Delivery o\'chirishda xatolik:', error);
+    logger.error('Delivery o\'chirishda xatolik:', error);
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });

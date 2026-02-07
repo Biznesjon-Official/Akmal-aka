@@ -37,7 +37,7 @@ const systemSettingsSchema = new mongoose.Schema({
 });
 
 // Indexlar
-systemSettingsSchema.index({ setting_key: 1 });
+// setting_key already has unique index from field definition
 systemSettingsSchema.index({ is_system: 1 });
 
 // Static method: Sozlamani olish

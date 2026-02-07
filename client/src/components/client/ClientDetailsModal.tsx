@@ -7,7 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { Card } from '@/components/ui/Card';
 import Icon from '@/components/Icon';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 interface Client {
   _id: string;
@@ -75,6 +75,9 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'sales' | 'payments' | 'lots'>('overview');
 
+  // Scroll lock
+  useScrollLock(true);
+
   const { data: clientDetails, isLoading, error } = useQuery<ClientDetailsData>({
     queryKey: ['client-details', clientId],
     queryFn: async () => {
@@ -140,10 +143,10 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
   const { client, sales, salesStats, payments, debtByCurrency, monthlySales, summary } = clientDetails;
 
   const tabs = [
-    { id: 'overview', name: 'Umumiy', icon: 'dashboard' },
-    { id: 'sales', name: 'Sotuvlar', icon: 'trending-up' },
-    { id: 'payments', name: 'To\'lovlar', icon: 'credit-card' },
-    { id: 'lots', name: 'Lotlar', icon: 'package' }
+    { id: 'overview', name: t.client.details || 'Umumiy', icon: 'dashboard' },
+    { id: 'sales', name: t.vagonSale.sales || 'Sotuvlar', icon: 'trending-up' },
+    { id: 'payments', name: t.client.paymentHistory || 'To\'lovlar', icon: 'credit-card' },
+    { id: 'lots', name: t.vagon.lots || 'Lotlar', icon: 'package' }
   ];
 
   return (
@@ -341,32 +344,20 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
                     <Icon name="trending-up" className="h-5 w-5 text-blue-600 mr-2" />
                     Oylik sotuv dinamikasi
                   </h3>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={monthlySales}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="_id.month"
-                          tickFormatter={(value, index) => {
-                            const item = monthlySales[index];
-                            return item ? `${item._id.month}/${item._id.year}` : value;
-                          }}
-                        />
-                        <YAxis />
-                        <Tooltip 
-                          formatter={(value, name) => [
-                            formatCurrency(value as number, name as string), 
-                            'Sotuv'
-                          ]}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="totalSales" 
-                          stroke="#3b82f6" 
-                          strokeWidth={2}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {monthlySales.slice(0, 6).map((item, index) => (
+                      <div key={index} className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-600 mb-1">
+                          {item._id.month}/{item._id.year}
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {formatCurrency(item.totalSales, 'USD')}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {item.count} ta sotuv
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </Card>
               )}
@@ -377,7 +368,7 @@ export default function ClientDetailsModal({ clientId, onClose }: Props) {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold flex items-center">
                 <Icon name="trending-up" className="h-5 w-5 text-green-600 mr-2" />
-                Sotuvlar tarixi
+                {t.client.salesHistory}
               </h3>
               {sales && sales.length > 0 ? (
                 <div className="space-y-3">

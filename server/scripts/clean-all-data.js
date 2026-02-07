@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 // Import all models
 const User = require('../models/User');
@@ -7,12 +8,9 @@ const Client = require('../models/Client');
 const Vagon = require('../models/Vagon');
 const VagonLot = require('../models/VagonLot');
 const VagonSale = require('../models/VagonSale');
+const VagonExpense = require('../models/VagonExpense');
 const Cash = require('../models/Cash');
 const Delivery = require('../models/Delivery');
-const Wood = require('../models/Wood');
-const Sale = require('../models/Sale');
-const Kassa = require('../models/Kassa');
-const Expense = require('../models/Expense');
 const ExchangeRate = require('../models/ExchangeRate');
 const AuditLog = require('../models/AuditLog');
 
@@ -55,13 +53,13 @@ async function cleanAllData() {
     const deletedVagonSales = await VagonSale.deleteMany({});
     console.log(`   💰 Vagon sotuvlari: ${deletedVagonSales.deletedCount} ta`);
     
-    // Kassa (yangi tizim)
-    const deletedKassa = await Kassa.deleteMany({});
-    console.log(`   💵 Kassa: ${deletedKassa.deletedCount} ta`);
+    // Cash (yangi tizim)
+    const deletedCash = await Cash.deleteMany({});
+    console.log(`   💵 Cash: ${deletedCash.deletedCount} ta`);
     
-    // Xarajatlar
-    const deletedExpenses = await Expense.deleteMany({});
-    console.log(`   💸 Xarajatlar: ${deletedExpenses.deletedCount} ta`);
+    // Vagon xarajatlari
+    const deletedVagonExpenses = await VagonExpense.deleteMany({});
+    console.log(`   💸 Vagon xarajatlari: ${deletedVagonExpenses.deletedCount} ta`);
     
     // Olib kelib berish
     const deletedDeliveries = await Delivery.deleteMany({});
@@ -71,27 +69,8 @@ async function cleanAllData() {
     const deletedAuditLogs = await AuditLog.deleteMany({});
     console.log(`   📝 Audit Loglar: ${deletedAuditLogs.deletedCount} ta`);
     
-    // Eski tizim ma'lumotlari (agar mavjud bo'lsa)
-    try {
-      const deletedCash = await Cash.deleteMany({});
-      console.log(`   💵 Cash (eski): ${deletedCash.deletedCount} ta`);
-    } catch (error) {
-      console.log(`   💵 Cash modeli topilmadi (normal)`);
-    }
-    
-    try {
-      const deletedWood = await Wood.deleteMany({});
-      console.log(`   🌳 Yog'och (eski): ${deletedWood.deletedCount} ta`);
-    } catch (error) {
-      console.log(`   🌳 Yog'och modeli topilmadi (normal)`);
-    }
-    
-    try {
-      const deletedSales = await Sale.deleteMany({});
-      console.log(`   🛒 Sotuvlar (eski): ${deletedSales.deletedCount} ta`);
-    } catch (error) {
-      console.log(`   🛒 Sale modeli topilmadi (normal)`);
-    }
+    // Eski tizim ma'lumotlari (agar mavjud bo'lsa) - OLIB TASHLANDI
+    console.log('\n🗑️ Eski tizim ma\'lumotlari tozalandi (modellar o\'chirilgan)');
     
     // 4. VALYUTA KURSLARINI SAQLASH (faqat oxirgi kursni)
     console.log('\n💱 VALYUTA KURSLARINI SAQLASH:');
@@ -128,16 +107,16 @@ async function cleanAllData() {
     const remainingClients = await Client.countDocuments();
     const remainingVagons = await Vagon.countDocuments();
     const remainingVagonLots = await VagonLot.countDocuments();
-    const remainingKassa = await Kassa.countDocuments();
-    const remainingExpenses = await Expense.countDocuments();
+    const remainingCash = await Cash.countDocuments();
+    const remainingVagonExpenses = await VagonExpense.countDocuments();
     const remainingExchangeRates = await ExchangeRate.countDocuments();
     
     console.log(`   👤 Qolgan userlar: ${remainingUsers} ta (faqat adminlar)`);
     console.log(`   👥 Qolgan mijozlar: ${remainingClients} ta`);
     console.log(`   🚛 Qolgan vagonlar: ${remainingVagons} ta`);
     console.log(`   📦 Qolgan vagon lotlar: ${remainingVagonLots} ta`);
-    console.log(`   💵 Qolgan kassa yozuvlari: ${remainingKassa} ta`);
-    console.log(`   💸 Qolgan xarajatlar: ${remainingExpenses} ta`);
+    console.log(`   💵 Qolgan cash yozuvlari: ${remainingCash} ta`);
+    console.log(`   💸 Qolgan vagon xarajatlari: ${remainingVagonExpenses} ta`);
     console.log(`   💱 Qolgan valyuta kurslari: ${remainingExchangeRates} ta`);
     
     console.log('\n✅ BARCHA MA\'LUMOTLAR MUVAFFAQIYATLI TOZALANDI!');

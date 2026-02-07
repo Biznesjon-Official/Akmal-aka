@@ -292,12 +292,24 @@ vagonSchema.virtual('loss_percentage').get(function() {
 vagonSchema.set('toJSON', { virtuals: true });
 vagonSchema.set('toObject', { virtuals: true });
 
-// Static method: Vagon kodi generatsiya
+// Static method: Vagon kodi generatsiya (atomic counter bilan)
 vagonSchema.statics.generateVagonCode = async function(year) {
-  const count = await this.countDocuments({ 
-    vagonCode: new RegExp(`^VAG-${year}-`) 
-  });
-  return `VAG-${year}-${String(count + 1).padStart(3, '0')}`;
+  const Counter = require('./Counter');
+  
+  try {
+    // Atomic counter ishlatib keyingi raqamni olish
+    const sequenceName = `vagon_${year}`;
+    const nextNumber = await Counter.getNextSequence(sequenceName);
+    
+    const newCode = `VAG-${year}-${String(nextNumber).padStart(3, '0')}`;
+    
+    console.log(`✅ Yangi vagon kodi yaratildi: ${newCode}`);
+    return newCode;
+    
+  } catch (error) {
+    console.error('❌ Vagon kodi yaratishda xatolik:', error);
+    throw new Error('Vagon kodi yaratishda xatolik');
+  }
 };
 
 // Instance method: Sotish mumkinligini tekshirish

@@ -165,10 +165,49 @@ async function updateVagonTotals(vagonId, session = null) {
       
     const vagon = await updateQuery;
     if (vagon) {
+      const oldStatus = vagon.status;
       Object.assign(vagon, totals);
+      
+      // MUHIM: Status avtomatik boshqarish
+      // Vagon faqat quyidagi shartlarda avtomatik yopiladi:
+      // 1. Jami hajm mavjud (lotlar qo'shilgan)
+      // 2. Qolgan hajm 0 ga teng yoki kamroq (0.001 m³ toleransiya bilan)
+      // 3. Sotilgan hajm mavjud (hech bo'lmaganda biror narsa sotilgan)
+      const hasVolume = totals.total_volume_m3 > 0;
+      const hasSales = totals.sold_volume_m3 > 0;
+      
+      // Floating point xatolari uchun toleransiya
+      const CLOSE_THRESHOLD = 0.001; // 0.001 m³ (1 litr) dan kam bo'lsa 0 deb hisoblanadi
+      
+      if (hasVolume) {
+        // Agar qolgan hajm 0 ga teng VA sotuvlar bo'lgan bo'lsa → closed
+        // Bu yangi vagonlar (lotlar qo'shilgan lekin hali sotilmagan) yopilishini oldini oladi
+        if (totals.remaining_volume_m3 <= CLOSE_THRESHOLD && hasSales && vagon.status === 'active') {
+          vagon.status = 'closed';
+          vagon.closure_date = new Date();
+          vagon.closure_reason = 'fully_sold';
+          console.log(`🔒 Vagon ${vagonId} statusini o'zgartirish: ${oldStatus} → closed (qolgan hajm: ${totals.remaining_volume_m3}, sotilgan: ${totals.sold_volume_m3})`);
+        } else if (totals.remaining_volume_m3 > CLOSE_THRESHOLD && vagon.status === 'closed') {
+          // Agar qolgan hajm bor bo'lsa, vagonni qayta ochish
+          vagon.status = 'active';
+          vagon.closure_date = null;
+          vagon.closure_reason = null;
+          console.log(`🔓 Vagon ${vagonId} statusini o'zgartirish: ${oldStatus} → active (qolgan hajm: ${totals.remaining_volume_m3})`);
+        }
+      } else {
+        // Agar vagon yangi va lotlar yo'q bo'lsa, statusni active qoldirish
+        if (vagon.status === 'closed') {
+          vagon.status = 'active';
+          vagon.closure_date = null;
+          vagon.closure_reason = null;
+          console.log(`🔓 Vagon ${vagonId} statusini active ga qaytarish (lotlar yo'q)`);
+        }
+      }
+      
       await vagon.save({ session });
       
       console.log(`✅ Vagon ${vagonId} jami ma'lumotlari yangilandi (AGGREGATION):`, {
+        status: vagon.status,
         total_volume: totals.total_volume_m3.toFixed(2),
         sold_volume: totals.sold_volume_m3.toFixed(2),
         remaining_volume: totals.remaining_volume_m3.toFixed(2),

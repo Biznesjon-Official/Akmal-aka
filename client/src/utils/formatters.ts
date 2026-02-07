@@ -65,7 +65,8 @@ export const formatCurrency = (amount: number | null | undefined, currency: stri
  * Kub va tonna formatlash
  */
 export const formatVolume = (volume: number): string => {
-  return `${formatNumber(volume)} m³`;
+  // 0 gacha ko'rsatish, yaxlitlamasdan
+  return `${volume} m³`;
 };
 
 export const formatWeight = (weight: number): string => {
@@ -77,4 +78,20 @@ export const formatWeight = (weight: number): string => {
  */
 export const formatPercentage = (value: number): string => {
   return `${formatNumber(value)}%`;
+};
+
+/**
+ * Sana formatlash
+ */
+export const formatDate = (date: string | Date): string => {
+  if (!date) return '';
+  
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(dateObj.getTime())) return '';
+  
+  return dateObj.toLocaleDateString('uz-UZ', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
 };

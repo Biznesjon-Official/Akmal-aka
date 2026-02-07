@@ -4,10 +4,10 @@ const exchangeRateSchema = new mongoose.Schema({
   // Valyuta nomi
   currency: {
     type: String,
-    enum: ['USD', 'RUB'],
+    enum: ['USD', 'RUB', 'UZS'],
     required: true,
     unique: true,
-    comment: 'USD: 1 USD = X RUB, RUB: 1 RUB = X USD'
+    comment: 'USD: 1 USD = X RUB/UZS, RUB: 1 RUB = X USD, UZS: 1 UZS = X USD'
   },
   
   // Kurs qiymati

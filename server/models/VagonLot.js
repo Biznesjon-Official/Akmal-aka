@@ -8,6 +8,13 @@ const vagonLotSchema = new mongoose.Schema({
     required: [true, 'Vagon tanlanishi shart']
   },
   
+  // Yog'och nomi (ixtiyoriy)
+  name: {
+    type: String,
+    trim: true,
+    comment: 'Yog\'och nomi, masalan: "Yog\'och 1", "Premium Taxta", va hokazo'
+  },
+  
   // O'lcham ma'lumotlari
   dimensions: {
     type: String,
@@ -61,12 +68,6 @@ const vagonLotSchema = new mongoose.Schema({
   },
   
   // ANIQ HAJM HISOBI (Yangi terminologiya)
-  available_volume_m3: {
-    type: Number,
-    default: 0,
-    min: 0,
-    comment: 'DEPRECATED: warehouse_available_volume_m3 ishlatiladi'
-  },
   warehouse_available_volume_m3: {
     type: Number,
     default: 0,
@@ -92,12 +93,6 @@ const vagonLotSchema = new mongoose.Schema({
     default: 0,
     min: 0,
     comment: 'DEPRECATED: Ishlatilmaydi, warehouse_dispatched_volume_m3 ishlatiladi'
-  },
-  remaining_volume_m3: {
-    type: Number,
-    default: 0,
-    min: 0,
-    comment: 'DEPRECATED: Ishlatilmaydi, warehouse_remaining_volume_m3 ishlatiladi'
   },
   
   // Qolgan dona soni (avtomatik hisoblash)
@@ -126,6 +121,23 @@ const vagonLotSchema = new mongoose.Schema({
     default: 0,
     min: 0,
     comment: 'Tannarx = total_investment / volume_m3'
+  },
+  // YANGI: Tavsiya etilgan sotuv narxi
+  recommended_sale_price_per_m3: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Tavsiya etilgan sotuv narxi (m³ uchun) - kirim qilishda avtomatik to\'ldiriladi'
+  },
+  expected_profit_per_m3: {
+    type: Number,
+    default: 0,
+    comment: 'Kutilayotgan foyda = recommended_sale_price - cost_per_m3'
+  },
+  expected_profit_margin_percentage: {
+    type: Number,
+    default: 0,
+    comment: 'Kutilayotgan foyda foizi = (expected_profit / recommended_sale_price) * 100'
   },
   total_revenue: {
     type: Number,
@@ -184,11 +196,6 @@ const vagonLotSchema = new mongoose.Schema({
     min: 0,
     comment: 'DEPRECATED: total_investment ishlatiladi'
   },
-  profit: {
-    type: Number,
-    default: 0,
-    comment: 'DEPRECATED: realized_profit ishlatiladi'
-  },
   
   // Qo'shimcha
   notes: {
@@ -210,12 +217,22 @@ vagonLotSchema.index({ vagon: 1 });
 vagonLotSchema.index({ isDeleted: 1 });
 vagonLotSchema.index({ createdAt: -1 }); // Yangi qo'shildi
 vagonLotSchema.index({ dimensions: 1 }); // Yangi qo'shildi - o'lcham bo'yicha qidiruv
-// Compound index - vagon lotlari uchun
+// Compound index - vagon yog'ochlari uchun
 vagonLotSchema.index({ vagon: 1, createdAt: -1 });
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonLotSchema.pre('save', async function(next) {
   try {
+    // 0. Avtomatik nom yaratish (agar nom berilmagan bo'lsa)
+    if (!this.name && this.isNew) {
+      // Shu vagondagi yog'ochlar sonini hisoblash
+      const existingCount = await mongoose.model('VagonLot').countDocuments({
+        vagon: this.vagon,
+        isDeleted: false
+      });
+      this.name = `Yog'och ${existingCount + 1}`;
+    }
+    
     // 1. Omborda mavjud hajm = Umumiy hajm - Brak
     const volume = Number(this.volume_m3) || 0;
     const lossVolume = Number(this.loss_volume_m3) || 0;
@@ -228,7 +245,6 @@ vagonLotSchema.pre('save', async function(next) {
     
     // 3. Backward compatibility uchun eski field'larni yangilash
     this.sold_volume_m3 = dispatchedVolume;
-    this.remaining_volume_m3 = this.warehouse_remaining_volume_m3;
     this.available_volume_m3 = this.warehouse_available_volume_m3;
     
     // 4. Qolgan soni (taxminiy)
@@ -257,9 +273,20 @@ vagonLotSchema.pre('save', async function(next) {
     if (volume > 0) {
       this.cost_per_m3 = this.total_investment / volume;
       this.break_even_price_per_m3 = this.cost_per_m3;
+      
+      // Kutilayotgan foyda hisoblash (agar tavsiya etilgan narx kiritilgan bo'lsa)
+      if (this.recommended_sale_price_per_m3 > 0) {
+        this.expected_profit_per_m3 = this.recommended_sale_price_per_m3 - this.cost_per_m3;
+        this.expected_profit_margin_percentage = (this.expected_profit_per_m3 / this.recommended_sale_price_per_m3) * 100;
+      } else {
+        this.expected_profit_per_m3 = 0;
+        this.expected_profit_margin_percentage = 0;
+      }
     } else {
       this.cost_per_m3 = 0;
       this.break_even_price_per_m3 = 0;
+      this.expected_profit_per_m3 = 0;
+      this.expected_profit_margin_percentage = 0;
     }
     
     // Haqiqiy foyda = Daromad - (Sarmoya * Sotilgan foiz)
@@ -276,7 +303,6 @@ vagonLotSchema.pre('save', async function(next) {
     
     // Backward compatibility
     this.total_expenses = this.total_investment;
-    this.profit = this.realized_profit;
     
     // Asosiy valyutaga konvertatsiya (xatolik bo'lsa ham davom etadi)
     try {

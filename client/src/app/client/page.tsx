@@ -10,6 +10,7 @@ import ClientTableSkeleton from '@/components/client/ClientTableSkeleton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Pagination from '@/components/ui/Pagination'; // ⚡ PAGINATION IMPORT
 import Icon from '@/components/Icon';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import axios from '@/lib/axios';
 
 interface Client {
@@ -53,6 +54,9 @@ export default function ClientPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  
+  // Scroll lock for modal
+  useScrollLock(showModal);
   
   // ⚡ PAGINATION STATE
   const [currentPage, setCurrentPage] = useState(1);
@@ -328,122 +332,182 @@ export default function ClientPage() {
 
   return (
     <Layout>
-      <div className="container-full-desktop space-y-4 sm:space-y-6">
-        {/* Header - Responsive */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center">
-                <Icon name="clients" className="text-white" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-blue-100">
+        {/* Hero Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-700 text-white">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative px-6 py-12">
+            <div className="w-full">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                <div className="mb-8 lg:mb-0">
+                  <h1 className="text-4xl lg:text-5xl font-bold mb-4 flex items-center">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
+                      <Icon name="users" className="h-7 w-7" />
+                    </div>
+                    {t.client.title}
+                  </h1>
+                  <p className="text-xl opacity-90 mb-2">
+                    {t.client.appSubtitle}
+                  </p>
+                  <p className="text-sm opacity-75">
+                    Mijozlar bilan ishlash va qarzlarni boshqarish
+                  </p>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    resetForm();
+                    setShowModal(true);
+                  }}
+                  className="bg-white/20 backdrop-blur-sm text-white px-8 py-4 rounded-2xl hover:bg-white/30 flex items-center shadow-lg transition-all duration-200 font-semibold"
+                >
+                  <Icon name="plus" className="mr-3 h-6 w-6" />
+                  {t.client.addClient}
+                </button>
               </div>
-              {t.client.title}
-            </h1>
-            <p className="text-gray-500 mt-1">{t.client.appSubtitle}</p>
+            </div>
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <button
-              onClick={() => {
-                setLoading(true);
-                fetchClients();
-              }}
-              className="btn-secondary flex items-center justify-center gap-2 flex-1 sm:flex-initial"
-              title="Yangilash"
-            >
-              <Icon name="refresh-cw" size="sm" />
-              <span className="hidden sm:inline">Yangilash</span>
-            </button>
-            <button
-              onClick={() => {
-                resetForm();
-                setShowModal(true);
-              }}
-              className="btn-primary flex items-center justify-center gap-2 flex-1 sm:flex-initial"
-            >
-              <Icon name="add" size="sm" />
-              <span className="hidden sm:inline">{t.client.addClient}</span>
-              <span className="sm:hidden">Qo'shish</span>
-            </button>
-          </div>
+          
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
         </div>
 
-        {/* Filters and Search - Responsive */}
-        <div className="space-y-4">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder={t.client.search}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="input-field"
-              />
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select
-                value={filterBy}
-                onChange={(e) => setFilterBy(e.target.value as any)}
-                className="input-field"
-              >
-                <option value="all">{t.vagonSale.allClients}</option>
-                <option value="debt">{t.vagonSale.clientsWithDebt}</option>
-                <option value="no-debt">{t.vagonSale.clientsWithoutDebt}</option>
-              </select>
+        <div className="w-full px-6 py-8">
+          {/* Filters and Search - Responsive */}
+          <div className="mb-8">
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h3 className="text-xl font-bold mb-4 flex items-center">
+                <div className="w-8 h-8 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
+                  <Icon name="filter" className="h-5 w-5 text-white" />
+                </div>
+                {t.common.searchAndFilters}
+              </h3>
               
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="input-field"
-              >
-                <option value="name">{t.client.sortByName}</option>
-                <option value="debt">{t.client.sortByDebt}</option>
-                <option value="volume">{t.client.sortByVolume}</option>
-                <option value="date">{t.client.sortByDate}</option>
-              </select>
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder={t.client.search}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-200"
+                  />
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <select
+                    value={filterBy}
+                    onChange={(e) => setFilterBy(e.target.value as any)}
+                    className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-200"
+                  >
+                    <option value="all">{t.vagonSale.allClients}</option>
+                    <option value="debt">{t.vagonSale.clientsWithDebt}</option>
+                    <option value="no-debt">{t.vagonSale.clientsWithoutDebt}</option>
+                  </select>
+                  
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-200"
+                  >
+                    <option value="name">{t.client.sortByName}</option>
+                    <option value="debt">{t.client.sortByDebt}</option>
+                    <option value="volume">{t.client.sortByVolume}</option>
+                    <option value="date">{t.client.sortByDate}</option>
+                  </select>
+                  
+                  <button
+                    onClick={() => {
+                      setLoading(true);
+                      fetchClients();
+                    }}
+                    className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl hover:from-cyan-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center gap-2 font-semibold"
+                    title={t.common.update}
+                  >
+                    <Icon name="refresh-cw" size="sm" />
+                    {t.common.update}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Quick Stats - Responsive Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-            <div className="stats-card text-center">
-              <div className="text-xl sm:text-2xl font-bold text-blue-600">{clients.length}</div>
-              <div className="text-xs sm:text-sm text-blue-600">{t.client.totalClients}</div>
-            </div>
-            <div className="stats-card text-center">
-              <div className="text-xl sm:text-2xl font-bold text-red-600">
-                {clients.filter(c => 
-                  Math.max(0, c.usd_current_debt || 0) > 0 || 
-                  Math.max(0, c.rub_current_debt || 0) > 0 || 
-                  Math.max(0, c.delivery_current_debt || 0) > 0
-                ).length}
+          <div className="mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-indigo-600/5"></div>
+                <div className="relative p-6 text-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon name="users" className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="text-3xl font-bold text-blue-600 mb-1">{clients.length}</div>
+                  <div className="text-sm text-gray-600">{t.client.totalClients}</div>
+                </div>
               </div>
-              <div className="text-xs sm:text-sm text-red-600">{t.vagonSale.clientsWithDebt}</div>
-            </div>
-            <div className="stats-card text-center">
-              <div className="text-lg sm:text-2xl font-bold text-green-600">
-                ${clients.reduce((sum, c) => sum + Math.max(0, c.usd_current_debt || 0), 0).toLocaleString()}
+              
+              <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-rose-600/5"></div>
+                <div className="relative p-6 text-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-rose-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon name="alert-circle" className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="text-3xl font-bold text-red-600 mb-1">
+                    {clients.filter(c => 
+                      Math.max(0, c.usd_current_debt || 0) > 0 || 
+                      Math.max(0, c.rub_current_debt || 0) > 0 || 
+                      Math.max(0, c.delivery_current_debt || 0) > 0
+                    ).length}
+                  </div>
+                  <div className="text-sm text-gray-600">{t.vagonSale.clientsWithDebt}</div>
+                </div>
               </div>
-              <div className="text-xs sm:text-sm text-green-600">{t.client.usdDebt}</div>
-            </div>
-            <div className="stats-card text-center col-span-2 sm:col-span-1">
-              <div className="text-lg sm:text-2xl font-bold text-orange-600">
-                {clients.reduce((sum, c) => sum + Math.max(0, c.rub_current_debt || 0), 0).toLocaleString()} ₽
+              
+              <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-600/5"></div>
+                <div className="relative p-6 text-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon name="dollar-sign" className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="text-2xl font-bold text-green-600 mb-1">
+                    ${clients.reduce((sum, c) => sum + Math.max(0, c.usd_current_debt || 0), 0)}
+                  </div>
+                  <div className="text-sm text-gray-600">{t.client.usdDebt}</div>
+                </div>
               </div>
-              <div className="text-xs sm:text-sm text-orange-600">{t.client.rubDebt}</div>
-            </div>
-            <div className="stats-card text-center col-span-2 sm:col-span-3 lg:col-span-1">
-              <div className="text-lg sm:text-2xl font-bold text-purple-600">
-                ${clients.reduce((sum, c) => sum + Math.max(0, c.delivery_current_debt || 0), 0).toLocaleString()}
+              
+              <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-amber-600/5"></div>
+                <div className="relative p-6 text-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-amber-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon name="ruble-sign" className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="text-2xl font-bold text-orange-600 mb-1">
+                    {clients.reduce((sum, c) => sum + Math.max(0, c.rub_current_debt || 0), 0)} ₽
+                  </div>
+                  <div className="text-sm text-gray-600">{t.client.rubDebt}</div>
+                </div>
               </div>
-              <div className="text-xs sm:text-sm text-purple-600">{t.client.deliveryDebt}</div>
+              
+              <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-indigo-600/5"></div>
+                <div className="relative p-6 text-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <Icon name="truck" className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="text-2xl font-bold text-purple-600 mb-1">
+                    ${clients.reduce((sum, c) => sum + Math.max(0, c.delivery_current_debt || 0), 0)}
+                  </div>
+                  <div className="text-sm text-gray-600">{t.client.deliveryDebt}</div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Clients Grid - Responsive */}
+          {/* Clients Grid - Responsive */}
         {filteredClients.length === 0 ? (
-          <div className="text-center py-12">
-            <Icon name="clients" className="mx-auto text-gray-400 mb-4" size="lg" />
+          <div className="text-center py-12 bg-white rounded-2xl shadow-lg">
+            <Icon name="users" className="mx-auto text-gray-400 mb-4" size="lg" />
             <p className="text-gray-500">{t.client.noClients}</p>
           </div>
         ) : (
@@ -453,10 +517,10 @@ export default function ClientPage() {
                 <div className="mb-4">
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg sm:text-xl font-bold text-gray-900 truncate">{client.name}</h3>
-                      <p className="text-gray-600 text-sm sm:text-base">{client.phone}</p>
+                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{client.name}</h3>
+                      <p className="text-gray-600 text-base sm:text-lg">{client.phone}</p>
                       {client.address && (
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">{client.address}</p>
+                        <p className="text-sm sm:text-base text-gray-500 mt-1 truncate">{client.address}</p>
                       )}
                     </div>
                     <div className={`w-3 h-3 rounded-full flex-shrink-0 ml-2 ${
@@ -467,7 +531,7 @@ export default function ClientPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2 mb-4 text-sm">
+                <div className="space-y-2 mb-4 text-base">
                   <div className="flex justify-between">
                     <span className="text-gray-600">{t.client.totalReceived}:</span>
                     <span className="font-semibold">{((client.usd_total_received_volume || 0) + (client.rub_total_received_volume || 0)).toFixed(2)} m³</span>
@@ -478,16 +542,16 @@ export default function ClientPage() {
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600">{t.client.usdDebt}:</span>
-                        <span className="font-semibold">${(client.usd_total_debt || 0).toLocaleString()}</span>
+                        <span className="font-semibold">${(client.usd_total_debt || 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">{t.client.usdPaid}:</span>
-                        <span className="font-semibold text-green-600">${(client.usd_total_paid || 0).toLocaleString()}</span>
+                        <span className="font-semibold text-green-600">${(client.usd_total_paid || 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600 font-semibold">{t.client.usdRemaining}:</span>
                         <span className={`font-bold ${(client.usd_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          ${Math.max(0, client.usd_current_debt || 0).toLocaleString()}
+                          ${Math.max(0, client.usd_current_debt || 0)}
                         </span>
                       </div>
                     </>
@@ -498,16 +562,16 @@ export default function ClientPage() {
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600">{t.client.rubDebt}:</span>
-                        <span className="font-semibold">{(client.rub_total_debt || 0).toLocaleString()} ₽</span>
+                        <span className="font-semibold">{(client.rub_total_debt || 0)} ₽</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">{t.client.rubPaid}:</span>
-                        <span className="font-semibold text-green-600">{(client.rub_total_paid || 0).toLocaleString()} ₽</span>
+                        <span className="font-semibold text-green-600">{(client.rub_total_paid || 0)} ₽</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600 font-semibold">{t.client.rubRemaining}:</span>
                         <span className={`font-bold ${(client.rub_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {Math.max(0, client.rub_current_debt || 0).toLocaleString()} ₽
+                          {Math.max(0, client.rub_current_debt || 0)} ₽
                         </span>
                       </div>
                     </>
@@ -522,14 +586,14 @@ export default function ClientPage() {
                             <Icon name="truck" className="w-3 h-3" />
                             {t.client.deliveryDebt}:
                           </span>
-                          <span className="font-semibold text-purple-600">${(client.delivery_total_debt || 0).toLocaleString()}</span>
+                          <span className="font-semibold text-purple-600">${(client.delivery_total_debt || 0)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-purple-600 text-xs flex items-center gap-1">
                             <Icon name="truck" className="w-3 h-3" />
                             {t.client.totalPaid}:
                           </span>
-                          <span className="font-semibold text-green-600">${(client.delivery_total_paid || 0).toLocaleString()}</span>
+                          <span className="font-semibold text-green-600">${(client.delivery_total_paid || 0)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-purple-600 font-semibold text-xs flex items-center gap-1">
@@ -537,7 +601,7 @@ export default function ClientPage() {
                             Qolgan:
                           </span>
                           <span className={`font-bold ${(client.delivery_current_debt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            ${Math.max(0, client.delivery_current_debt || 0).toLocaleString()}
+                            ${Math.max(0, client.delivery_current_debt || 0)}
                           </span>
                         </div>
                       </div>
@@ -562,23 +626,23 @@ export default function ClientPage() {
                       console.log('🔍 Debt button clicked for:', client.name);
                       openDebtModal(client);
                     }}
-                    className="bg-gradient-to-r from-orange-500 to-amber-600 text-white text-xs py-2 px-3 rounded-xl hover:from-orange-600 hover:to-amber-700 transition-all duration-200 flex items-center justify-center gap-1 relative z-10"
+                    className="bg-gradient-to-r from-orange-500 to-amber-600 text-white text-sm py-2.5 px-4 rounded-xl hover:from-orange-600 hover:to-amber-700 transition-all duration-200 flex items-center justify-center gap-1 relative z-10"
                     type="button"
                     style={{ pointerEvents: 'auto' }}
                   >
-                    <Icon name="dollar-sign" className="w-4 h-4" />
+                    <Icon name="dollar-sign" className="w-5 h-5" />
                     <span>{t.client.debt}</span>
                   </button>
                   <button
                     onClick={() => openEditModal(client)}
-                    className="btn-primary text-xs py-2 px-3 flex items-center justify-center gap-1"
+                    className="btn-primary text-sm py-2.5 px-4 flex items-center justify-center gap-1"
                   >
                     <Icon name="edit" size="sm" />
                     <span className="hidden sm:inline">{t.common.edit}</span>
                   </button>
                   <button
                     onClick={() => handleDelete(client._id)}
-                    className="btn-danger text-xs py-2 px-3 flex items-center justify-center"
+                    className="btn-danger text-sm py-2.5 px-4 flex items-center justify-center"
                   >
                     <Icon name="delete" size="sm" />
                   </button>
@@ -878,6 +942,7 @@ export default function ClientPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </Layout>
   );

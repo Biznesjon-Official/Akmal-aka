@@ -2,6 +2,7 @@ const express = require('express');
 const SystemSettings = require('../models/SystemSettings');
 const auth = require('../middleware/auth');
 const { auditMiddleware, logUserAction } = require('../middleware/auditLog');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get('/', auth, async (req, res) => {
     
     res.json(settings);
   } catch (error) {
-    console.error('SystemSettings list error:', error);
+    logger.error('SystemSettings list error:', error);
     res.status(500).json({ message: 'Sozlamalarni olishda xatolik' });
   }
 });
@@ -86,7 +87,7 @@ router.put('/:key', [auth, auth.adminOnly, auditMiddleware('SystemSettings')], a
       setting
     });
   } catch (error) {
-    console.error('SystemSettings update error:', error);
+    logger.error('SystemSettings update error:', error);
     res.status(500).json({ message: 'Sozlamani yangilashda xatolik' });
   }
 });

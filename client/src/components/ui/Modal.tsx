@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import Icon from '@/components/Icon';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 interface ModalProps {
   isOpen: boolean;
@@ -20,17 +21,8 @@ export default function Modal({
   showCloseButton = true,
   closeOnOverlayClick = true
 }: ModalProps) {
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
+  // Scroll lock hook - modal ochilganda background scroll'ni to'xtatadi
+  useScrollLock(isOpen);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -60,15 +52,16 @@ export default function Modal({
 
   return (
     <div 
-      className="fixed inset-0 bg-gradient-to-br from-black/40 via-blue-900/30 to-purple-900/30 backdrop-blur-md flex items-center justify-center z-50 p-0 sm:p-4 animate-fadeIn"
+      className="fixed inset-0 bg-gradient-to-br from-black/40 via-blue-900/30 to-purple-900/30 backdrop-blur-md flex items-center justify-center z-50 p-0 sm:p-4 animate-fadeIn modal-overlay"
       onClick={handleOverlayClick}
     >
       <div 
         className={`
           bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-2xl border-0 sm:border border-gray-200/50 w-full ${sizeClasses[size]} 
           h-full sm:h-auto sm:max-h-[90vh] max-h-screen overflow-hidden transform transition-all duration-300 scale-100 animate-slideUp
-          flex flex-col
+          flex flex-col modal-content
         `}
+        data-scroll-lock-ignore
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-3 sm:px-6 py-3 sm:py-5 flex items-center justify-between shadow-lg sticky top-0 z-10">
@@ -92,7 +85,13 @@ export default function Modal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+        <div 
+          className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+          style={{ 
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
           <div className="p-3 sm:p-6 lg:p-8">
             {children}
           </div>

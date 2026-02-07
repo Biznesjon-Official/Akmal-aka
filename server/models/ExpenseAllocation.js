@@ -123,7 +123,7 @@ const expenseAllocationSchema = new mongoose.Schema({
 });
 
 // Indexlar
-expenseAllocationSchema.index({ expense: 1, lot: 1 });
+// expense + lot unique index is defined below
 expenseAllocationSchema.index({ vagon: 1, status: 1 });
 expenseAllocationSchema.index({ lot: 1, status: 1 });
 expenseAllocationSchema.index({ created_by: 1, createdAt: -1 });

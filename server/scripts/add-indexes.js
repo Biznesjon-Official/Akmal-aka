@@ -5,9 +5,9 @@ require('dotenv').config();
 const Vagon = require('../models/Vagon');
 const VagonLot = require('../models/VagonLot');
 const VagonSale = require('../models/VagonSale');
+const VagonExpense = require('../models/VagonExpense');
 const Client = require('../models/Client');
 const Cash = require('../models/Cash');
-const Expense = require('../models/Expense');
 
 async function addIndexes() {
   try {
@@ -78,16 +78,16 @@ async function addIndexes() {
     await safeCreateIndex(VagonLot.collection, { createdAt: -1 });
     console.log('✅ VagonLot indexlari qo\'shildi');
 
-    // 6. Expense indexlari
-    console.log('6️⃣ Expense indexlari...');
-    await safeCreateIndex(Expense.collection, { turi: 1, isDeleted: 1 });
-    await safeCreateIndex(Expense.collection, { valyuta: 1, isDeleted: 1 });
-    await safeCreateIndex(Expense.collection, { xarajatSanasi: -1 });
-    await safeCreateIndex(Expense.collection, { woodLot: 1, isDeleted: 1 });
-    await safeCreateIndex(Expense.collection, { vagon: 1, isDeleted: 1 });
-    await safeCreateIndex(Expense.collection, { tolovHolati: 1, isDeleted: 1 });
-    await safeCreateIndex(Expense.collection, { createdAt: -1 });
-    console.log('✅ Expense indexlari qo\'shildi');
+    // 6. VagonExpense indexlari
+    console.log('6️⃣ VagonExpense indexlari...');
+    await safeCreateIndex(VagonExpense.collection, { expense_type: 1, isDeleted: 1 });
+    await safeCreateIndex(VagonExpense.collection, { currency: 1, isDeleted: 1 });
+    await safeCreateIndex(VagonExpense.collection, { expense_date: -1 });
+    await safeCreateIndex(VagonExpense.collection, { lot: 1, isDeleted: 1 });
+    await safeCreateIndex(VagonExpense.collection, { vagon: 1, isDeleted: 1 });
+    await safeCreateIndex(VagonExpense.collection, { payment_status: 1, isDeleted: 1 });
+    await safeCreateIndex(VagonExpense.collection, { createdAt: -1 });
+    console.log('✅ VagonExpense indexlari qo\'shildi');
 
     // 7. Compound indexlar (murakkab) - PERFORMANCE CRITICAL
     console.log('7️⃣ Compound indexlar...');
@@ -245,7 +245,7 @@ async function addIndexes() {
       { name: 'Client', model: Client },
       { name: 'Vagon', model: Vagon },
       { name: 'VagonLot', model: VagonLot },
-      { name: 'Expense', model: Expense }
+      { name: 'VagonExpense', model: VagonExpense }
     ];
     
     for (const collection of collections) {

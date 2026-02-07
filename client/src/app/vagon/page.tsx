@@ -1,22 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useDialog } from '@/context/DialogContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
-import VagonTableSkeleton from '@/components/vagon/VagonTableSkeleton';
-import { Skeleton } from '@/components/ui/Skeleton';
 import VagonDetailsModal from '@/components/vagon/VagonDetailsModal';
-import Pagination from '@/components/ui/Pagination'; // ⚡ PAGINATION IMPORT
+import Pagination from '@/components/ui/Pagination';
 import Icon from '@/components/Icon';
 import { useDebouncedSearch } from '@/hooks/useDebounce';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import axios from '@/lib/axios';
 
-interface VagonLot {
+// Constants
+const QUERY_STALE_TIME = 30000; // 30 seconds
+const QUERY_CACHE_TIME = 300000; // 5 minutes
+const DEFAULT_ITEMS_PER_PAGE = 12;
+const SEARCH_DEBOUNCE_DELAY = 300;
+
+interface VagonYogoch {
   _id: string;
+  name?: string; // Yog'och nomi
   dimensions: string;
   quantity: number;
   volume_m3: number;
@@ -24,7 +30,6 @@ interface VagonLot {
   loss_responsible_person?: string;
   loss_reason?: string;
   loss_date?: string;
-  // YANGI TERMINOLOGIYA
   warehouse_available_volume_m3: number;
   warehouse_dispatched_volume_m3: number;
   warehouse_remaining_volume_m3: number;
@@ -32,7 +37,6 @@ interface VagonLot {
   realized_profit: number;
   unrealized_value: number;
   break_even_price_per_m3: number;
-  // ESKI (Backward compatibility)
   currency: string;
   purchase_amount: number;
   remaining_quantity: number;
@@ -46,61 +50,260 @@ interface Vagon {
   sending_place: string;
   receiving_place: string;
   status: string;
-  // Yopilish ma'lumotlari
   closure_date?: string;
   closure_reason?: string;
   closure_notes?: string;
-  // YANGI TERMINOLOGIYA
   total_volume_m3: number;
   total_loss_m3: number;
   available_volume_m3: number;
   sold_volume_m3: number;
   remaining_volume_m3: number;
-  // Moliyaviy (backend field nomlari)
   usd_total_cost: number;
   usd_total_revenue: number;
   usd_profit: number;
   rub_total_cost: number;
   rub_total_revenue: number;
   rub_profit: number;
-  // ESKI (Backward compatibility)
-  total_investment_usd?: number;
-  total_investment_rub?: number;
-  realized_profit_usd?: number;
-  realized_profit_rub?: number;
-  unrealized_value_usd?: number;
-  unrealized_value_rub?: number;
-  total_purchase_usd?: number;
-  total_purchase_rub?: number;
-  total_expenses_usd?: number;
-  total_expenses_rub?: number;
-  total_revenue_usd?: number;
-  total_revenue_rub?: number;
-  profit_usd?: number;
-  profit_rub?: number;
-  lots: VagonLot[];
+  lots: VagonYogoch[];
 }
 
-interface LotInput {
-  _id?: string; // Tahrirlash uchun
+interface YogochInput {
+  _id?: string;
+  name?: string; // Yangi field - yog'och nomi
   thickness: string;
   width: string;
   length: string;
   quantity: string;
-  loss_volume_m3: string; // Brak hajmi (m³)
-  loss_responsible_person: string; // Brak uchun javobgar shaxs
-  loss_reason: string; // Brak sababi
+  loss_volume_m3: string;
+  loss_responsible_person: string;
+  loss_reason: string;
   currency: string;
   purchase_amount: string;
+  recommended_sale_price_per_m3: string; // YANGI: Tavsiya etilgan sotuv narxi
 }
+
+// VagonCard Component
+interface VagonCardProps {
+  vagon: Vagon;
+  onEdit: (vagon: Vagon) => void;
+  onDelete: (id: string, code: string) => void;
+  onClose: (id: string, reason: string) => void;
+  onViewDetails: (id: string) => void;
+  user: any;
+  t: any;
+  safeToFixed: (value: any, decimals?: number) => string;
+  calculatePercentage: (sold: number, total: number) => string;
+}
+
+const VagonCard: React.FC<VagonCardProps> = ({ 
+  vagon, 
+  onEdit, 
+  onDelete, 
+  onClose, 
+  onViewDetails, 
+  user, 
+  t, 
+  safeToFixed, 
+  calculatePercentage 
+}) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'closed': return 'bg-red-100 text-red-800 border-red-200';
+      case 'closing': return 'bg-amber-100 text-amber-800 border-amber-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'active': return 'Faol';
+      case 'closed': return 'Yopilgan';
+      case 'closing': return 'Yopilmoqda';
+      default: return status;
+    }
+  };
+
+  const soldPercentage = calculatePercentage(vagon.sold_volume_m3 || 0, vagon.total_volume_m3 || 0);
+
+  return (
+    <div className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2">
+      {/* Status Badge */}
+      <div className="absolute top-4 right-4 z-10">
+        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(vagon.status)}`}>
+          {getStatusText(vagon.status)}
+        </span>
+      </div>
+
+      {/* Header with Gradient */}
+      <div className="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 text-white p-6 pb-8">
+        <div className="absolute inset-0 bg-black/10"></div>
+        
+        <div className="relative">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4">
+                <Icon name="truck" className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold mb-1">{vagon.vagonCode}</h3>
+                <p className="text-sm opacity-90">{vagon.month}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold">{safeToFixed(vagon.total_volume_m3, 1)} m³</div>
+              <div className="text-xs opacity-90">Jami hajm</div>
+            </div>
+          </div>
+          
+          <div className="flex items-center text-sm opacity-90">
+            <Icon name="map-pin" className="h-4 w-4 mr-2" />
+            <span className="truncate">{vagon.sending_place} → {vagon.receiving_place}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 space-y-6">
+        {/* Progress Bar */}
+        <div className="space-y-3">
+          <div className="flex justify-between text-sm font-semibold">
+            <span className="text-gray-600">Sotish jarayoni</span>
+            <span className="text-indigo-600">{soldPercentage}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-emerald-500 to-green-600 rounded-full transition-all duration-1000 ease-out"
+              style={{ width: `${Math.min(parseFloat(soldPercentage), 100)}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Statistics Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-4 border border-emerald-100">
+            <div className="flex items-center mb-2">
+              <Icon name="check-circle" className="h-5 w-5 text-emerald-600 mr-2" />
+              <span className="text-sm font-semibold text-gray-700">Sotilgan</span>
+            </div>
+            <div className="text-xl font-bold text-emerald-700">
+              {safeToFixed(vagon.sold_volume_m3, 1)} m³
+            </div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-4 border border-purple-100">
+            <div className="flex items-center mb-2">
+              <Icon name="package" className="h-5 w-5 text-purple-600 mr-2" />
+              <span className="text-sm font-semibold text-gray-700">Qolgan</span>
+            </div>
+            <div className="text-xl font-bold text-purple-700">
+              {safeToFixed(vagon.remaining_volume_m3, 1)} m³
+            </div>
+          </div>
+        </div>
+
+        {/* Yog'ochlar Info */}
+        <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-2xl p-4 border border-gray-100">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <Icon name="layers" className="h-5 w-5 text-gray-600 mr-2" />
+              <span className="text-sm font-semibold text-gray-700">Yog'ochlar</span>
+            </div>
+            <span className="text-lg font-bold text-gray-900">{vagon.lots?.length || 0} ta</span>
+          </div>
+        </div>
+
+        {/* Financial Info */}
+        {((vagon.usd_total_cost || 0) > 0 || (vagon.rub_total_cost || 0) > 0) && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-gray-700 flex items-center">
+              <Icon name="dollar-sign" className="h-4 w-4 mr-2" />
+              Moliyaviy ko'rsatkichlar
+            </h4>
+            <div className="grid grid-cols-1 gap-3">
+              {(vagon.usd_total_cost || 0) > 0 && (
+                <div className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
+                  <span className="text-sm font-medium text-gray-700">USD foyda</span>
+                  <span className={`font-bold ${(vagon.usd_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ${safeToFixed(vagon.usd_profit || 0, 0)}
+                  </span>
+                </div>
+              )}
+              {(vagon.rub_total_cost || 0) > 0 && (
+                <div className="flex justify-between items-center p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <span className="text-sm font-medium text-gray-700">RUB foyda</span>
+                  <span className={`font-bold ${(vagon.rub_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ₽{safeToFixed(vagon.rub_profit || 0, 0)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="space-y-3 pt-4 border-t border-gray-100">
+          {/* Primary Actions */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => onViewDetails(vagon._id)}
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-3 px-4 rounded-2xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
+            >
+              <Icon name="eye" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+              Batafsil
+            </button>
+            
+            {vagon.status !== 'closed' && vagon.status !== 'archived' && (
+              <button
+                onClick={() => onEdit(vagon)}
+                className="bg-gradient-to-r from-emerald-500 to-green-600 text-white py-3 px-4 rounded-2xl hover:from-emerald-600 hover:to-green-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
+              >
+                <Icon name="edit" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                Tahrirlash
+              </button>
+            )}
+          </div>
+          
+          {/* Secondary Actions */}
+          {(vagon.status === 'active' || (user?.role === 'admin' && (vagon.sold_volume_m3 || 0) === 0)) && (
+            <div className="grid grid-cols-2 gap-3">
+              {vagon.status === 'active' && (
+                <button
+                  onClick={() => onClose(vagon._id, 'manual_closure')}
+                  className="bg-gradient-to-r from-amber-500 to-orange-600 text-white py-2 px-3 rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all duration-300 text-xs font-semibold flex items-center justify-center"
+                >
+                  <Icon name="x-circle" className="mr-1 h-3 w-3" />
+                  Yopish
+                </button>
+              )}
+              
+              {user?.role === 'admin' && vagon.status !== 'closed' && (vagon.sold_volume_m3 || 0) === 0 && (
+                <button
+                  onClick={() => onDelete(vagon._id, vagon.vagonCode)}
+                  className="bg-gradient-to-r from-red-500 to-red-600 text-white py-2 px-3 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 text-xs font-semibold flex items-center justify-center"
+                >
+                  <Icon name="trash" className="mr-1 h-3 w-3" />
+                  O'chirish
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Bottom accent */}
+      <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600"></div>
+    </div>
+  );
+};
 
 export default function VagonPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
   const { showAlert, showConfirm } = useDialog();
+  const queryClient = useQueryClient(); // CRITICAL FIX: Add queryClient hook
   
-  // State management
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedVagonId, setSelectedVagonId] = useState<string | null>(null);
@@ -109,25 +312,22 @@ export default function VagonPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingVagon, setEditingVagon] = useState<Vagon | null>(null);
 
-  // ⚡ PAGINATION STATE
+  useScrollLock(showModal);
+
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  // Debounced search
-  const { searchValue, debouncedSearchValue, setSearchValue, clearSearch, isSearching } = useDebouncedSearch('', 300);
+  const { searchValue, debouncedSearchValue, setSearchValue, clearSearch, isSearching } = useDebouncedSearch('', SEARCH_DEBOUNCE_DELAY);
 
-  // ⚡ OPTIMIZED: Pagination bilan data fetching
   const {
     data: vagonData,
     isLoading,
-    error,
     refetch
   } = useQuery({
-    queryKey: ['vagons', statusFilter, monthFilter, debouncedSearchValue, currentPage, itemsPerPage],
+    queryKey: ['vagons', statusFilter, monthFilter, debouncedSearchValue, currentPage, DEFAULT_ITEMS_PER_PAGE],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: currentPage.toString(),
-        limit: itemsPerPage.toString(),
+        limit: DEFAULT_ITEMS_PER_PAGE.toString(),
         includeLots: 'true'
       });
       
@@ -138,21 +338,19 @@ export default function VagonPage() {
       const response = await axios.get(`/vagon?${params}`);
       return response.data;
     },
-    staleTime: 30000, // 30 seconds
-    gcTime: 300000, // 5 minutes
+    staleTime: QUERY_STALE_TIME,
+    gcTime: QUERY_CACHE_TIME,
     refetchOnWindowFocus: false,
     retry: 1
   });
 
   const vagons = vagonData?.vagons || [];
   
-  // Vagon ma'lumotlari
-  const [vagonCode, setVagonCode] = useState('');
+  const [vagonCode, setVagonCode] = useState(''); // Yangi state
   const [month, setMonth] = useState('');
   const [sendingPlace, setSendingPlace] = useState('');
   const [receivingPlace, setReceivingPlace] = useState('');
   
-  // Bugungi sanani avtomatik o'rnatish
   useEffect(() => {
     if (!month) {
       const today = new Date();
@@ -163,10 +361,13 @@ export default function VagonPage() {
     }
   }, []);
   
-  // Lotlar ro'yxati
-  const [lots, setLots] = useState<LotInput[]>([
-    { thickness: '', width: '', length: '', quantity: '', loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', currency: 'USD', purchase_amount: '' }
-  ]);
+  const [yogochlar, setYogochlar] = useState<YogochInput[]>([]);
+  const [currentYogoch, setCurrentYogoch] = useState<YogochInput>({
+    name: '', thickness: '', width: '', length: '', quantity: '', 
+    loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
+    currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+  });
+  const [isAddingYogoch, setIsAddingYogoch] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -174,81 +375,127 @@ export default function VagonPage() {
     }
   }, [user, authLoading]);
 
-  const addLotRow = () => {
-    setLots([...lots, { thickness: '', width: '', length: '', quantity: '', loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', currency: 'USD', purchase_amount: '' }]);
-  };
-
-  const removeLotRow = (index: number) => {
-    if (lots.length > 1) {
-      setLots(lots.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateLot = (index: number, field: keyof LotInput, value: string) => {
-    const newLots = [...lots];
-    newLots[index][field] = value;
-    setLots(newLots);
-  };
-
-  const calculateLotVolume = (lot: LotInput): number => {
-    const thickness = parseFloat(lot.thickness) || 0;
-    const width = parseFloat(lot.width) || 0;
-    const length = parseFloat(lot.length) || 0;
-    const quantity = parseInt(lot.quantity) || 0;
+  const calculateYogochVolume = useCallback((yogoch: YogochInput): number => {
+    const thickness = parseFloat(yogoch.thickness) || 0;
+    const width = parseFloat(yogoch.width) || 0;
+    const length = parseFloat(yogoch.length) || 0;
+    const quantity = parseInt(yogoch.quantity) || 0;
     
     if (thickness && width && length && quantity) {
-      // Hajm = (qalinlik_mm × eni_mm × uzunlik_m × soni) / 1,000,000
       return (thickness * width * length * quantity) / 1000000;
     }
     return 0;
-  };
+  }, []);
 
-  const calculateTotalVolume = (): number => {
-    return lots.reduce((sum, lot) => sum + calculateLotVolume(lot), 0);
-  };
+  const calculatePercentage = useCallback((sold: number, total: number): string => {
+    return total > 0 ? ((sold / total) * 100).toFixed(1) : '0';
+  }, []);
 
-  // Xavfsiz raqam formatlash
-  const safeToFixed = (value: any, decimals: number = 4): string => {
+  const safeToFixed = (value: any, decimals: number = 2): string => {
     const num = parseFloat(value) || 0;
     return num.toFixed(decimals);
   };
 
+  const addYogochRow = useCallback(() => {
+    setIsAddingYogoch(true);
+    setCurrentYogoch({
+      name: '', thickness: '', width: '', length: '', quantity: '', 
+      loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
+      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+    });
+  }, []);
+
+  const saveCurrentYogoch = useCallback(() => {
+    // Validate current yogoch
+    if (!currentYogoch.name?.trim() || !currentYogoch.thickness || !currentYogoch.width || 
+        !currentYogoch.length || !currentYogoch.quantity || !currentYogoch.purchase_amount) {
+      showAlert({
+        title: 'Xatolik',
+        message: 'Barcha majburiy maydonlarni to\'ldiring',
+        type: 'warning'
+      });
+      return;
+    }
+
+    const volume = calculateYogochVolume(currentYogoch);
+    if (volume <= 0) {
+      showAlert({
+        title: 'Xatolik',
+        message: 'Yog\'och hajmi 0 dan katta bo\'lishi kerak',
+        type: 'warning'
+      });
+      return;
+    }
+
+    // Add to yogochlar list
+    setYogochlar(prev => [...prev, { ...currentYogoch }]);
+    
+    // Reset form
+    setCurrentYogoch({
+      name: '', thickness: '', width: '', length: '', quantity: '', 
+      loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
+      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+    });
+    setIsAddingYogoch(false);
+
+    showAlert({
+      title: 'Muvaffaqiyat',
+      message: 'Yog\'och muvaffaqiyatli qo\'shildi',
+      type: 'success'
+    });
+  }, [currentYogoch, calculateYogochVolume, showAlert]);
+
+  const cancelAddingYogoch = useCallback(() => {
+    setCurrentYogoch({
+      name: '', thickness: '', width: '', length: '', quantity: '', 
+      loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
+      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+    });
+    setIsAddingYogoch(false);
+  }, []);
+
+  const removeYogochRow = useCallback((index: number) => {
+    setYogochlar(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const updateCurrentYogoch = useCallback((field: keyof YogochInput, value: string) => {
+    setCurrentYogoch(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // ✅ LOADING STATE BOSHLASH
-    if (isSubmitting) return; // Double-click oldini olish
+    if (isSubmitting) return;
+    
+    // Check if we have yogochlar
+    if (yogochlar.length === 0 && !editingVagon) {
+      showAlert({
+        title: 'Xatolik',
+        message: 'Kamida bitta yog\'och qo\'shing',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    // Vagon kodi validatsiyasi (faqat yangi vagon uchun)
+    if (!editingVagon && vagonCode.trim() && vagonCode.trim().length < 3) {
+      showAlert({
+        title: 'Xatolik',
+        message: 'Vagon kodi kamida 3 belgi bo\'lishi kerak yoki bo\'sh qoldiring',
+        type: 'warning'
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      // Validatsiya - faqat to'liq to'ldirilgan lotlarni olish
-      const validLots = lots.filter(lot => 
-        lot.thickness && 
-        lot.width && 
-        lot.length && 
-        lot.quantity && 
-        lot.purchase_amount &&
-        parseFloat(lot.thickness) > 0 &&
-        parseFloat(lot.width) > 0 &&
-        parseFloat(lot.length) > 0 &&
-        parseInt(lot.quantity) > 0 &&
-        parseFloat(lot.purchase_amount) > 0
-      );
-      
-      if (validLots.length === 0 && !editingVagon) {
-        showAlert({
-          title: t.messages.error,
-          message: t.messages.enterCompleteLotInfo,
-          type: 'warning'
-        });
-        return;
-      }
-      
       const token = localStorage.getItem('token');
       
       if (editingVagon) {
-        // TAHRIRLASH REJIMI
-        // 1. Vagon ma'lumotlarini yangilash
+        // Update existing vagon
         const vagonData = {
           month,
           sending_place: sendingPlace,
@@ -256,95 +503,95 @@ export default function VagonPage() {
         };
         
         await axios.put(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon/${editingVagon._id}`,
+          `/vagon/${editingVagon._id}`,
           vagonData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         
-        // 2. Lotlarni yangilash
-        for (const lot of validLots) {
-          const volume = calculateLotVolume(lot);
+        // Update yogochlar
+        for (const yogoch of yogochlar) {
+          const volume = calculateYogochVolume(yogoch);
           
-          const lotData = {
-            dimensions: `${lot.thickness}×${lot.width}×${lot.length}`,
-            quantity: parseInt(lot.quantity),
+          const yogochData = {
+            name: yogoch.name || undefined,
+            dimensions: `${yogoch.thickness}×${yogoch.width}×${yogoch.length}`,
+            quantity: parseInt(yogoch.quantity),
             volume_m3: volume,
-            loss_volume_m3: parseFloat(lot.loss_volume_m3) || 0,
-            loss_responsible_person: lot.loss_responsible_person || null,
-            loss_reason: lot.loss_reason || null,
-            loss_date: parseFloat(lot.loss_volume_m3) > 0 ? new Date() : null,
-            purchase_currency: lot.currency,
-            purchase_amount: parseFloat(lot.purchase_amount)
+            loss_volume_m3: parseFloat(yogoch.loss_volume_m3) || 0,
+            loss_responsible_person: yogoch.loss_responsible_person || null,
+            loss_reason: yogoch.loss_reason || null,
+            loss_date: parseFloat(yogoch.loss_volume_m3) > 0 ? new Date() : null,
+            purchase_currency: yogoch.currency,
+            purchase_amount: parseFloat(yogoch.purchase_amount),
+            recommended_sale_price_per_m3: parseFloat(yogoch.recommended_sale_price_per_m3) || 0 // YANGI
           };
           
-          if (lot._id) {
-            // Mavjud lotni yangilash
+          if (yogoch._id) {
             await axios.put(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot/${lot._id}`,
-              lotData,
+              `/vagon-lot/${yogoch._id}`,
+              yogochData,
               { headers: { Authorization: `Bearer ${token}` } }
             );
           } else {
-            // Yangi lot qo'shish
             await axios.post(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot`,
-              { ...lotData, vagon: editingVagon._id },
+              `/vagon-lot`,
+              { ...yogochData, vagon: editingVagon._id },
               { headers: { Authorization: `Bearer ${token}` } }
             );
           }
         }
         
         showAlert({
-          title: t.messages.success,
-          message: t.messages.vagonUpdated || 'Vagon muvaffaqiyatli yangilandi',
+          title: 'Muvaffaqiyat',
+          message: 'Vagon muvaffaqiyatli yangilandi',
           type: 'success'
         });
       } else {
-        // YANGI YARATISH REJIMI
-        // 1. Vagon yaratish
+        // Create new vagon
         const vagonData = {
-          vagonCode,
+          vagonCode: vagonCode.trim() || undefined, // Qo'lda kiritilgan kod yoki undefined
           month,
           sending_place: sendingPlace,
           receiving_place: receivingPlace
         };
         
         const vagonResponse = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon`,
+          `/vagon`,
           vagonData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         
         const vagonId = vagonResponse.data._id;
         
-        // 2. Har bir lot uchun so'rov yuborish
-        for (const lot of validLots) {
-          // Hajmni hisoblash
-          const volume = calculateLotVolume(lot);
+        // Create all yogochlar
+        for (const yogoch of yogochlar) {
+          const volume = calculateYogochVolume(yogoch);
           
-          const lotData = {
+          const yogochData = {
             vagon: vagonId,
-            dimensions: `${lot.thickness}×${lot.width}×${lot.length}`,
-            quantity: parseInt(lot.quantity),
+            name: yogoch.name || undefined,
+            dimensions: `${yogoch.thickness}×${yogoch.width}×${yogoch.length}`,
+            quantity: parseInt(yogoch.quantity),
             volume_m3: volume,
-            loss_volume_m3: parseFloat(lot.loss_volume_m3) || 0,
-            loss_responsible_person: lot.loss_responsible_person || null,
-            loss_reason: lot.loss_reason || null,
-            loss_date: parseFloat(lot.loss_volume_m3) > 0 ? new Date() : null,
-            purchase_currency: lot.currency,
-            purchase_amount: parseFloat(lot.purchase_amount)
+            loss_volume_m3: parseFloat(yogoch.loss_volume_m3) || 0,
+            loss_responsible_person: yogoch.loss_responsible_person || null,
+            loss_reason: yogoch.loss_reason || null,
+            loss_date: parseFloat(yogoch.loss_volume_m3) > 0 ? new Date() : null,
+            purchase_currency: yogoch.currency,
+            purchase_amount: parseFloat(yogoch.purchase_amount),
+            recommended_sale_price_per_m3: parseFloat(yogoch.recommended_sale_price_per_m3) || 0 // YANGI
           };
           
           await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/vagon-lot`,
-            lotData,
+            `/vagon-lot`,
+            yogochData,
             { headers: { Authorization: `Bearer ${token}` } }
           );
         }
         
         showAlert({
-          title: t.messages.success,
-          message: t.messages.vagonAndLotsAdded,
+          title: 'Muvaffaqiyat',
+          message: `Vagon va ${yogochlar.length} ta yog'och muvaffaqiyatli saqlandi`,
           type: 'success'
         });
       }
@@ -354,53 +601,59 @@ export default function VagonPage() {
       resetForm();
     } catch (error: any) {
       showAlert({
-        title: t.messages.error,
-        message: error.response?.data?.message || t.messages.errorOccurred,
+        title: 'Xatolik',
+        message: error.response?.data?.message || 'Xatolik yuz berdi',
         type: 'error'
       });
     } finally {
-      // ✅ LOADING STATE TUGASHI
       setIsSubmitting(false);
     }
   };
 
   const resetForm = () => {
-    setVagonCode('');
+    setVagonCode(''); // Yangi field reset
     setMonth('');
     setSendingPlace('');
     setReceivingPlace('');
-    setLots([{ thickness: '', width: '', length: '', quantity: '', loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', currency: 'USD', purchase_amount: '' }]);
+    setYogochlar([]);
+    setCurrentYogoch({
+      name: '', thickness: '', width: '', length: '', quantity: '', 
+      loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
+      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+    });
+    setIsAddingYogoch(false);
     setEditingVagon(null);
   };
 
   const openEditModal = (vagon: Vagon) => {
     setEditingVagon(vagon);
-    setVagonCode(vagon.vagonCode);
     setMonth(vagon.month);
     setSendingPlace(vagon.sending_place);
     setReceivingPlace(vagon.receiving_place);
     
-    // Lotlarni yuklash
     if (vagon.lots && vagon.lots.length > 0) {
-      const loadedLots = vagon.lots.map(lot => {
-        // dimensions formatidan o'lchamlarni ajratib olish: "31×125×6"
-        const dims = lot.dimensions.split('×');
+      const loadedYogochlar = vagon.lots.map(yogoch => {
+        const dims = yogoch.dimensions.split('×');
         return {
-          _id: lot._id,
+          _id: yogoch._id,
+          name: yogoch.name || '',
           thickness: dims[0] || '',
           width: dims[1] || '',
           length: dims[2] || '',
-          quantity: lot.quantity.toString(),
-          loss_volume_m3: (lot.loss_volume_m3 || 0).toString(),
-          loss_responsible_person: lot.loss_responsible_person || '',
-          loss_reason: lot.loss_reason || '',
-          currency: lot.currency || 'USD',
-          purchase_amount: (lot.purchase_amount || 0).toString()
+          quantity: yogoch.quantity.toString(),
+          loss_volume_m3: (yogoch.loss_volume_m3 || 0).toString(),
+          loss_responsible_person: yogoch.loss_responsible_person || '',
+          loss_reason: yogoch.loss_reason || '',
+          currency: yogoch.currency || 'USD',
+          purchase_amount: (yogoch.purchase_amount || 0).toString()
         };
       });
-      setLots(loadedLots);
+      setYogochlar(loadedYogochlar);
+    } else {
+      setYogochlar([]);
     }
     
+    setIsAddingYogoch(false);
     setShowModal(true);
   };
 
@@ -424,16 +677,14 @@ export default function VagonPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/vagon/${vagonId}/close`,
+      await axios.patch(
+        `/vagon/${vagonId}/close`,
         { 
           reason: reason,
           notes: `Frontend orqali yopildi: ${reasonText}`
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      console.log('Close vagon response:', response.data);
       
       showAlert({
         title: t.messages.success,
@@ -442,8 +693,58 @@ export default function VagonPage() {
       });
       refetch();
     } catch (error: any) {
-      console.error('Close vagon error:', error);
-      console.error('Error response:', error.response?.data);
+      showAlert({
+        title: t.messages.error,
+        message: error.response?.data?.message || error.message || t.messages.errorOccurred,
+        type: 'error'
+      });
+    }
+  };
+
+  const deleteVagon = async (vagonId: string, vagonCode: string) => {
+    const confirmed = await showConfirm({
+      title: 'Vagonni o\'chirish',
+      message: `Rostdan ham "${vagonCode}" vagonini o'chirmoqchimisiz?\n\n⚠️ DIQQAT: Bu amal qaytarib bo'lmaydi!\n\n• Vagon va uning barcha yog'ochlari o'chiriladi\n• Faqat sotilmagan vagonlarni o'chirish mumkin\n• Barcha ma'lumotlar doimiy ravishda o'chiriladi`,
+      type: 'danger',
+      confirmText: 'Ha, o\'chirish',
+      cancelText: 'Bekor qilish'
+    });
+    
+    if (!confirmed) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      // CRITICAL FIX: Optimistic update - remove from UI immediately
+      queryClient.setQueryData(
+        ['vagons', statusFilter, monthFilter, debouncedSearchValue, currentPage, DEFAULT_ITEMS_PER_PAGE],
+        (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            vagons: oldData.vagons.filter((v: any) => v._id !== vagonId)
+          };
+        }
+      );
+      
+      await axios.delete(
+        `/vagon/${vagonId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // CRITICAL FIX: Invalidate all vagon-related queries
+      await queryClient.invalidateQueries({ queryKey: ['vagons'] });
+      await queryClient.invalidateQueries({ queryKey: ['vagon', vagonId] });
+      
+      showAlert({
+        title: t.messages.success,
+        message: `"${vagonCode}" vagoni va uning barcha yog'ochlari muvaffaqiyatli o'chirildi`,
+        type: 'success'
+      });
+      
+    } catch (error: any) {
+      // CRITICAL FIX: Revert optimistic update on error
+      await queryClient.invalidateQueries({ queryKey: ['vagons'] });
       
       showAlert({
         title: t.messages.error,
@@ -453,36 +754,26 @@ export default function VagonPage() {
     }
   };
 
-  const getCurrencySymbol = (currency: string) => {
-    switch(currency) {
-      case 'USD': return '$';
-      case 'RUB': return '₽';
-      default: return '';
-    }
-  };
-
   if (authLoading || isLoading) {
     return (
       <Layout>
-        <div className="container-full-desktop space-y-6">
-          <div className="flex justify-between items-center">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-4 w-64" />
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
+          <div className="space-y-8">
+            <div className="h-48 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl animate-pulse"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl p-6 shadow-lg animate-pulse">
+                  <div className="h-6 bg-gray-300 rounded mb-4"></div>
+                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-16 bg-gray-300 rounded"></div>
+                    <div className="h-16 bg-gray-300 rounded"></div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <Skeleton className="h-10 w-32" />
           </div>
-          
-          {/* Filter skeleton */}
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-32" />
-            </div>
-          </div>
-          
-          <VagonTableSkeleton />
         </div>
       </Layout>
     );
@@ -495,98 +786,101 @@ export default function VagonPage() {
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        {/* Hero Header */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 text-white">
-          <div className="absolute inset-0 bg-black/10"></div>
-          <div className="relative px-6 py-12">
+        {/* Modern Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-700">
+          <div className="absolute inset-0 bg-black/5"></div>
+          
+          <div className="relative px-6 py-16">
             <div className="max-w-7xl mx-auto">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
                 <div className="mb-8 lg:mb-0">
-                  <h1 className="text-4xl lg:text-5xl font-bold mb-4 flex items-center">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
-                      <Icon name="truck" className="h-7 w-7" />
+                  <div className="flex items-center mb-6">
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-6 shadow-lg">
+                      <Icon name="truck" className="h-9 w-9 text-white" />
                     </div>
-                    {t.vagon.title}
-                  </h1>
-                  <p className="text-xl opacity-90 mb-2">
-                    Professional vagon boshqaruv tizimi
-                  </p>
-                  <p className="text-sm opacity-75">
-                    Vagonlar, lotlar va hajm statistikasini kuzatib boring
-                  </p>
+                    <div>
+                      <h1 className="text-5xl lg:text-6xl font-bold text-white mb-2">
+                        {t.vagon.title}
+                      </h1>
+                      <p className="text-xl text-white/90">
+                        Professional vagon management system
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-white">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                      <div className="text-2xl font-bold">{vagons.length}</div>
+                      <div className="text-sm opacity-90">Jami vagonlar</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                      <div className="text-2xl font-bold">
+                        {vagons.reduce((sum: number, v: Vagon) => sum + (v.lots?.length || 0), 0)}
+                      </div>
+                      <div className="text-sm opacity-90">Jami yog'ochlar</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                      <div className="text-xl font-bold">
+                        {safeToFixed(vagons.reduce((sum: number, v: Vagon) => sum + (v.total_volume_m3 || 0), 0), 1)} m³
+                      </div>
+                      <div className="text-sm opacity-90">Jami hajm</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                      <div className="text-xl font-bold">
+                        {safeToFixed(vagons.reduce((sum: number, v: Vagon) => sum + (v.sold_volume_m3 || 0), 0), 1)} m³
+                      </div>
+                      <div className="text-sm opacity-90">Sotilgan</div>
+                    </div>
+                  </div>
                 </div>
                 
-                <button
-                  onClick={() => {
-                    resetForm();
-                    setShowModal(true);
-                  }}
-                  className="bg-white/20 backdrop-blur-sm text-white px-8 py-4 rounded-2xl hover:bg-white/30 flex items-center shadow-lg transition-all duration-200 font-semibold"
-                >
-                  <Icon name="plus" className="mr-3 h-6 w-6" />
-                  {t.vagon.addVagon}
-                </button>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={() => {
+                      resetForm();
+                      setShowModal(true);
+                    }}
+                    className="bg-white/20 backdrop-blur-sm text-white px-8 py-4 rounded-2xl hover:bg-white/30 flex items-center justify-center shadow-lg transition-all duration-300 font-semibold text-lg group"
+                  >
+                    <Icon name="plus" className="mr-3 h-6 w-6 group-hover:scale-110 transition-transform" />
+                    {t.vagon.addVagon}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-          
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-6 py-8">
-          {/* Modern Filters */}
+          {/* Enhanced Filters */}
           <div className="mb-8">
-            <div className="bg-white rounded-2xl shadow-lg p-8">
-              <h3 className="text-2xl font-bold mb-6 flex items-center">
-                <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
                   <Icon name="filter" className="h-6 w-6 text-white" />
                 </div>
-                Filtrlar va Qidiruv
-              </h3>
+                <h3 className="text-2xl font-bold text-gray-800">Qidirish va filtrlash</h3>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.statusFilterLabel}</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value);
-                    }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                  >
-                    <option value="">{t.vagon.allStatuses}</option>
-                    <option value="active">{t.vagon.activeVagon}</option>
-                    <option value="closed">{t.vagon.closedVagon}</option>
-                    <option value="archived">{t.vagon.archivedVagon}</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.monthFilterLabel}</label>
-                  <input
-                    type="month"
-                    value={monthFilter}
-                    onChange={(e) => {
-                      setMonthFilter(e.target.value);
-                    }}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.searchLabel}</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Search */}
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Qidirish</label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Icon name="search" className="h-5 w-5 text-gray-400" />
+                    </div>
                     <input
                       type="text"
                       value={searchValue}
                       onChange={(e) => setSearchValue(e.target.value)}
-                      placeholder={t.vagon.searchPlaceholder}
-                      className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                      placeholder="Vagon kodi, jo'natish yoki qabul qilish joyi..."
+                      className="w-full pl-12 pr-12 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white/50 backdrop-blur-sm"
                     />
                     {isSearching && (
                       <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                        <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                        <div className="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
                       </div>
                     )}
                     {searchValue && !isSearching && (
@@ -599,483 +893,509 @@ export default function VagonPage() {
                     )}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-        {/* Content */}
-        {isLoading ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl shadow-lg p-6 animate-pulse">
-                  <div className="h-6 bg-gray-300 rounded mb-4"></div>
-                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-300 rounded mb-4"></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="h-16 bg-gray-300 rounded"></div>
-                    <div className="h-16 bg-gray-300 rounded"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : vagons.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
-            <div className="text-6xl mb-4">
-              <Icon name="package" className="w-16 h-16 mx-auto text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-700 mb-2">Vagonlar topilmadi</h3>
-            <p className="text-gray-500">Yangi vagon qo'shish uchun yuqoridagi tugmani bosing</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {vagons.map((vagon: Vagon) => (
-              <div key={vagon._id} className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                {/* Gradient Header */}
-                <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white p-6">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-2xl font-bold mb-2">{vagon.vagonCode}</h3>
-                      <p className="text-sm opacity-90 mb-1">{vagon.month}</p>
-                      <p className="text-sm opacity-90 flex items-center">
-                        <Icon name="map-pin" className="h-4 w-4 mr-1" />
-                        {vagon.sending_place} → {vagon.receiving_place}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold">{safeToFixed(vagon.total_volume_m3)} m³</div>
-                      <div className="text-sm opacity-90">{t.vagon.totalVolumeLabel}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-6">
-                  {/* Main Statistics */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="text-center p-4 bg-green-50 rounded-xl border border-green-200 hover:bg-green-100 transition-colors">
-                      <div className="text-xl font-bold text-green-600" title="Barcha sotuvlar (dona va hajm) kub hisobida">
-                        {safeToFixed(vagon.sold_volume_m3)} m³
-                      </div>
-                      <div className="text-sm text-gray-600">{t.vagon.soldLabel}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {(vagon.total_volume_m3 || 0) > 0 ? `${safeToFixed(((vagon.sold_volume_m3 || 0) / (vagon.total_volume_m3 || 1)) * 100, 1)}%` : '0%'}
-                      </div>
-                    </div>
-                    <div className="text-center p-4 bg-purple-50 rounded-xl border border-purple-200 hover:bg-purple-100 transition-colors">
-                      <div className="text-xl font-bold text-purple-600">{safeToFixed(vagon.remaining_volume_m3)} m³</div>
-                      <div className="text-sm text-gray-600">{t.vagon.remainingLabel}</div>
-                    </div>
-                  </div>
-
-                  {/* Lot Information */}
-                  <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-semibold text-gray-700">{t.vagon.lots}:</span>
-                    <span className="font-bold text-gray-900">{vagon.lots?.length || 0} ta</span>
-                  </div>
-
-                  {/* Financial Information */}
-                  <div className="space-y-3 mb-6">
-                    {(vagon.usd_total_cost || 0) > 0 && (
-                      <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                        <span className="text-sm font-semibold text-gray-700">USD {t.vagon.vagonDetailsModal.profitLabel}</span>
-                        <span className={`font-bold ${(vagon.usd_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${(vagon.usd_profit || 0).toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                    {(vagon.rub_total_cost || 0) > 0 && (
-                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                        <span className="text-sm font-semibold text-gray-700">RUB {t.vagon.vagonDetailsModal.profitLabel}</span>
-                        <span className={`font-bold ${(vagon.rub_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ₽{(vagon.rub_profit || 0).toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div className="flex justify-between items-center mb-6">
-                    <span className="text-sm font-semibold text-gray-700">{t.common.status}:</span>
-                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${
-                      vagon.status === 'active' ? 'bg-green-100 text-green-700' : 
-                      vagon.status === 'closed' ? 'bg-red-100 text-red-700' :
-                      vagon.status === 'closing' ? 'bg-yellow-100 text-yellow-700' : 
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {vagon.status === 'active' ? t.vagon.activeVagon : 
-                       vagon.status === 'closed' ? t.vagon.closedVagon :
-                       vagon.status === 'closing' ? t.vagon.closingStatus : vagon.status}
-                    </span>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <button
-                      onClick={() => {
-                        setSelectedVagonId(vagon._id);
-                        setShowDetailsModal(true);
-                      }}
-                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center"
-                    >
-                      <Icon name="eye" className="mr-2 h-4 w-4" />
-                      <span>{t.vagon.details}</span>
-                    </button>
-                    {vagon.status !== 'closed' && vagon.status !== 'archived' && (
-                      <button
-                        onClick={() => openEditModal(vagon)}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-4 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center"
-                      >
-                        <Icon name="edit" className="mr-2 h-4 w-4" />
-                        <span>{t.vagon.edit}</span>
-                      </button>
-                    )}
-                  </div>
+                
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Holat</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                  >
+                    <option value="">Barcha holatlar</option>
+                    <option value="active">Faol</option>
+                    <option value="closed">Yopilgan</option>
+                    <option value="archived">Arxivlangan</option>
+                  </select>
                 </div>
                 
-                {/* Bottom gradient line */}
-                <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600"></div>
+                {/* Month Filter */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Oy</label>
+                  <input
+                    type="month"
+                    value={monthFilter}
+                    onChange={(e) => setMonthFilter(e.target.value)}
+                    className="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                  />
+                </div>
               </div>
-            ))}
+            </div>
           </div>
 
-          {/* ⚡ PAGINATION COMPONENT */}
-          {vagonData?.pagination && vagonData.pagination.totalPages > 1 && (
-            <div className="mt-8">
-              <Pagination
-                currentPage={vagonData.pagination.currentPage}
-                totalPages={vagonData.pagination.totalPages}
-                totalItems={vagonData.pagination.totalItems}
-                itemsPerPage={vagonData.pagination.itemsPerPage}
-                hasNextPage={vagonData.pagination.hasNextPage}
-                hasPrevPage={vagonData.pagination.hasPrevPage}
-                onPageChange={(page) => setCurrentPage(page)}
-                onLimitChange={(limit) => {
-                  setItemsPerPage(limit);
-                  setCurrentPage(1); // Reset to first page
+          {/* Content */}
+          {vagons.length === 0 ? (
+            <div className="text-center py-20 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20">
+              <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+                <Icon name="package" className="w-12 h-12 text-gray-400" />
+              </div>
+              <h3 className="text-3xl font-bold text-gray-700 mb-4">Vagonlar topilmadi</h3>
+              <p className="text-gray-500 text-lg mb-8">Yangi vagon qo'shish uchun yuqoridagi tugmani bosing</p>
+              <button
+                onClick={() => {
+                  resetForm();
+                  setShowModal(true);
                 }}
-                showLimitSelector={true}
-                className="bg-white rounded-2xl shadow-lg p-6"
-              />
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 font-semibold text-lg flex items-center mx-auto"
+              >
+                <Icon name="plus" className="mr-3 h-6 w-6" />
+                Birinchi vagonni qo'shish
+              </button>
             </div>
+          ) : (
+            <>
+              {/* Vagon Cards Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+                {vagons.map((vagon: Vagon) => (
+                  <VagonCard 
+                    key={vagon._id} 
+                    vagon={vagon} 
+                    onEdit={openEditModal}
+                    onDelete={deleteVagon}
+                    onClose={closeVagon}
+                    onViewDetails={(id) => {
+                      setSelectedVagonId(id);
+                      setShowDetailsModal(true);
+                    }}
+                    user={user}
+                    t={t}
+                    safeToFixed={safeToFixed}
+                    calculatePercentage={calculatePercentage}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {vagonData?.pagination && vagonData.pagination.totalPages > 1 && (
+                <div className="mt-12">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6">
+                    <Pagination
+                      currentPage={vagonData.pagination.currentPage}
+                      totalPages={vagonData.pagination.totalPages}
+                      totalItems={vagonData.pagination.totalItems}
+                      itemsPerPage={vagonData.pagination.itemsPerPage}
+                      hasNextPage={vagonData.pagination.hasNextPage}
+                      hasPrevPage={vagonData.pagination.hasPrevPage}
+                      onPageChange={(page: number) => setCurrentPage(page)}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
-        </>
-        )}
+        </div>
       </div>
 
-        {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto p-4">
-            <div className="bg-white rounded-2xl p-8 w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-3xl font-bold flex items-center">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-4">
-                    <Icon name="truck" className="h-7 w-7 text-white" />
-                  </div>
-                  {editingVagon ? t.vagon.vagonModal.editVagonTitle : t.vagon.vagonModal.newVagonTitle}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-all duration-200 p-3 rounded-xl hover:bg-gray-100 group"
-                  aria-label={t.vagon.vagonModal.closeButton}
-                >
-                  <Icon name="x" className="h-6 w-6 group-hover:rotate-90 transition-transform duration-300" />
-                </button>
-              </div>
-              <form onSubmit={handleSubmit}>
-                {/* Vagon ma'lumotlari */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl mb-8 border border-blue-200">
-                  <h3 className="font-bold text-xl mb-6 flex items-center text-blue-900">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
-                      <Icon name="info" className="h-5 w-5 text-white" />
-                    </div>
-                    {t.vagon.vagonModal.vagonInfoSection}
-                  </h3>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.vagonCodeLabel}</label>
-                      <input
-                        type="text"
-                        required
-                        value={vagonCode}
-                        onChange={(e) => setVagonCode(e.target.value)}
-                        placeholder={t.vagon.vagonModal.vagonCodePlaceholder}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        disabled={!!editingVagon}
-                      />
+      {/* Details Modal */}
+      {showDetailsModal && selectedVagonId && (
+        <VagonDetailsModal
+          vagonId={selectedVagonId}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedVagonId(null);
+          }}
+          onVagonUpdated={() => {
+            refetch();
+          }}
+        />
+      )}
+
+      {/* Compact Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="bg-white/95 backdrop-blur-sm rounded-3xl w-full max-w-4xl my-8 shadow-2xl border border-white/20">
+              {/* Compact Modal Header */}
+              <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-700 text-white p-6 rounded-t-3xl">
+                <div className="absolute inset-0 bg-black/10 rounded-t-3xl"></div>
+                
+                <div className="relative flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mr-4">
+                      <Icon name={editingVagon ? "edit" : "plus"} className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.monthLabel}</label>
-                      <input
-                        type="text"
-                        required
-                        value={month}
-                        onChange={(e) => setMonth(e.target.value)}
-                        placeholder={t.vagon.vagonModal.monthPlaceholder}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.sendingPlace}</label>
-                      <input
-                        type="text"
-                        required
-                        value={sendingPlace}
-                        onChange={(e) => setSendingPlace(e.target.value)}
-                        placeholder={t.vagon.vagonModal.sendingPlacePlaceholder}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">{t.vagon.receivingPlace}</label>
-                      <input
-                        type="text"
-                        required
-                        value={receivingPlace}
-                        onChange={(e) => setReceivingPlace(e.target.value)}
-                        placeholder={t.vagon.vagonModal.receivingPlacePlaceholder}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                      />
+                      <h2 className="text-2xl font-bold mb-1">
+                        {editingVagon ? 'Vagonni tahrirlash' : 'Yangi vagon yaratish'}
+                      </h2>
+                      <p className="text-white/80 text-sm">
+                        {editingVagon ? 'Ma\'lumotlarni yangilang' : 'Vagon va yog\'ochlar ma\'lumotlari'}
+                      </p>
                     </div>
                   </div>
-                  {editingVagon && (
-                    <div className="mt-4 p-4 bg-blue-100 border border-blue-300 rounded-xl text-sm text-blue-800">
-                      <Icon name="info" className="inline mr-2 h-4 w-4" />
-                      {t.vagon.vagonModal.editInfoMessage}
-                    </div>
-                  )}
-                </div>
-
-                {/* Lotlar - yangi vagon yaratishda va tahrirlashda */}
-                <div className="mb-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-2xl font-bold flex items-center">
-                        <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center mr-3">
-                          <Icon name="package" className="h-6 w-6 text-white" />
-                        </div>
-                        {t.vagon.vagonModal.lotsSection}
-                      </h3>
-                      <div className="text-right bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-4 rounded-2xl border-2 border-orange-200">
-                        <div className="text-3xl font-bold text-orange-600">
-                          {safeToFixed(calculateTotalVolume())} m³
-                        </div>
-                        <div className="text-sm text-gray-600 font-semibold">{t.vagon.totalVolumeLabel}</div>
-                      </div>
-                    </div>
-
-                  <div className="space-y-6">
-                    {lots.map((lot, index) => (
-                      <div key={index} className="border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-200">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                              <span className="text-white font-bold text-lg">{index + 1}</span>
-                            </div>
-                            <div className="font-bold text-xl text-blue-900">{t.vagon.vagonModal.lotNumber} {index + 1}</div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right bg-white px-6 py-3 rounded-xl shadow-sm border-2 border-orange-200">
-                              <div className="text-2xl font-bold text-orange-600">
-                                {safeToFixed(calculateLotVolume(lot))} m³
-                              </div>
-                              <div className="text-xs text-gray-500 font-semibold mt-1">
-                                {lot.quantity && calculateLotVolume(lot) > 0 ? `1m³ = ${safeToFixed(parseInt(lot.quantity) / calculateLotVolume(lot), 0)} ${t.vagon.pieces}` : 'Hajm'}
-                              </div>
-                            </div>
-                            {lots.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeLotRow(index)}
-                                className="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 p-3 rounded-xl transition-all duration-200"
-                                title="Lotni o'chirish"
-                              >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-7 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.thickness} (mm)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={lot.thickness}
-                              onChange={(e) => updateLot(index, 'thickness', e.target.value)}
-                              placeholder={t.vagon.vagonModal.thicknessPlaceholder}
-                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.width} (mm)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={lot.width}
-                              onChange={(e) => updateLot(index, 'width', e.target.value)}
-                              placeholder={t.vagon.vagonModal.widthPlaceholder}
-                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.length} (m)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={lot.length}
-                              onChange={(e) => updateLot(index, 'length', e.target.value)}
-                              placeholder={t.vagon.vagonModal.lengthPlaceholder}
-                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.quantity} (dona)</label>
-                            <input
-                              type="number"
-                              value={lot.quantity}
-                              onChange={(e) => updateLot(index, 'quantity', e.target.value)}
-                              placeholder={t.vagon.vagonModal.quantityPlaceholder}
-                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-red-600 mb-2">{t.vagon.brakVolume} (m³)</label>
-                            <input
-                              type="number"
-                              step="0.0001"
-                              value={lot.loss_volume_m3}
-                              onChange={(e) => updateLot(index, 'loss_volume_m3', e.target.value)}
-                              placeholder={t.vagon.vagonModal.brakVolumePlaceholder}
-                              className="w-full px-3 py-3 border-2 border-red-300 rounded-xl text-center font-bold text-lg text-red-600 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.vagonCurrency}</label>
-                            <select
-                              value={lot.currency}
-                              onChange={(e) => updateLot(index, 'currency', e.target.value)}
-                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                            >
-                              <option value="USD">USD $</option>
-                              <option value="RUB">RUB ₽</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">{t.vagon.price}</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={lot.purchase_amount}
-                              onChange={(e) => updateLot(index, 'purchase_amount', e.target.value)}
-                              placeholder={t.vagon.vagonModal.pricePlaceholder}
-                              className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                            />
-                          </div>
-                        </div>
-                        
-                        {/* Brak ma'lumotlari (agar brak mavjud bo'lsa) */}
-                        {parseFloat(lot.loss_volume_m3) > 0 && (
-                          <div className="mt-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-200 rounded-xl">
-                            <h5 className="text-sm font-bold text-red-700 mb-3 flex items-center">
-                              <Icon name="alert-triangle" className="h-4 w-4 mr-2" />
-                              {t.vagon.vagonModal.brakInfoSection}
-                            </h5>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-xs font-bold text-red-600 mb-2">{t.vagon.responsiblePerson}</label>
-                                <input
-                                  type="text"
-                                  value={lot.loss_responsible_person}
-                                  onChange={(e) => updateLot(index, 'loss_responsible_person', e.target.value)}
-                                  placeholder={t.vagon.vagonModal.responsiblePersonPlaceholder}
-                                  className="w-full px-3 py-2 border-2 border-red-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold text-red-600 mb-2">{t.vagon.brakReasonLabel}</label>
-                                <input
-                                  type="text"
-                                  value={lot.loss_reason}
-                                  onChange={(e) => updateLot(index, 'loss_reason', e.target.value)}
-                                  placeholder={t.vagon.vagonModal.brakReasonPlaceholder}
-                                  className="w-full px-3 py-2 border-2 border-red-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={addLotRow}
-                    className="mt-6 w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-4 rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 font-bold text-lg shadow-lg hover:shadow-xl flex items-center justify-center"
-                  >
-                    <Icon name="plus" className="mr-3 h-5 w-5" />
-                    {t.vagon.vagonModal.addLotButton}
-                  </button>
-                </div>
-
-                <div className="flex gap-4 mt-8">
                   <button
                     type="button"
                     onClick={() => {
                       setShowModal(false);
                       resetForm();
                     }}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-4 rounded-xl hover:bg-gray-300 font-bold text-lg transition-all duration-200"
+                    className="text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-300"
                   >
-                    {t.vagon.vagonModal.cancelButton}
+                    <Icon name="x" className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Compact Modal Content */}
+              <div className="p-6 space-y-6">
+                {/* Vagon Information - Compact */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                  <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center">
+                    <Icon name="truck" className="h-5 w-5 mr-2" />
+                    Vagon ma'lumotlari
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Vagon kodi 
+                        <span className="text-xs text-gray-500 ml-1">(ixtiyoriy)</span>
+                      </label>
+                      {editingVagon ? (
+                        <input
+                          type="text"
+                          value={editingVagon.vagonCode}
+                          className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-600 font-semibold"
+                          disabled
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={vagonCode}
+                          onChange={(e) => {
+                            const value = e.target.value.toUpperCase();
+                            // Faqat harf, raqam, tire va pastki chiziq ruxsat etiladi
+                            const cleanValue = value.replace(/[^A-Z0-9\-_]/g, '');
+                            setVagonCode(cleanValue);
+                          }}
+                          placeholder="Masalan: VAG-2025-MAXSUS yoki bo'sh qoldiring"
+                          className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                          maxLength={20}
+                        />
+                      )}
+                      {!editingVagon && (
+                        <div className="text-xs mt-1">
+                          {vagonCode.length > 0 ? (
+                            vagonCode.length < 3 ? (
+                              <p className="text-red-500">Kamida 3 belgi bo'lishi kerak</p>
+                            ) : (
+                              <p className="text-green-600">✓ To'g'ri format</p>
+                            )
+                          ) : (
+                            <p className="text-gray-500">Bo'sh qoldirsangiz avtomatik yaratiladi (VAG-2026-XXX)</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Sana</label>
+                      <input
+                        type="date"
+                        value={month ? new Date(month.split('/').reverse().join('-')).toISOString().split('T')[0] : ''}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const date = new Date(e.target.value);
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const monthNum = String(date.getMonth() + 1).padStart(2, '0');
+                            const year = date.getFullYear();
+                            setMonth(`${day}/${monthNum}/${year}`);
+                          } else {
+                            setMonth('');
+                          }
+                        }}
+                        className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Jo'natish joyi</label>
+                      <input
+                        type="text"
+                        value={sendingPlace}
+                        onChange={(e) => setSendingPlace(e.target.value)}
+                        placeholder="Moskva"
+                        className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Qabul qilish joyi</label>
+                      <input
+                        type="text"
+                        value={receivingPlace}
+                        onChange={(e) => setReceivingPlace(e.target.value)}
+                        placeholder="Toshkent"
+                        className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Yog'ochlar Section - Compact */}
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-purple-900 flex items-center">
+                      <Icon name="package" className="h-5 w-5 mr-2" />
+                      Yog'ochlar ({yogochlar.length} ta)
+                    </h3>
+                    {!isAddingYogoch && (
+                      <button
+                        type="button"
+                        onClick={addYogochRow}
+                        className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-2 rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 text-sm font-semibold flex items-center"
+                      >
+                        <Icon name="plus" className="mr-2 h-4 w-4" />
+                        Yog'och qo'shish
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Added Yogochlar List */}
+                  {yogochlar.length > 0 && (
+                    <div className="mb-4 space-y-2 max-h-40 overflow-y-auto">
+                      {yogochlar.map((yogoch, index) => (
+                        <div key={index} className="bg-white/80 rounded-xl p-3 border border-purple-200 flex justify-between items-center">
+                          <div className="flex-1">
+                            <div className="font-semibold text-purple-900">{yogoch.name}</div>
+                            <div className="text-xs text-gray-600">
+                              {yogoch.thickness}×{yogoch.width}×{yogoch.length} mm/m × {yogoch.quantity} dona
+                              = {safeToFixed(calculateYogochVolume(yogoch), 3)} m³
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {yogoch.purchase_amount} {yogoch.currency}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeYogochRow(index)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded-lg transition-all duration-300"
+                          >
+                            <Icon name="trash" className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add Yogoch Form */}
+                  {isAddingYogoch && (
+                    <div className="bg-white/80 rounded-xl p-4 border-2 border-purple-300 mb-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-bold text-purple-900">Yangi yog'och qo'shish</h4>
+                        <button
+                          type="button"
+                          onClick={cancelAddingYogoch}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <Icon name="x" className="h-4 w-4" />
+                        </button>
+                      </div>
+                      
+                      {/* Compact Yogoch Form */}
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Yog'och nomi *</label>
+                          <input
+                            type="text"
+                            value={currentYogoch.name || ''}
+                            onChange={(e) => updateCurrentYogoch('name', e.target.value)}
+                            placeholder="Premium yog'och"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            required
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Qalinlik (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={currentYogoch.thickness}
+                              onChange={(e) => updateCurrentYogoch('thickness', e.target.value)}
+                              placeholder="31"
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Eni (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={currentYogoch.width}
+                              onChange={(e) => updateCurrentYogoch('width', e.target.value)}
+                              placeholder="125"
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Uzunlik (m)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={currentYogoch.length}
+                              onChange={(e) => updateCurrentYogoch('length', e.target.value)}
+                              placeholder="6"
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Soni</label>
+                            <input
+                              type="number"
+                              value={currentYogoch.quantity}
+                              onChange={(e) => updateCurrentYogoch('quantity', e.target.value)}
+                              placeholder="100"
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Valyuta</label>
+                            <select
+                              value={currentYogoch.currency}
+                              onChange={(e) => updateCurrentYogoch('currency', e.target.value)}
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                            >
+                              <option value="USD">USD</option>
+                              <option value="RUB">RUB</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Tannarx</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={currentYogoch.purchase_amount}
+                              onChange={(e) => updateCurrentYogoch('purchase_amount', e.target.value)}
+                              placeholder="1000"
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Hajm</label>
+                            <div className="w-full px-2 py-2 bg-purple-100 border border-purple-200 rounded-lg text-sm font-bold text-purple-800">
+                              {safeToFixed(calculateYogochVolume(currentYogoch), 3)} m³
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* YANGI: Sotuv narxi */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">
+                              Sotuv narxi (m³ uchun) <span className="text-gray-500">(ixtiyoriy)</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={currentYogoch.recommended_sale_price_per_m3}
+                              onChange={(e) => updateCurrentYogoch('recommended_sale_price_per_m3', e.target.value)}
+                              placeholder="Masalan: 150"
+                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">
+                              Kutilayotgan foyda
+                            </label>
+                            <div className="w-full px-2 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-bold text-green-700">
+                              {(() => {
+                                const volume = calculateYogochVolume(currentYogoch);
+                                const cost = parseFloat(currentYogoch.purchase_amount) || 0;
+                                const salePrice = parseFloat(currentYogoch.recommended_sale_price_per_m3) || 0;
+                                const costPerM3 = volume > 0 ? cost / volume : 0;
+                                const profitPerM3 = salePrice - costPerM3;
+                                const totalProfit = profitPerM3 * volume;
+                                const margin = salePrice > 0 ? ((profitPerM3 / salePrice) * 100).toFixed(1) : '0';
+                                return totalProfit > 0 
+                                  ? `${safeToFixed(totalProfit, 2)} ${currentYogoch.currency} (${margin}%)`
+                                  : '—';
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={cancelAddingYogoch}
+                            className="px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                          >
+                            Bekor qilish
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveCurrentYogoch}
+                            className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-600 hover:to-pink-700 text-sm font-semibold"
+                          >
+                            Qo'shish
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Total Volume Display */}
+                  {yogochlar.length > 0 && (
+                    <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 border border-purple-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-purple-900">Jami hajm:</span>
+                        <span className="text-xl font-bold text-purple-900">
+                          {safeToFixed(yogochlar.reduce((sum, yogoch) => sum + calculateYogochVolume(yogoch), 0), 3)} m³
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      resetForm();
+                    }}
+                    className="px-6 py-3 text-sm border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-300 font-semibold"
+                  >
+                    Bekor qilish
                   </button>
                   <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`flex-1 px-6 py-4 rounded-xl transition-all duration-200 flex items-center justify-center font-bold text-lg shadow-lg hover:shadow-xl ${
-                      isSubmitting
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
-                    }`}
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || yogochlar.length === 0}
+                    className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-8 py-3 text-sm rounded-xl hover:from-indigo-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 font-semibold flex items-center"
                   >
                     {isSubmitting ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-3 h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        {t.vagon.vagonModal.loadingText}...
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Saqlanmoqda...
                       </>
                     ) : (
                       <>
-                        <Icon name="save" className="mr-3 h-5 w-5" />
-                        {t.vagon.vagonModal.saveButton}
+                        <Icon name="save" className="mr-2 h-4 w-4" />
+                        {editingVagon ? 'Yangilash' : `Saqlash (${yogochlar.length} ta yog'och)`}
                       </>
                     )}
                   </button>
                 </div>
-              </form>
+              </div>
             </div>
           </div>
-        )}
-
-        {/* Vagon Details Modal */}
-        {showDetailsModal && selectedVagonId && (
-          <VagonDetailsModal
-            vagonId={selectedVagonId}
-            onClose={() => {
-              setShowDetailsModal(false);
-              setSelectedVagonId(null);
-            }}
-          />
-        )}
-
-      </div>
+        </div>
+      )}
     </Layout>
   );
 }

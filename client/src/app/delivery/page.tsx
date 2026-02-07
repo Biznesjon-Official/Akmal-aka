@@ -4,6 +4,7 @@ import { useState, lazy, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from '@/lib/axios';
 import { useLanguage } from '@/context/LanguageContext';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import Layout from '@/components/Layout';
 import { Card } from '@/components/ui/Card';
 import Icon from '@/components/Icon';
@@ -22,6 +23,9 @@ export default function DeliveryPage() {
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // Scroll lock for modal
+  useScrollLock(isModalOpen);
 
   // Deliverylarni olish - cache bilan
   const { data: deliveries = [], isLoading } = useQuery({

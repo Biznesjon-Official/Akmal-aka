@@ -16,6 +16,20 @@
     background-attachment: fixed;
   }
   
+  /* Modal ochilganda body scroll'ni to'xtatish */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Modal overlay'da scroll'ni to'xtatish */
+  .modal-overlay {
+    position: fixed !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    touch-action: none !important;
+    -webkit-overflow-scrolling: auto !important;
+  }
+  
   /* Professional Typography */
   h1, h2, h3, h4, h5, h6 {
     @apply font-bold tracking-tight;

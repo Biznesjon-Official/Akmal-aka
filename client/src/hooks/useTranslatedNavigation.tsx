@@ -7,16 +7,28 @@ export function useTranslatedNavigation() {
 
   const navigation = useMemo(() => [
     { 
-      name: t.sidebar.dashboard, 
-      href: '/', 
-      icon: <Icon name="dashboard" size="sm" />,
-      gradient: 'from-blue-500 to-blue-600' 
-    },
-    { 
       name: t.sidebar.cash, 
       href: '/cash', 
       icon: <Icon name="cash" size="sm" />,
       gradient: 'from-green-500 to-green-600' 
+    },
+    { 
+      name: 'Qarz Daftarcha', 
+      href: '/debt', 
+      icon: <Icon name="credit-card" size="sm" />,
+      gradient: 'from-red-500 to-red-600' 
+    },
+    { 
+      name: t.sidebar.expenses, 
+      href: '/expenses', 
+      icon: <Icon name="expenses" size="sm" />,
+      gradient: 'from-orange-500 to-orange-600' 
+    },
+    { 
+      name: t.sidebar.warehouse, 
+      href: '/warehouse', 
+      icon: <Icon name="warehouse" size="sm" />,
+      gradient: 'from-indigo-500 to-indigo-600' 
     },
     { 
       name: t.sidebar.vagons, 
@@ -25,40 +37,10 @@ export function useTranslatedNavigation() {
       gradient: 'from-teal-500 to-teal-600' 
     },
     { 
-      name: t.sidebar.expenses, 
-      href: '/expense', 
-      icon: <Icon name="expenses" size="sm" />,
-      gradient: 'from-orange-500 to-orange-600' 
-    },
-    { 
-      name: t.sidebar.vagonSales, 
-      href: '/vagon-sale', 
-      icon: <Icon name="sales" size="sm" />,
-      gradient: 'from-emerald-500 to-emerald-600' 
-    },
-    { 
       name: t.sidebar.clients, 
       href: '/client', 
       icon: <Icon name="clients" size="sm" />,
       gradient: 'from-cyan-500 to-cyan-600' 
-    },
-    { 
-      name: t.sidebar.reports, 
-      href: '/reports', 
-      icon: <Icon name="reports" size="sm" />,
-      gradient: 'from-pink-500 to-pink-600' 
-    },
-    { 
-      name: t.sidebar.exchangeRates, 
-      href: '/exchange-rate', 
-      icon: <Icon name="trending-up" size="sm" />,
-      gradient: 'from-yellow-500 to-yellow-600' 
-    },
-    { 
-      name: t.sidebar.calculator, 
-      href: '/calculator', 
-      icon: <Icon name="calculator" size="sm" />,
-      gradient: 'from-indigo-500 to-indigo-600' 
     },
     { 
       name: t.sidebar.delivery, 

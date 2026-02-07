@@ -4,6 +4,7 @@ const VagonExpense = require('../models/VagonExpense');
 const VagonLot = require('../models/VagonLot');
 const Vagon = require('../models/Vagon');
 const auth = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Barcha xarajatlar
 router.get('/', auth, async (req, res) => {
@@ -22,7 +23,7 @@ router.get('/', auth, async (req, res) => {
     
     res.json(expenses);
   } catch (error) {
-    console.error('VagonExpense list error:', error);
+    logger.error('VagonExpense list error:', error);
     res.status(500).json({ message: 'Xarajatlar ro\'yxatini olishda xatolik' });
   }
 });
@@ -146,7 +147,7 @@ router.post('/', auth, async (req, res) => {
     
     res.status(201).json(expense);
   } catch (error) {
-    console.error('VagonExpense create error:', error);
+    logger.error('VagonExpense create error:', error);
     res.status(400).json({ message: error.message });
   }
 });

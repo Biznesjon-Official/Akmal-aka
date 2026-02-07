@@ -3,16 +3,70 @@ const router = express.Router();
 const Cash = require('../models/Cash');
 const VagonSale = require('../models/VagonSale');
 const Client = require('../models/Client');
-const Expense = require('../models/Expense');
 const auth = require('../middleware/auth');
+const logger = require('../utils/logger');
+const { ClientNotFoundError, InvalidCurrencyError, handleCustomError } = require('../utils/customErrors');
+
+// Double submit prevention middleware
+const preventDoubleSubmit = (req, res, next) => {
+  const key = `${req.user.userId}-${req.method}-${req.originalUrl}`;
+  const now = Date.now();
+  
+  if (!req.app.locals.recentRequests) {
+    req.app.locals.recentRequests = new Map();
+  }
+  
+  const lastRequest = req.app.locals.recentRequests.get(key);
+  if (lastRequest && (now - lastRequest) < 2000) { // 2 sekund ichida
+    return res.status(409).json({ 
+      message: 'Takroriy yuborildi. Iltimos kutib turing.',
+      code: 'DUPLICATE_REQUEST'
+    });
+  }
+  
+  req.app.locals.recentRequests.set(key, now);
+  
+  // Eski requestlarni tozalash
+  if (req.app.locals.recentRequests.size > 1000) {
+    const cutoff = now - 10000; // 10 sekund
+    for (const [k, v] of req.app.locals.recentRequests.entries()) {
+      if (v < cutoff) {
+        req.app.locals.recentRequests.delete(k);
+      }
+    }
+  }
+  
+  next();
+};
 
 // Umumiy balans (/:id dan oldin bo'lishi kerak!)
+router.get('/balance', auth, async (req, res) => {
+  try {
+    const balances = await Cash.getBalanceByCurrency();
+    
+    // Frontend format'iga moslashtirish
+    const formattedBalances = Object.keys(balances).map(currency => ({
+      _id: currency,
+      jamiKirim: balances[currency].income || 0,
+      xarajatlar: balances[currency].expense || 0,
+      sof: balances[currency].balance || 0,
+      vagonSotuvi: 0, // Hisoblash kerak
+      mijozTolovi: 0  // Hisoblash kerak
+    }));
+    
+    res.json(formattedBalances);
+  } catch (error) {
+    logger.error('Balance error:', error);
+    res.status(500).json({ message: 'Balansni hisoblashda xatolik' });
+  }
+});
+
 router.get('/balance/total', auth, async (req, res) => {
   try {
     const balance = await Cash.getTotalBalance();
     res.json(balance);
   } catch (error) {
-    console.error('Balance error:', error);
+    logger.error('Balance error:', error);
     res.status(500).json({ message: 'Balansni hisoblashda xatolik' });
   }
 });
@@ -23,7 +77,7 @@ router.get('/balance/by-currency', auth, async (req, res) => {
     const balances = await Cash.getBalanceByCurrency();
     res.json(balances);
   } catch (error) {
-    console.error('Balance by currency error:', error);
+    logger.error('Balance by currency error:', error);
     res.status(500).json({ message: 'Valyuta bo\'yicha balansni hisoblashda xatolik' });
   }
 });
@@ -77,7 +131,8 @@ router.get('/', auth, async (req, res) => {
     const hasPrevPage = pageNum > 1;
     
     res.json({
-      transactions,
+      transactions: transactions,
+      kassa: transactions, // Backward compatibility
       pagination: {
         currentPage: pageNum,
         totalPages,
@@ -88,7 +143,7 @@ router.get('/', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Cash list error:', error);
+    logger.error('Cash list error:', error);
     res.status(500).json({ message: 'Tranzaksiyalar ro\'yxatini olishda xatolik' });
   }
 });
@@ -112,8 +167,335 @@ router.get('/:id', auth, async (req, res) => {
     
     res.json(transaction);
   } catch (error) {
-    console.error('Cash get error:', error);
+    logger.error('Cash get error:', error);
     res.status(500).json({ message: 'Tranzaksiya ma\'lumotlarini olishda xatolik' });
+  }
+});
+
+// YANGI FEATURE: Daromad qo'shish
+router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
+  try {
+    const { income_source, amount, currency, description, client_id, date, vagon_id, yogoch_id, client_type, one_time_client_name, one_time_client_phone, total_price, paid_amount } = req.body;
+    
+    // Initialize variables
+    let yogoch = null;
+    
+    // Validatsiya
+    const errors = [];
+    
+    if (!income_source || !['yogoch_tolovi', 'qarz_daftarcha', 'yetkazib_berish'].includes(income_source)) {
+      errors.push('income_source faqat yogoch_tolovi, qarz_daftarcha yoki yetkazib_berish bo\'lishi mumkin');
+    }
+    
+    if (!amount || amount <= 0) {
+      errors.push('amount 0 dan katta bo\'lishi shart');
+    }
+    
+    if (amount > 1e9) {
+      errors.push('amount juda katta (maksimal 1 milliard)');
+    }
+    
+    if (!currency || !['USD', 'RUB'].includes(currency)) {
+      errors.push('currency faqat USD yoki RUB bo\'lishi mumkin');
+    }
+    
+    if (!description || description.trim().length < 3) {
+      errors.push('description kamida 3 belgi bo\'lishi shart');
+    }
+    
+    if (description && description.length > 500) {
+      errors.push('description 500 belgidan oshmasin');
+    }
+    
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      errors.push('date formati YYYY-MM-DD bo\'lishi shart');
+    }
+    
+    // Qarz daftarcha uchun client_id majburiy
+    if (income_source === 'qarz_daftarcha' && !client_id) {
+      errors.push('Qarz daftarcha uchun client_id majburiy');
+    }
+    
+    // Yogoch tolovi uchun vagon va yogoch majburiy
+    if (income_source === 'yogoch_tolovi' && !vagon_id) {
+      errors.push('Yogoch tolovi uchun vagon_id majburiy');
+    }
+    
+    if (income_source === 'yogoch_tolovi' && vagon_id && !yogoch_id) {
+      errors.push('Yogoch tolovi uchun yogoch_id majburiy');
+    }
+    
+    // Yogoch tolovi uchun mijoz majburiy
+    if (income_source === 'yogoch_tolovi') {
+      if (client_type === 'existing' && !client_id) {
+        errors.push('Yogoch tolovi uchun doimiy mijoz tanlanishi shart');
+      }
+      if (client_type === 'one_time') {
+        if (!one_time_client_name || one_time_client_name.trim().length < 2) {
+          errors.push('Bir martalik mijoz ismi kamida 2 belgi bo\'lishi shart');
+        }
+        if (!one_time_client_phone || one_time_client_phone.trim().length < 9) {
+          errors.push('Bir martalik mijoz telefoni kamida 9 belgi bo\'lishi shart');
+        }
+      }
+      if (!client_type || !['existing', 'one_time'].includes(client_type)) {
+        errors.push('Yogoch tolovi uchun mijoz turi (existing yoki one_time) tanlanishi shart');
+      }
+    }
+    
+    // Yetkazib berish uchun faqat vagon majburiy (yogoch ixtiyoriy)
+    if (income_source === 'yetkazib_berish' && !vagon_id) {
+      errors.push('Yetkazib berish uchun vagon_id majburiy');
+    }
+    
+    if (errors.length > 0) {
+      return res.status(400).json({ 
+        message: 'Validatsiya xatoliklari',
+        errors 
+      });
+    }
+    
+    // Client mavjudligini tekshirish
+    if (client_id) {
+      const Client = require('../models/Client');
+      const client = await Client.findById(client_id);
+      if (!client) {
+        return res.status(400).json({ message: 'Mijoz topilmadi' });
+      }
+    }
+    
+    // Vagon mavjudligini tekshirish
+    if (vagon_id) {
+      const Vagon = require('../models/Vagon');
+      const vagon = await Vagon.findOne({ _id: vagon_id, isDeleted: false });
+      if (!vagon) {
+        return res.status(400).json({ message: 'Vagon topilmadi' });
+      }
+    }
+    
+    // Yogoch mavjudligini tekshirish
+    if (yogoch_id) {
+      const VagonLot = require('../models/VagonLot');
+      yogoch = await VagonLot.findOne({ _id: yogoch_id, isDeleted: false });
+      if (!yogoch) {
+        return res.status(400).json({ message: 'Yog\'och topilmadi' });
+      }
+      
+      // Yogoch va vagon mos kelishini tekshirish
+      if (vagon_id && yogoch.vagon.toString() !== vagon_id) {
+        return res.status(400).json({ message: 'Tanlangan yog\'och bu vagonga tegishli emas' });
+      }
+    }
+    
+    // Type mapping
+    let type = 'client_payment';
+    if (income_source === 'yogoch_tolovi') type = 'vagon_sale';
+    else if (income_source === 'yetkazib_berish') type = 'delivery_payment';
+    else if (income_source === 'qarz_daftarcha') type = 'debt_payment';
+    
+    // Yogoch tolovi uchun VagonSale yaratish va qarz boshqaruvi
+    let vagonSaleId = null;
+    
+    if (income_source === 'yogoch_tolovi') {
+      // Narxlarni hisoblash
+      const totalPrice = total_price || parseFloat(amount);
+      const paidAmount = paid_amount || 0;
+      const debt = totalPrice - paidAmount;
+      
+      // Status aniqlash
+      let status = 'pending';
+      if (paidAmount >= totalPrice) {
+        status = 'paid';
+      } else if (paidAmount > 0) {
+        status = 'partial';
+      }
+      
+      // VagonSale yaratish
+      const vagonSale = new VagonSale({
+        vagon: vagon_id,
+        lot: yogoch_id,
+        client: client_id || null, // Doimiy mijoz bo'lsa
+        warehouse_dispatched_volume_m3: yogoch ? yogoch.volume_m3 : 0,
+        client_received_volume_m3: yogoch ? yogoch.volume_m3 : 0,
+        sale_unit: 'volume',
+        sent_quantity: yogoch ? yogoch.quantity : 0,
+        accepted_quantity: yogoch ? yogoch.quantity : 0,
+        total_price: totalPrice,
+        sale_currency: currency,
+        paid_amount: paidAmount,
+        debt: debt,
+        status: status,
+        sale_date: new Date(date),
+        // Bir martalik mijoz ma'lumotlari
+        one_time_client_name: one_time_client_name?.trim() || null,
+        one_time_client_phone: one_time_client_phone?.trim() || null
+      });
+      
+      await vagonSale.save();
+      vagonSaleId = vagonSale._id;
+      
+      // Agar doimiy mijoz bo'lsa, Client modelini yangilash
+      if (client_id) {
+        const Client = require('../models/Client');
+        const client = await Client.findById(client_id);
+        if (client) {
+          if (currency === 'USD') {
+            client.usd_total_debt += debt;
+            client.usd_total_paid += paidAmount;
+          } else {
+            client.rub_total_debt += debt;
+            client.rub_total_paid += paidAmount;
+          }
+          await client.save();
+        }
+      }
+    }
+    
+    // Cash tranzaksiyasini yaratish (faqat to'langan summa uchun)
+    let cash = null;
+    if (income_source !== 'yogoch_tolovi' || (income_source === 'yogoch_tolovi' && paid_amount > 0)) {
+      const cashAmount = income_source === 'yogoch_tolovi' ? parseFloat(paid_amount) : parseFloat(amount);
+      
+      cash = new Cash({
+        type,
+        client: client_id || null,
+        vagon: vagon_id || null,
+        yogoch: yogoch_id || null,
+        vagonSale: vagonSaleId || null,
+        amount: cashAmount,
+        currency,
+        description: description.trim(),
+        transaction_date: new Date(date),
+        createdBy: req.user.userId,
+        // Bir martalik mijoz ma'lumotlari
+        one_time_client_name: one_time_client_name?.trim() || null,
+        one_time_client_phone: one_time_client_phone?.trim() || null
+      });
+      
+      await cash.save();
+    }
+    
+    res.status(201).json({
+      message: income_source === 'yogoch_tolovi' 
+        ? 'Yogoch sotuvi muvaffaqiyatli yaratildi' 
+        : 'Daromad muvaffaqiyatli qo\'shildi',
+      cash,
+      vagonSale: vagonSaleId ? { _id: vagonSaleId } : null
+    });
+  } catch (error) {
+    return handleCustomError(error, res);
+  }
+});
+
+// YANGI FEATURE: Xarajat qo'shish
+router.post('/expense', auth, preventDoubleSubmit, async (req, res) => {
+  try {
+    const { expense_source, amount, currency, description, responsible_person, date, related_client_id, vagon_id, yogoch_id } = req.body;
+    
+    // Validatsiya
+    const errors = [];
+    
+    if (!expense_source || !['transport', 'bojxona', 'ish_haqi', 'yuklash_tushurish', 'soliq', 'sifatsiz_mahsulot'].includes(expense_source)) {
+      errors.push('expense_source faqat transport, bojxona, ish_haqi, yuklash_tushurish, soliq yoki sifatsiz_mahsulot bo\'lishi mumkin');
+    }
+    
+    if (!amount || amount <= 0) {
+      errors.push('amount 0 dan katta bo\'lishi shart');
+    }
+    
+    if (amount > 1e9) {
+      errors.push('amount juda katta (maksimal 1 milliard)');
+    }
+    
+    if (!currency || !['USD', 'RUB'].includes(currency)) {
+      errors.push('currency faqat USD yoki RUB bo\'lishi mumkin');
+    }
+    
+    if (!description || description.trim().length < 3) {
+      errors.push('description kamida 3 belgi bo\'lishi shart');
+    }
+    
+    if (description && description.length > 500) {
+      errors.push('description 500 belgidan oshmasin');
+    }
+    
+    if (!responsible_person || responsible_person.trim().length === 0) {
+      errors.push('responsible_person bo\'sh bo\'lmasin');
+    }
+    
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      errors.push('date formati YYYY-MM-DD bo\'lishi shart');
+    }
+    
+    // Sifatsiz mahsulot uchun maxsus validatsiya
+    if (expense_source === 'sifatsiz_mahsulot' && description.trim().length < 10) {
+      errors.push('Sifatsiz mahsulot uchun description kamida 10 belgi bo\'lishi shart');
+    }
+    
+    if (errors.length > 0) {
+      return res.status(400).json({ 
+        message: 'Validatsiya xatoliklari',
+        errors 
+      });
+    }
+    
+    // Client mavjudligini tekshirish
+    if (related_client_id) {
+      const Client = require('../models/Client');
+      const client = await Client.findById(related_client_id);
+      if (!client) {
+        return res.status(400).json({ message: 'Bog\'liq mijoz topilmadi' });
+      }
+    }
+    
+    // Vagon mavjudligini tekshirish
+    if (vagon_id) {
+      const Vagon = require('../models/Vagon');
+      const vagon = await Vagon.findOne({ _id: vagon_id, isDeleted: false });
+      if (!vagon) {
+        return res.status(400).json({ message: 'Vagon topilmadi' });
+      }
+    }
+    
+    // Yogoch mavjudligini tekshirish
+    if (yogoch_id) {
+      const VagonLot = require('../models/VagonLot');
+      const yogoch = await VagonLot.findOne({ _id: yogoch_id, isDeleted: false });
+      if (!yogoch) {
+        return res.status(400).json({ message: 'Yog\'och topilmadi' });
+      }
+      
+      // Yogoch va vagon mos kelishini tekshirish
+      if (vagon_id && yogoch.vagon.toString() !== vagon_id) {
+        return res.status(400).json({ message: 'Tanlangan yog\'och bu vagonga tegishli emas' });
+      }
+    }
+    
+    // Type mapping
+    let type = 'expense';
+    if (expense_source === 'yetkazib_berish') type = 'delivery_expense';
+    
+    // Cash tranzaksiyasini yaratish
+    const cash = new Cash({
+      type,
+      client: related_client_id || null,
+      vagon: vagon_id || null,
+      yogoch: yogoch_id || null,
+      amount: parseFloat(amount),
+      currency,
+      description: `${expense_source.toUpperCase()}: ${description.trim()} (Javobgar: ${responsible_person.trim()})`,
+      transaction_date: new Date(date),
+      createdBy: req.user.userId
+    });
+    
+    await cash.save();
+    
+    res.status(201).json({
+      message: 'Xarajat muvaffaqiyatli qo\'shildi',
+      cash
+    });
+  } catch (error) {
+    return handleCustomError(error, res);
   }
 });
 
@@ -129,6 +511,11 @@ router.post('/client-payment', auth, async (req, res) => {
       });
     }
     
+    // Valyuta validatsiyasi
+    if (currency && !['USD', 'RUB'].includes(currency)) {
+      throw new InvalidCurrencyError(currency);
+    }
+    
     // Sotuvni tekshirish
     const sale = await VagonSale.findOne({ 
       _id: vagonSale, 
@@ -141,9 +528,7 @@ router.post('/client-payment', auth, async (req, res) => {
     
     // Qarzdan ko'p to'lash mumkin emas
     if (amount > sale.debt) {
-      return res.status(400).json({ 
-        message: `Qarz: ${sale.debt.toLocaleString()} so'm. Siz ${amount.toLocaleString()} so'm to'lamoqchisiz` 
-      });
+      throw new PaymentExceedsDebtError(amount, sale.debt);
     }
     
     // Cash tranzaksiyasini yaratish
@@ -177,53 +562,7 @@ router.post('/client-payment', auth, async (req, res) => {
       sale
     });
   } catch (error) {
-    console.error('Client payment error:', error);
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// Xarajat (expense)
-router.post('/expense', auth, async (req, res) => {
-  try {
-    const { expense, amount, currency, description } = req.body;
-    
-    // Validatsiya
-    if (!expense || !amount) {
-      return res.status(400).json({ 
-        message: 'Xarajat va summa kiritilishi shart' 
-      });
-    }
-    
-    // Xarajatni tekshirish
-    const expenseDoc = await Expense.findOne({ 
-      _id: expense, 
-      isDeleted: false 
-    });
-    
-    if (!expenseDoc) {
-      return res.status(404).json({ message: 'Xarajat topilmadi' });
-    }
-    
-    // Cash tranzaksiyasini yaratish
-    const cash = new Cash({
-      type: 'expense',
-      vagon: expenseDoc.wood, // Hozircha wood field ishlatiladi
-      expense: expense,
-      amount,
-      currency: currency || 'RUB',
-      description: description || `Xarajat: ${expenseDoc.type}`,
-      createdBy: req.user.userId
-    });
-    
-    await cash.save();
-    
-    res.status(201).json({
-      message: 'Xarajat qo\'shildi',
-      cash
-    });
-  } catch (error) {
-    console.error('Expense error:', error);
-    res.status(400).json({ message: error.message });
+    return handleCustomError(error, res);
   }
 });
 
@@ -255,7 +594,7 @@ router.post('/initial-balance', auth, async (req, res) => {
       cash
     });
   } catch (error) {
-    console.error('Initial balance error:', error);
+    logger.error('Initial balance error:', error);
     res.status(400).json({ message: error.message });
   }
 });
@@ -292,7 +631,7 @@ router.delete('/:id', auth, async (req, res) => {
     
     res.json({ message: 'Tranzaksiya o\'chirildi' });
   } catch (error) {
-    console.error('Cash delete error:', error);
+    logger.error('Cash delete error:', error);
     res.status(500).json({ message: 'Tranzaksiyani o\'chirishda xatolik' });
   }
 });
@@ -345,7 +684,7 @@ router.get('/stats/summary', auth, async (req, res) => {
       transaction_count: transactions.length
     });
   } catch (error) {
-    console.error('Stats error:', error);
+    logger.error('Stats error:', error);
     res.status(500).json({ message: 'Statistikani olishda xatolik' });
   }
 });

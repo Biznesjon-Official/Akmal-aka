@@ -5,7 +5,9 @@ const EXPENSE_TYPES = [
   // Kategoriyalar (asosiy)
   'shaxsiy',             // Shaxsiy xarajatlar kategoriyasi
   'qarzdorlik',          // Qarzdorlik xarajatlari kategoriyasi
+  'firma_xarajatlari',   // Firma xarajatlari kategoriyasi
   'chiqim',              // Chiqim kategoriyasi
+  'yogoch_sotib_olish',  // Yog'och sotib olish (faqat RUB)
   
   // Chiqim ichidagi xarajat turlari
   'transport_kz',        // Transport KZ
@@ -27,18 +29,31 @@ const EXPENSE_TYPE_LABELS = {
   'ishchilar': 'Ishchilar maoshi',
   'shaxsiy': 'Shaxsiy xarajatlar',
   'qarzdorlik': 'Qarzdorlik xarajatlari',
-  'chiqim': 'Chiqim'
+  'firma_xarajatlari': 'Firma xarajatlari',
+  'chiqim': 'Chiqim',
+  'yogoch_sotib_olish': 'Yog\'och sotib olish'
 };
 
 const EXPENSE_TYPE_DETAILS = [
   // KATEGORIYALAR (Asosiy tanlov)
   {
+    id: 'yogoch_sotib_olish',
+    name: 'Yog\'och sotib olish',
+    description: 'Yog\'och sotib olish xarajatlari (faqat RUB valyutasida)',
+    icon: 'tree',
+    category: 'wood_purchase',
+    isCategory: true,
+    currencyRestriction: 'RUB', // Faqat RUB
+    priority: 1 // Eng yuqori prioritet
+  },
+  {
     id: 'shaxsiy',
     name: 'Shaxsiy xarajatlar',
     description: 'Biznesmen o\'zi uchun sarflagan pullar (tavsif yozing)',
-    icon: 'dollar-sign',
+    icon: 'user',
     category: 'personal',
-    isCategory: true
+    isCategory: true,
+    priority: 2
   },
   {
     id: 'qarzdorlik',
@@ -47,16 +62,27 @@ const EXPENSE_TYPE_DETAILS = [
     icon: 'credit-card',
     category: 'debt',
     isCategory: true,
-    requiresClient: true
+    requiresClient: true,
+    priority: 3
+  },
+  {
+    id: 'firma_xarajatlari',
+    name: 'Firma xarajatlari',
+    description: 'Firma uchun umumiy xarajatlar (narx va tavsif)',
+    icon: 'briefcase',
+    category: 'company',
+    isCategory: true,
+    priority: 4
   },
   {
     id: 'chiqim',
     name: 'Chiqim',
     description: 'Boshqa barcha xarajatlar (tavsif yozing)',
-    icon: 'details',
+    icon: 'clipboard',
     category: 'other',
     isCategory: true,
-    hasSubTypes: true
+    hasSubTypes: true,
+    priority: 5
   },
   
   // CHIQIM ICHIDAGI XARAJAT TURLARI
@@ -85,7 +111,7 @@ const EXPENSE_TYPE_DETAILS = [
     id: 'bojxona_nds',
     name: 'Bojxona NDS',
     description: 'Bojxona NDS to\'lovlari',
-    icon: 'building',
+    icon: 'customs',
     parentCategory: 'chiqim'
   },
   {

@@ -3,8 +3,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import Layout from '@/components/Layout';
-import Dashboard from '@/components/Dashboard';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function Home() {
@@ -14,6 +12,9 @@ export default function Home() {
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+    } else if (!loading && user) {
+      // Asosiy sahifa sifatida Kassa sahifasiga yo'naltirish
+      router.push('/cash');
     }
   }, [user, loading, router]);
 
@@ -21,13 +22,5 @@ export default function Home() {
     return <LoadingSpinner />;
   }
 
-  if (!user) {
-    return null;
-  }
-
-  return (
-    <Layout>
-      <Dashboard />
-    </Layout>
-  );
+  return <LoadingSpinner />;
 }

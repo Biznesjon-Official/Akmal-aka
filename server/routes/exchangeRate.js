@@ -90,7 +90,7 @@ router.get('/realtime', auth, async (req, res) => {
 });
 // Valyuta kursini qo'lda yangilash yoki yaratish (faqat admin)
 router.post('/', [auth, auth.adminOnly, [
-  body('currency').isIn(['USD', 'RUB']).withMessage('Noto\'g\'ri valyuta'),
+  body('currency').isIn(['USD', 'RUB', 'UZS']).withMessage('Noto\'g\'ri valyuta'),
   body('rate').isNumeric().withMessage('Kurs raqam bo\'lishi kerak').isFloat({ min: 0 }).withMessage('Kurs musbat bo\'lishi kerak')
 ]], async (req, res) => {
   try {
@@ -129,7 +129,7 @@ router.get('/:currency', auth, async (req, res) => {
   try {
     const { currency } = req.params;
     
-    if (!['USD', 'RUB'].includes(currency.toUpperCase())) {
+    if (!['USD', 'RUB', 'UZS'].includes(currency.toUpperCase())) {
       return res.status(400).json({ message: 'Noto\'g\'ri valyuta' });
     }
 

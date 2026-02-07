@@ -1,44 +1,109 @@
 # Dependencies
 node_modules/
 */node_modules/
+package-lock.json
+*/package-lock.json
 
 # Environment variables
 .env
 .env.local
 .env.production
+.env.development
 */.env
 */.env.local
 */.env.production
+*/.env.development
 
 # Build outputs
 dist/
 build/
 .next/
 out/
+*/dist/
+*/build/
+*/.next/
+*/out/
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+logs/
+*/logs/
+server/logs/
 
 # OS files
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
 # Test coverage
 coverage/
+.nyc_output/
+*/coverage/
 
 # Backup files
 server/backups/
 *.backup
+*.bak
+*.old
 
 # Temporary files
 tmp/
 temp/
+*.tmp
+.cache/
+
+# PM2
+.pm2/
+ecosystem.config.js.backup
+
+# SSL Certificates (if any)
+*.pem
+*.key
+*.crt
+*.csr
+
+# Database dumps
+*.sql
+*.dump
+*.sqlite
+*.db
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Debug files
+debug/
+*.debug

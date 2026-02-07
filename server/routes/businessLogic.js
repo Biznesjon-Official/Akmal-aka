@@ -3,9 +3,10 @@ const mongoose = require('mongoose');
 const Vagon = require('../models/Vagon');
 const VagonLot = require('../models/VagonLot');
 const VagonSale = require('../models/VagonSale');
-const Kassa = require('../models/Kassa');
+const Cash = require('../models/Cash');
 const Client = require('../models/Client');
 const auth = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -232,7 +233,7 @@ router.get('/vagon-full-report/:vagonId', auth, async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('Vagon full report error:', error);
+    logger.error('Vagon full report error:', error);
     res.status(500).json({ message: 'Hisobotni olishda xatolik', error: error.message });
   }
 });
@@ -275,9 +276,9 @@ router.get('/business-summary', auth, async (req, res) => {
       const lots = await VagonLot.find({ vagon: vagon._id, isDeleted: false });
       
       // Xarajatlar
-      const expenses = await Kassa.find({ 
+      const expenses = await Cash.find({ 
         vagon: vagon._id, 
-        turi: 'rasxod',
+        type: 'expense',
         isDeleted: false,
         ...dateFilter
       });
@@ -305,34 +306,23 @@ router.get('/business-summary', auth, async (req, res) => {
       });
       
       expenses.forEach(expense => {
-        totalSummary.totalExpenses += expense.summaRUB || expense.summa;
+        totalSummary.totalExpenses += expense.amount || 0;
         
         // Xarajat kategoriyasi
-        if (!totalSummary.expenseBreakdown[expense.xarajatTuri]) {
-          totalSummary.expenseBreakdown[expense.xarajatTuri] = 0;
+        const expenseType = expense.description || 'Noma\'lum';
+        if (!totalSummary.expenseBreakdown[expenseType]) {
+          totalSummary.expenseBreakdown[expenseType] = 0;
         }
-        totalSummary.expenseBreakdown[expense.xarajatTuri] += expense.summaRUB || expense.summa;
-        
-        // Javobgar shaxs
-        try {
-          const additionalInfo = JSON.parse(expense.qoshimchaMalumot || '{}');
-          const responsible = additionalInfo.javobgarShaxs || 'Noma\'lum';
-          if (!totalSummary.responsibilityBreakdown[responsible]) {
-            totalSummary.responsibilityBreakdown[responsible] = { loss: 0, expense: 0 };
-          }
-          totalSummary.responsibilityBreakdown[responsible].expense += expense.summaRUB || expense.summa;
-        } catch (e) {
-          // JSON parse error
-        }
+        totalSummary.expenseBreakdown[expenseType] += expense.amount || 0;
       });
       
       sales.forEach(sale => {
-        totalSummary.totalSold += sale.accepted_volume_m3;
-        totalSummary.totalRevenue += sale.total_price;
-        totalSummary.totalDebt += sale.debt;
+        totalSummary.totalSold += sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0;
+        totalSummary.totalRevenue += sale.total_price || 0;
+        totalSummary.totalDebt += sale.debt || 0;
         
         // Mijoz bo'yicha
-        const clientName = sale.client?.name || 'Noma\'lum';
+        const clientName = sale.client?.name || sale.one_time_client_name || 'Noma\'lum';
         if (!totalSummary.clientBreakdown[clientName]) {
           totalSummary.clientBreakdown[clientName] = {
             sales: 0,
@@ -340,9 +330,9 @@ router.get('/business-summary', auth, async (req, res) => {
             volume: 0
           };
         }
-        totalSummary.clientBreakdown[clientName].sales += sale.total_price;
-        totalSummary.clientBreakdown[clientName].debt += sale.debt;
-        totalSummary.clientBreakdown[clientName].volume += sale.accepted_volume_m3;
+        totalSummary.clientBreakdown[clientName].sales += sale.total_price || 0;
+        totalSummary.clientBreakdown[clientName].debt += sale.debt || 0;
+        totalSummary.clientBreakdown[clientName].volume += sale.client_received_volume_m3 || sale.warehouse_dispatched_volume_m3 || 0;
       });
     }
     
@@ -356,7 +346,7 @@ router.get('/business-summary', auth, async (req, res) => {
     res.json(totalSummary);
     
   } catch (error) {
-    console.error('Business summary error:', error);
+    logger.error('Business summary error:', error);
     res.status(500).json({ message: 'Biznes xulosasini olishda xatolik', error: error.message });
   }
 });
@@ -488,7 +478,7 @@ router.get('/responsibility-report', auth, async (req, res) => {
     res.json(responsibilityReport);
     
   } catch (error) {
-    console.error('Responsibility report error:', error);
+    logger.error('Responsibility report error:', error);
     res.status(500).json({ message: 'Javobgarlik hisobotini olishda xatolik', error: error.message });
   }
 });

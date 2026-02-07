@@ -139,9 +139,12 @@ class SmartInvalidation {
     QueryCache.invalidatePattern(`client:${clientId}`);
     QueryCache.invalidatePattern(`sale:${saleId}`);
     QueryCache.invalidatePattern('sales:list');
+    QueryCache.invalidatePattern('vagons:list');
+    QueryCache.invalidatePattern('/'); // Vagon va sale list cache keys
     AggregationCache.invalidatePattern('sales');
     AggregationCache.invalidatePattern('clients');
-    console.log(`🔄 Smart invalidation: sale ${saleId}`);
+    AggregationCache.invalidatePattern('vagon');
+    console.log(`🔄 Smart invalidation: sale ${saleId}, vagon ${vagonId}`);
   }
   
   static onClientChange(clientId) {
@@ -172,7 +175,13 @@ function cacheMiddleware(ttl = 300) {
       return next();
     }
     
-    const cacheKey = generateCacheKey(req.path, req.query);
+    // CRITICAL FIX: Include isDeleted filter in cache key for vagon routes
+    const cacheParams = { ...req.query };
+    if (req.path.includes('/vagon')) {
+      cacheParams._includeDeleted = 'false'; // Add deleted filter to cache key
+    }
+    
+    const cacheKey = generateCacheKey(req.path, cacheParams);
     const cached = QueryCache.get(cacheKey);
     
     if (cached) {

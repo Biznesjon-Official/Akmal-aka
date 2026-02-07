@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
+import { useDialog } from '@/context/DialogContext';
 import Icon from '@/components/Icon';
 import axios from '@/lib/axios';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 interface VagonLot {
   _id: string;
+  name?: string; // Yog'och nomi
   dimensions: string;
   quantity: number;
   volume_m3: number;
@@ -54,14 +57,19 @@ interface Vagon {
 interface Props {
   vagonId: string;
   onClose: () => void;
+  onVagonUpdated?: () => void; // Vagon yangilanganda parent componentni xabardor qilish uchun
 }
 
-export default function VagonDetailsModal({ vagonId, onClose }: Props) {
+export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: Props) {
   const { t } = useLanguage();
+  const { showAlert, showConfirm } = useDialog();
   const [vagon, setVagon] = useState<Vagon | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Scroll lock
+  useScrollLock(true);
 
   useEffect(() => {
     fetchVagonDetails();
@@ -95,12 +103,14 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
       setExpenses(filteredExpenses);
     } catch (error: any) {
       console.error('Error fetching vagon expenses:', error);
+      // Xarajatlar yuklanmasa ham modal ochilsin
     }
   };
 
   const safeToFixed = (value: number | undefined | null, decimals: number = 2): string => {
-    if (value === null || value === undefined || isNaN(value)) return '0.00';
-    return Number(value).toFixed(decimals);
+    if (value === null || value === undefined || isNaN(value)) return '0';
+    // 0 gacha ko'rsatish, yaxlitlamasdan
+    return String(Number(value));
   };
 
   const getCurrencySymbol = (currency: string): string => {
@@ -113,8 +123,15 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 text-center">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-hidden modal-overlay">
+        <div className="bg-white rounded-lg p-8 text-center relative">
+          <button
+            onClick={onClose}
+            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Yopish"
+          >
+            <Icon name="close" size="sm" />
+          </button>
           <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p>{t.vagon.vagonDetailsModal.loadingMessage}</p>
         </div>
@@ -124,8 +141,15 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 text-center">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-hidden modal-overlay">
+        <div className="bg-white rounded-lg p-8 text-center relative">
+          <button
+            onClick={onClose}
+            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 transition-all duration-200 p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Yopish"
+          >
+            <Icon name="close" size="sm" />
+          </button>
           <Icon name="error" className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">{t.vagon.vagonDetailsModal.errorTitle}</h3>
           <p className="text-gray-600 mb-4">{error}</p>
@@ -145,11 +169,28 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-hidden modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="bg-white rounded-lg w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6">
-          <div className="flex justify-between items-start">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 z-10 text-white hover:text-white/80 transition-all duration-200 p-2 rounded-xl hover:bg-white/20 backdrop-blur-sm group"
+            aria-label="Yopish"
+          >
+            <Icon name="close" size="md" className="group-hover:rotate-90 transition-transform duration-300" />
+          </button>
+          
+          <div className="flex justify-between items-start pr-12">
             <div>
               <h2 className="text-3xl font-bold">{vagon.vagonCode}</h2>
               <p className="text-lg opacity-90">{vagon.month}</p>
@@ -160,12 +201,6 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
               <div className="text-lg opacity-90">{t.vagon.vagonDetailsModal.totalVolumeTitle}</div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
-          >
-            <Icon name="close" className="h-6 w-6" />
-          </button>
         </div>
 
         <div className="p-6">
@@ -277,7 +312,7 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
                             <span className="text-white font-bold text-lg">{index + 1}</span>
                           </div>
                           <div className="font-bold text-xl text-blue-900">
-                            {lot.dimensions} mm × {lot.quantity} {t.vagon.pieces}
+                            {lot.name || lot.dimensions} mm × {lot.quantity} {t.vagon.pieces}
                           </div>
                         </div>
                         
@@ -301,6 +336,46 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
                             <div className="text-xs text-gray-600 font-semibold mb-1">Qolgan</div>
                             <div className="text-lg font-bold text-purple-600">
                               {safeToFixed((lot.warehouse_remaining_volume_m3 || 0) || (lot.remaining_volume_m3 || 0))} m³
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Moliyaviy ma'lumotlar - tan narx va foyda */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 p-3 rounded-xl border-2 border-yellow-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Tan narxi</div>
+                            <div className="text-lg font-bold text-yellow-600">
+                              {(lot.purchase_amount || 0).toLocaleString()} {lot.currency}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {safeToFixed((lot.purchase_amount || 0) / (lot.volume_m3 || 1), 2)} {lot.currency}/m³
+                            </div>
+                          </div>
+                          <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-3 rounded-xl border-2 border-green-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Haqiqiy foyda</div>
+                            <div className={`text-lg font-bold ${(lot.realized_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {(lot.realized_profit || 0).toLocaleString()} {lot.currency}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Sotilgan qismdan
+                            </div>
+                          </div>
+                          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 rounded-xl border-2 border-blue-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Qolgan qiymat</div>
+                            <div className="text-lg font-bold text-blue-600">
+                              {(lot.unrealized_value || 0).toLocaleString()} {lot.currency}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Sotilmagan qism
+                            </div>
+                          </div>
+                          <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-3 rounded-xl border-2 border-purple-200 text-center">
+                            <div className="text-xs text-gray-600 font-semibold mb-1">Rentabellik</div>
+                            <div className="text-lg font-bold text-purple-600">
+                              {safeToFixed(lot.break_even_price_per_m3 || 0, 2)} {lot.currency}/m³
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Minimal narx
                             </div>
                           </div>
                         </div>
@@ -483,10 +558,114 @@ export default function VagonDetailsModal({ vagonId, onClose }: Props) {
           </div>
           
           <div className="p-6">
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <div className="flex gap-3">
+                {/* Vagon yopish tugmasi */}
+                {vagon.status === 'active' && (
+                  <button
+                    onClick={async () => {
+                      const confirmed = await showConfirm({
+                        title: 'Vagonni yopish',
+                        message: `Rostdan ham "${vagon?.vagonCode}" vagonini yopmoqchimisiz?`,
+                        type: 'warning',
+                        confirmText: 'Ha, yopish',
+                        cancelText: 'Bekor qilish'
+                      });
+                      
+                      if (!confirmed) return;
+                      
+                      try {
+                        const token = localStorage.getItem('token');
+                        await axios.patch(
+                          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon/${vagonId}/close`,
+                          { 
+                            reason: 'manual_closure',
+                            notes: 'Modal orqali yopildi'
+                          },
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                        
+                        showAlert({
+                          title: 'Muvaffaqiyat',
+                          message: `"${vagon?.vagonCode}" vagoni muvaffaqiyatli yopildi`,
+                          type: 'success'
+                        });
+                        
+                        // Vagon ma'lumotlarini yangilash
+                        await fetchVagonDetails();
+                        
+                        // Parent componentni xabardor qilish
+                        if (onVagonUpdated) {
+                          onVagonUpdated();
+                        }
+                      } catch (error: any) {
+                        showAlert({
+                          title: 'Xatolik',
+                          message: error.response?.data?.message || error.message || 'Vagonni yopishda xatolik',
+                          type: 'error'
+                        });
+                      }
+                    }}
+                    className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-xl hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-semibold flex items-center"
+                  >
+                    <Icon name="x-circle" className="mr-2 h-5 w-5" />
+                    Vagonni yopish
+                  </button>
+                )}
+                
+                {/* Vagon o'chirish tugmasi - faqat admin uchun */}
+                {vagon.status !== 'closed' && (vagon.sold_volume_m3 || 0) === 0 && (
+                  <button
+                    onClick={async () => {
+                      const confirmed = await showConfirm({
+                        title: 'Vagonni o\'chirish',
+                        message: `Rostdan ham "${vagon?.vagonCode}" vagonini o'chirmoqchimisiz?\n\n⚠️ DIQQAT: Bu amal qaytarib bo'lmaydi!`,
+                        type: 'danger',
+                        confirmText: 'Ha, o\'chirish',
+                        cancelText: 'Bekor qilish'
+                      });
+                      
+                      if (!confirmed) return;
+                      
+                      try {
+                        const token = localStorage.getItem('token');
+                        await axios.delete(
+                          `${process.env.NEXT_PUBLIC_API_URL}/api/vagon/${vagonId}`,
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                        
+                        showAlert({
+                          title: 'Muvaffaqiyat',
+                          message: `"${vagon?.vagonCode}" vagoni muvaffaqiyatli o'chirildi`,
+                          type: 'success'
+                        });
+                        
+                        // Parent componentni xabardor qilish
+                        if (onVagonUpdated) {
+                          onVagonUpdated();
+                        }
+                        
+                        // Modalni yopish
+                        onClose();
+                      } catch (error: any) {
+                        showAlert({
+                          title: 'Xatolik',
+                          message: error.response?.data?.message || error.message || 'Vagonni o\'chirishda xatolik',
+                          type: 'error'
+                        });
+                      }
+                    }}
+                    className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 font-semibold flex items-center"
+                  >
+                    <Icon name="trash" className="mr-2 h-5 w-5" />
+                    Vagonni o'chirish
+                  </button>
+                )}
+              </div>
+              
               <button
                 onClick={onClose}
-                className="btn-secondary"
+                className="btn-secondary px-8 py-3"
               >
                 {t.vagon.vagonDetailsModal.closeButton}
               </button>

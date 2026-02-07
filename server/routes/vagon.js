@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const Vagon = require('../models/Vagon');
+const VagonLot = require('../models/VagonLot'); // CRITICAL FIX: Add VagonLot import
+const VagonExpense = require('../models/VagonExpense');
 const auth = require('../middleware/auth');
 const { cacheMiddleware, SmartInvalidation } = require('../utils/cacheManager');
+const logger = require('../utils/logger');
 
 // Barcha vagonlar ro'yxati (OPTIMIZED PAGINATION + CACHE)
 router.get('/', auth, cacheMiddleware(180), async (req, res) => {
@@ -12,12 +15,16 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
       month, 
       page = 1, 
       limit = 20,
-      includeLots = 'true', // Default true for better UX
+      includeLots = 'false', // Default false for better performance
       search
     } = req.query;
     
     const filter = { isDeleted: false };
-    if (status) filter.status = status;
+    // Agar status aniq ko'rsatilmagan bo'lsa, barcha statusdagi vagonlarni ko'rsatish (faqat o'chirilmaganlar)
+    if (status) {
+      filter.status = status;
+    }
+    // Default: barcha statusdagi vagonlar (active, closing, closed)
     if (month) filter.month = month;
     
     // Search filter
@@ -96,7 +103,7 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Vagon list error:', error);
+    logger.error('Vagon list error:', error);
     res.status(500).json({ message: 'Vagonlar ro\'yxatini olishda xatolik' });
   }
 });
@@ -107,15 +114,30 @@ router.get('/:id', auth, async (req, res) => {
     const vagon = await Vagon.findOne({ 
       _id: req.params.id, 
       isDeleted: false 
-    });
+    }).lean();
     
     if (!vagon) {
       return res.status(404).json({ message: 'Vagon topilmadi' });
     }
     
+    // Lotlarni yuklash
+    const VagonLot = require('../models/VagonLot');
+    const lots = await VagonLot.find({ 
+      vagon: req.params.id, 
+      isDeleted: false 
+    })
+    .select('dimensions quantity volume_m3 loss_volume_m3 loss_responsible_person loss_reason loss_date warehouse_available_volume_m3 warehouse_dispatched_volume_m3 warehouse_remaining_volume_m3 purchase_currency purchase_amount total_investment realized_profit unrealized_value break_even_price_per_m3 remaining_quantity remaining_volume_m3')
+    .lean();
+    
+    // Lotlarni vagon obyektiga qo'shish va backward compatibility uchun currency maydonini qo'shish
+    vagon.lots = lots.map(lot => ({
+      ...lot,
+      currency: lot.purchase_currency // Backward compatibility
+    }));
+    
     res.json(vagon);
   } catch (error) {
-    console.error('Vagon get error:', error);
+    logger.error('Vagon get error:', error);
     res.status(500).json({ message: 'Vagon ma\'lumotlarini olishda xatolik' });
   }
 });
@@ -142,9 +164,9 @@ router.get('/:id/details', auth, async (req, res) => {
       .sort({ createdAt: -1 });
     
     // Xarajatlarni olish
-    const Expense = require('../models/Expense');
-    const expenses = await Expense.find({ 
-      woodLot: req.params.id,
+    // const Expense = require('../models/Expense'); // DEPRECATED - using VagonExpense
+    const expenses = await VagonExpense.find({ 
+      vagon: req.params.id,
       isDeleted: false 
     }).sort({ createdAt: -1 });
     
@@ -162,7 +184,7 @@ router.get('/:id/details', auth, async (req, res) => {
     
     res.json(details);
   } catch (error) {
-    console.error('Vagon details error:', error);
+    logger.error('Vagon details error:', error);
     res.status(500).json({ message: 'Vagon ma\'lumotlarini olishda xatolik' });
   }
 });
@@ -187,52 +209,128 @@ router.get('/:id/available', auth, async (req, res) => {
       percentage: vagon.sold_percentage
     });
   } catch (error) {
-    console.error('Vagon available error:', error);
+    logger.error('Vagon available error:', error);
     res.status(500).json({ message: 'Mavjud hajmni olishda xatolik' });
   }
 });
 
 // Yangi vagon yaratish
 router.post('/', auth, async (req, res) => {
-  try {
-    const {
-      month,
-      sending_place,
-      receiving_place,
-      notes
-    } = req.body;
-    
-    // Validatsiya
-    if (!month || !sending_place || !receiving_place) {
+  const maxRetries = 5;
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
+    try {
+      const {
+        vagonCode, // Yangi field - qo'lda kiritish uchun
+        month,
+        sending_place,
+        receiving_place,
+        notes
+      } = req.body;
+      
+      // Validatsiya
+      if (!month || !sending_place || !receiving_place) {
+        return res.status(400).json({ 
+          message: 'Barcha majburiy maydonlar to\'ldirilishi shart' 
+        });
+      }
+      
+      // Qo'shimcha validatsiya
+      if (month.length < 8 || month.length > 12) {
+        return res.status(400).json({ 
+          message: 'Sana formati noto\'g\'ri (DD/MM/YYYY)' 
+        });
+      }
+      
+      if (sending_place.trim().length < 2) {
+        return res.status(400).json({ 
+          message: 'Jo\'natish joyi kamida 2 belgi bo\'lishi kerak' 
+        });
+      }
+      
+      if (receiving_place.trim().length < 2) {
+        return res.status(400).json({ 
+          message: 'Qabul qilish joyi kamida 2 belgi bo\'lishi kerak' 
+        });
+      }
+      
+      // Vagon kodi - qo'lda kiritilgan yoki avtomatik generatsiya
+      let finalVagonCode;
+      
+      if (vagonCode && vagonCode.trim()) {
+        // Qo'lda kiritilgan kod
+        finalVagonCode = vagonCode.trim().toUpperCase();
+        
+        // Mavjudligini tekshirish
+        const existingVagon = await Vagon.findOne({ 
+          vagonCode: finalVagonCode, 
+          isDeleted: false 
+        });
+        
+        if (existingVagon) {
+          return res.status(400).json({ 
+            message: `"${finalVagonCode}" kodi allaqachon mavjud. Boshqa kod kiriting.` 
+          });
+        }
+        
+        // Kod formatini tekshirish (ixtiyoriy)
+        if (finalVagonCode.length < 3 || finalVagonCode.length > 20) {
+          return res.status(400).json({ 
+            message: 'Vagon kodi 3-20 belgi orasida bo\'lishi kerak' 
+          });
+        }
+      } else {
+        // Avtomatik generatsiya
+        const year = new Date().getFullYear();
+        finalVagonCode = await Vagon.generateVagonCode(year);
+      }
+      
+      // Yangi vagon yaratish (lotlar keyinroq qo'shiladi)
+      const vagon = new Vagon({
+        vagonCode: finalVagonCode,
+        month,
+        sending_place,
+        receiving_place,
+        notes,
+        status: 'active'
+      });
+      
+      await vagon.save();
+      
+      // Smart cache invalidation
+      SmartInvalidation.onVagonChange(vagon._id);
+      
+      return res.status(201).json(vagon);
+      
+    } catch (error) {
+      // Agar duplicate key error bo'lsa, qayta urinish
+      if (error.code === 11000 && attempt < maxRetries - 1) {
+        attempt++;
+        console.log(`Vagon code conflict, retrying... (attempt ${attempt}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 100 * attempt)); // Exponential backoff
+        continue;
+      }
+      
+      // Boshqa xatolar yoki maksimal urinishlar tugagan
+      logger.error('Vagon create error:', error);
+      
+      if (error.code === 11000) {
+        return res.status(400).json({ 
+          message: 'Vagon yaratishda xatolik. Iltimos, qaytadan urinib ko\'ring.' 
+        });
+      }
+      
       return res.status(400).json({ 
-        message: 'Barcha majburiy maydonlar to\'ldirilishi shart' 
+        message: error.message || 'Vagon yaratishda xatolik' 
       });
     }
-    
-    // Vagon kodi generatsiya
-    const year = new Date().getFullYear();
-    const vagonCode = await Vagon.generateVagonCode(year);
-    
-    // Yangi vagon yaratish (lotlar keyinroq qo'shiladi)
-    const vagon = new Vagon({
-      vagonCode,
-      month,
-      sending_place,
-      receiving_place,
-      notes,
-      status: 'active'
-    });
-    
-    await vagon.save();
-    
-    // Smart cache invalidation
-    SmartInvalidation.onVagonChange(vagon._id);
-    
-    res.status(201).json(vagon);
-  } catch (error) {
-    console.error('Vagon create error:', error);
-    res.status(400).json({ message: error.message });
   }
+  
+  // Bu yerga yetib kelmasligi kerak
+  return res.status(500).json({ 
+    message: 'Vagon yaratishda kutilmagan xatolik' 
+  });
 });
 
 // Vagonni yangilash
@@ -266,7 +364,7 @@ router.put('/:id', auth, async (req, res) => {
     
     res.json(vagon);
   } catch (error) {
-    console.error('Vagon update error:', error);
+    logger.error('Vagon update error:', error);
     res.status(400).json({ message: error.message });
   }
 });
@@ -280,7 +378,7 @@ router.delete('/:id', auth, async (req, res) => {
     });
     
     if (!vagon) {
-      return res.status(404).json({ message: 'Vagon topilmadi' });
+      return res.status(404).json({ message: 'Vagon topilmadi yoki allaqachon o\'chirilgan' });
     }
     
     // Sotilgan bo'lsa o'chirish mumkin emas
@@ -290,25 +388,48 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
     
-    // Lotlar bo'lsa o'chirish mumkin emas
-    const VagonLot = require('../models/VagonLot');
-    const lotsCount = await VagonLot.countDocuments({ 
-      vagon: req.params.id, 
-      isDeleted: false 
-    });
+    // CRITICAL FIX: Transaction ichida o'chirish
+    const session = await Vagon.startSession();
     
-    if (lotsCount > 0) {
-      return res.status(400).json({ 
-        message: 'Bu vagonda lotlar mavjud. Avval lotlarni o\'chiring' 
+    try {
+      await session.withTransaction(async () => {
+        // Vagon o'chirilganda barcha lotlarni ham o'chirish
+        await VagonLot.updateMany(
+          { vagon: req.params.id, isDeleted: false },
+          { isDeleted: true },
+          { session }
+        );
+        
+        // Vagonni o'chirish
+        vagon.isDeleted = true;
+        await vagon.save({ session });
       });
+      
+      // CRITICAL FIX: Cache invalidation qo'shish
+      SmartInvalidation.onVagonChange(vagon._id);
+      
+      // Lotlar sonini hisoblash (log uchun)
+      const deletedLotsCount = await VagonLot.countDocuments({ 
+        vagon: req.params.id, 
+        isDeleted: true 
+      });
+      
+      logger.info(`Vagon o'chirildi: ${vagon.vagonCode}, ${deletedLotsCount} ta lot bilan birga`);
+      
+      res.json({ 
+        message: `Vagon o'chirildi (${deletedLotsCount} ta lot bilan birga)`,
+        deletedLotsCount 
+      });
+      
+    } catch (transactionError) {
+      logger.error('Vagon delete transaction error:', transactionError);
+      throw transactionError;
+    } finally {
+      await session.endSession();
     }
     
-    vagon.isDeleted = true;
-    await vagon.save();
-    
-    res.json({ message: 'Vagon o\'chirildi' });
   } catch (error) {
-    console.error('Vagon delete error:', error);
+    logger.error('Vagon delete error:', error);
     res.status(500).json({ message: 'Vagonni o\'chirishda xatolik' });
   }
 });
@@ -355,7 +476,7 @@ router.get('/:id/stats', auth, async (req, res) => {
     
     res.json(stats);
   } catch (error) {
-    console.error('Vagon stats error:', error);
+    logger.error('Vagon stats error:', error);
     res.status(500).json({ message: 'Statistikani olishda xatolik' });
   }
 });
@@ -391,7 +512,7 @@ router.patch('/:id/close', auth, async (req, res) => {
       vagon 
     });
   } catch (error) {
-    console.error('Vagon close error:', error);
+    logger.error('Vagon close error:', error);
     res.status(500).json({ message: 'Vagonni yopishda xatolik', error: error.message });
   }
 });
@@ -494,7 +615,7 @@ router.patch('/:id/adjust-volume', auth, async (req, res) => {
       adjustment: adjustmentRecord
     });
   } catch (error) {
-    console.error('Volume adjustment error:', error);
+    logger.error('Volume adjustment error:', error);
     res.status(500).json({ message: 'Hajm tuzatishda xatolik', error: error.message });
   }
 });
