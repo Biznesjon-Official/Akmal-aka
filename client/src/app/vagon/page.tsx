@@ -41,6 +41,7 @@ interface VagonYogoch {
   purchase_amount: number;
   remaining_quantity: number;
   remaining_volume_m3: number;
+  recommended_sale_price_per_m3?: number; // Tavsiya etilgan sotuv narxi
 }
 
 interface Vagon {
@@ -632,7 +633,7 @@ export default function VagonPage() {
     setReceivingPlace(vagon.receiving_place);
     
     if (vagon.lots && vagon.lots.length > 0) {
-      const loadedYogochlar = vagon.lots.map(yogoch => {
+      const loadedYogochlar: YogochInput[] = vagon.lots.map(yogoch => {
         const dims = yogoch.dimensions.split('×');
         return {
           _id: yogoch._id,
@@ -645,7 +646,8 @@ export default function VagonPage() {
           loss_responsible_person: yogoch.loss_responsible_person || '',
           loss_reason: yogoch.loss_reason || '',
           currency: yogoch.currency || 'USD',
-          purchase_amount: (yogoch.purchase_amount || 0).toString()
+          purchase_amount: (yogoch.purchase_amount || 0).toString(),
+          recommended_sale_price_per_m3: (yogoch.recommended_sale_price_per_m3 || 0).toString()
         };
       });
       setYogochlar(loadedYogochlar);
