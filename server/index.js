@@ -65,7 +65,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
         process.env.CLIENT_URL,
         'https://wood-export-frontend.onrender.com',
         'https://export-1-y4tz.onrender.com',
-        'http://akmalaka.biznesjon.uz'
+        'http://akmalaka.biznesjon.uz',
+        'https://akmalaka.biznesjon.uz'
       ].filter(Boolean)
     : ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
