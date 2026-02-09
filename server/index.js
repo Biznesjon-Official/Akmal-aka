@@ -93,29 +93,26 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
-app.use('/api/auth', require('./routes/auth')); // Auth restored
-app.use('/api/client', require('./routes/client')); // Mijozlar
-app.use('/api/vagon', require('./routes/vagon')); // Vagonlar
-app.use('/api/vagon-lot', require('./routes/vagonLot')); // Vagon lotlari (YANGI)
-app.use('/api/vagon-expense', require('./routes/vagonExpense')); // Vagon xarajatlari (YANGI) - Working
-// app.use('/api/debt', require('./routes/debt')); // Qarz daftarcha (YANGI) - Temporarily disabled
-app.use('/api/vagon-sale', require('./routes/vagonSale')); // Vagon sotuvlari - Fixed
-app.use('/api/business-logic', require('./routes/businessLogic')); // TO'LIQ BIZNES LOGIKASI - Working
-app.use('/api/cash', require('./routes/cash')); // Pul oqimi
-
-
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/client', require('./routes/client'));
+app.use('/api/vagon', require('./routes/vagon'));
+app.use('/api/vagon-lot', require('./routes/vagonLot'));
+app.use('/api/vagon-expense', require('./routes/vagonExpense'));
+app.use('/api/debt', require('./routes/debt')); // ✅ YOQILDI
+app.use('/api/vagon-sale', require('./routes/vagonSale'));
+app.use('/api/business-logic', require('./routes/businessLogic'));
+app.use('/api/cash', require('./routes/cash'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/exchange-rate', require('./routes/exchangeRate'));
 
-
-
-// app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // Kengaytirilgan xarajatlar
-// app.use('/api/loss-liability', require('./routes/lossLiability')); // Yo'qotish javobgarligi (YANGI)
-// app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // Xarajat taqsimoti (YANGI)
-// app.use('/api/system-settings', require('./routes/systemSettings')); // Tizim sozlamalari (YANGI)
-// app.use('/api/delivery', require('./routes/delivery')); // Olib kelib berish logistika (YANGI)
-// app.use('/api/monitoring', require('./routes/monitoring')); // System monitoring (YANGI)
-// app.use('/api/backup', require('./routes/backup'));
+// ❌ HALI IMPLEMENTATSIYA QILINMAGAN - Kelajakda qo'shiladi
+// app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // TODO: Kengaytirilgan xarajatlar
+// app.use('/api/loss-liability', require('./routes/lossLiability')); // TODO: Yo'qotish javobgarligi
+// app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // TODO: Xarajat taqsimoti
+// app.use('/api/system-settings', require('./routes/systemSettings')); // TODO: Tizim sozlamalari
+// app.use('/api/delivery', require('./routes/delivery')); // TODO: Yetkazib berish logistika
+// app.use('/api/monitoring', require('./routes/monitoring')); // TODO: System monitoring
+// app.use('/api/backup', require('./routes/backup')); // TODO: Backup tizimi
 
 // Global error handler
 app.use((err, req, res, next) => {

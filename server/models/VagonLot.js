@@ -341,12 +341,29 @@ vagonLotSchema.pre('save', async function(next) {
       
     } catch (error) {
       console.error('⚠️ Currency conversion error in VagonLot (using fallback):', error.message);
+      
+      // MUHIM: Valyuta konvertatsiya xatosi - foydalanuvchiga ogohlantirish
+      const logger = require('../utils/logger');
+      logger.error('Valyuta konvertatsiya xatosi:', {
+        lotId: this._id,
+        currency: this.purchase_currency,
+        error: error.message
+      });
+      
       // Xatolik bo'lsa, asl valyutadagi qiymatlarni ishlatish
       this.base_currency_cost_per_m3 = this.cost_per_m3;
       this.base_currency_realized_profit = this.realized_profit;
       this.base_currency_unrealized_value = this.unrealized_value;
       this.base_currency_total_investment = this.total_investment;
       this.base_currency_total_revenue = totalRevenue;
+      
+      // Ogohlantirish belgisi qo'shish
+      if (!this.notes) {
+        this.notes = '';
+      }
+      if (!this.notes.includes('⚠️ VALYUTA KONVERTATSIYA XATOSI')) {
+        this.notes += '\n⚠️ VALYUTA KONVERTATSIYA XATOSI: Hisob-kitoblar asl valyutada ko\'rsatilgan. Iltimos, valyuta kursini tekshiring.';
+      }
     }
     
     next();

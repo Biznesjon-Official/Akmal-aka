@@ -497,6 +497,78 @@ router.patch('/:id/close', auth, async (req, res) => {
       return res.status(400).json({ message: 'Vagon allaqachon yopilgan' });
     }
     
+    // ✅ YANGI: Yopilishdan oldin validatsiya
+    const VagonSale = require('../models/VagonSale');
+    const Client = require('../models/Client');
+    
+    // 1. Barcha sotuvlarni tekshirish
+    const allSales = await VagonSale.find({
+      vagon: req.params.id,
+      isDeleted: false
+    }).populate('client');
+    
+    // 2. To'lanmagan qarzlarni topish
+    const unpaidSales = allSales.filter(sale => {
+      return sale.debt && sale.debt > 0;
+    });
+    
+    if (unpaidSales.length > 0) {
+      // Qarzlar ro'yxati
+      const debtList = unpaidSales.map(sale => ({
+        client: sale.client?.name || 'Noma\'lum',
+        amount: sale.debt,
+        currency: sale.sale_currency,
+        saleDate: sale.sale_date
+      }));
+      
+      const totalUsdDebt = unpaidSales
+        .filter(s => s.sale_currency === 'USD')
+        .reduce((sum, s) => sum + (s.debt || 0), 0);
+      
+      const totalRubDebt = unpaidSales
+        .filter(s => s.sale_currency === 'RUB')
+        .reduce((sum, s) => sum + (s.debt || 0), 0);
+      
+      logger.warn(`⚠️ Vagon yopilmoqda lekin to'lanmagan qarzlar bor:`, {
+        vagonId: req.params.id,
+        vagonCode: vagon.vagonCode,
+        unpaidCount: unpaidSales.length,
+        totalUsdDebt,
+        totalRubDebt
+      });
+      
+      // Agar force=true bo'lmasa, xato qaytarish
+      if (req.body.force !== true) {
+        return res.status(400).json({ 
+          message: 'Vagonni yopish mumkin emas - to\'lanmagan qarzlar mavjud',
+          code: 'UNPAID_DEBTS_EXIST',
+          unpaidSales: unpaidSales.length,
+          totalDebt: {
+            usd: totalUsdDebt,
+            rub: totalRubDebt
+          },
+          debtList,
+          hint: 'Barcha qarzlar to\'langanidan keyin qayta urinib ko\'ring yoki force=true parametrini qo\'shing'
+        });
+      }
+      
+      logger.warn(`⚠️ Vagon majburiy yopilmoqda (force=true)`);
+    }
+    
+    // 3. Qolgan hajmni tekshirish
+    if (vagon.remaining_volume_m3 > 0) {
+      logger.warn(`⚠️ Vagon yopilmoqda lekin qolgan hajm bor: ${vagon.remaining_volume_m3} m³`);
+      
+      if (req.body.force !== true) {
+        return res.status(400).json({
+          message: 'Vagonni yopish mumkin emas - sotilmagan hajm mavjud',
+          code: 'UNSOLD_VOLUME_EXISTS',
+          remainingVolume: vagon.remaining_volume_m3,
+          hint: 'Barcha hajm sotilganidan keyin qayta urinib ko\'ring yoki force=true parametrini qo\'shing'
+        });
+      }
+    }
+    
     const { reason, notes } = req.body;
     
     vagon.status = 'closed';
@@ -507,9 +579,20 @@ router.patch('/:id/close', auth, async (req, res) => {
     
     await vagon.save();
     
+    logger.info(`✅ Vagon yopildi: ${vagon.vagonCode}`, {
+      closedBy: req.user.username,
+      reason,
+      unpaidDebts: unpaidSales.length,
+      remainingVolume: vagon.remaining_volume_m3
+    });
+    
     res.json({ 
       message: 'Vagon yopildi',
-      vagon 
+      vagon,
+      warnings: {
+        unpaidDebts: unpaidSales.length,
+        remainingVolume: vagon.remaining_volume_m3
+      }
     });
   } catch (error) {
     logger.error('Vagon close error:', error);
