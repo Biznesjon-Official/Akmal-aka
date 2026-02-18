@@ -23,7 +23,7 @@ function LoginContent() {
     if (!authLoading) {
       setChecked(true);
       if (user) {
-        router.push('/');
+        router.push('/cash');
       }
     }
   }, [user, authLoading, router]);
@@ -58,7 +58,7 @@ function LoginContent() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('token', token);
         // Token saqlanganidan keyin sahifani reload qilish
-        window.location.href = '/';
+        window.location.href = '/cash';
       }
     } catch (error: any) {
       setError(error.response?.data?.message || t.messages.loginError);
