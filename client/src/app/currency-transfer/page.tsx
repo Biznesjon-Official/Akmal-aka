@@ -559,6 +559,12 @@ function DepositModal({ isOpen, onClose }: DepositModalProps) {
   // Deposit mutation
   const depositMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      console.log('Deposit request data:', {
+        currency: data.currency,
+        amount: parseFloat(data.amount),
+        notes: data.notes
+      });
+      
       const response = await axios.post('/currency-transfer/deposit', {
         currency: data.currency,
         amount: parseFloat(data.amount),
@@ -578,6 +584,7 @@ function DepositModal({ isOpen, onClose }: DepositModalProps) {
       });
     },
     onError: (error: any) => {
+      console.error('Deposit error:', error.response?.data);
       showToast.error(error.response?.data?.message || 'Xatolik yuz berdi');
     }
   });
@@ -585,10 +592,29 @@ function DepositModal({ isOpen, onClose }: DepositModalProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+    console.log('Form data before validation:', formData);
+    
+    if (!formData.amount || formData.amount.trim() === '') {
       showToast.error('Summani kiriting');
       return;
     }
+    
+    const amountValue = parseFloat(formData.amount);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showToast.error('Summa 0 dan katta bo\'lishi kerak');
+      return;
+    }
+    
+    if (!formData.notes || formData.notes.trim() === '') {
+      showToast.error('Izoh kiritish majburiy');
+      return;
+    }
+
+    console.log('Submitting deposit:', {
+      currency: formData.currency,
+      amount: amountValue,
+      notes: formData.notes
+    });
 
     depositMutation.mutate(formData);
   };

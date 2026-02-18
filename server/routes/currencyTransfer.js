@@ -83,8 +83,21 @@ router.post('/', auth, async (req, res) => {
  * @access  Private (Admin, Manager, Accountant)
  */
 router.post('/deposit', auth, async (req, res) => {
+  console.log('=== DEPOSIT REQUEST START ===');
+  console.log('User:', req.user);
+  console.log('Body:', req.body);
+  
   // Role tekshirish
+  if (!req.user || !req.user.role) {
+    console.log('User role not found');
+    return res.status(403).json({
+      success: false,
+      message: 'Foydalanuvchi roli aniqlanmadi'
+    });
+  }
+  
   if (!['admin', 'manager', 'accountant'].includes(req.user.role)) {
+    console.log('User role not authorized:', req.user.role);
     return res.status(403).json({
       success: false,
       message: 'Sizda hisob to\'ldirish ruxsati yo\'q'
@@ -98,19 +111,42 @@ router.post('/deposit', auth, async (req, res) => {
     const { currency, amount, notes } = req.body;
     const Cash = require('../models/Cash');
     
+    console.log('Extracted fields:', { currency, amount, notes });
+    
     // Validatsiya
-    if (!currency || !['USD', 'RUB'].includes(currency)) {
+    if (!currency) {
       await session.abortTransaction();
+      console.log('Currency is missing');
+      return res.status(400).json({
+        success: false,
+        message: 'Valyuta kiritilishi shart'
+      });
+    }
+    
+    if (!['USD', 'RUB'].includes(currency)) {
+      await session.abortTransaction();
+      console.log('Invalid currency:', currency);
       return res.status(400).json({
         success: false,
         message: 'Valyuta USD yoki RUB bo\'lishi kerak'
       });
     }
     
-    const amountNumber = typeof amount === 'string' ? parseFloat(amount) : amount;
-    
-    if (!amountNumber || isNaN(amountNumber) || amountNumber <= 0) {
+    if (amount === undefined || amount === null || amount === '') {
       await session.abortTransaction();
+      console.log('Amount is missing');
+      return res.status(400).json({
+        success: false,
+        message: 'Summa kiritilishi shart'
+      });
+    }
+    
+    const amountNumber = typeof amount === 'string' ? parseFloat(amount) : amount;
+    console.log('Amount conversion:', { original: amount, converted: amountNumber, type: typeof amount });
+    
+    if (isNaN(amountNumber) || amountNumber <= 0) {
+      await session.abortTransaction();
+      console.log('Invalid amount:', amountNumber);
       return res.status(400).json({
         success: false,
         message: 'Summa 0 dan katta bo\'lishi kerak'
@@ -118,6 +154,7 @@ router.post('/deposit', auth, async (req, res) => {
     }
     
     // Kassa yozuvini yaratish
+    console.log('Creating cash entry...');
     const cashEntry = await Cash.create([{
       type: 'initial_balance',
       amount: amountNumber,
@@ -128,6 +165,8 @@ router.post('/deposit', auth, async (req, res) => {
     }], { session });
     
     await session.commitTransaction();
+    console.log('Deposit successful:', cashEntry[0]);
+    console.log('=== DEPOSIT REQUEST END ===');
     
     res.status(201).json({
       success: true,
@@ -137,6 +176,7 @@ router.post('/deposit', auth, async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error('Hisob to\'ldirishda xatolik:', error);
+    console.log('=== DEPOSIT REQUEST ERROR ===');
     res.status(400).json({
       success: false,
       message: error.message

@@ -115,6 +115,11 @@ cashSchema.index({ vagon: 1, transaction_date: -1 }); // Vagon transactions
 
 // Pre-save hook: Valyuta cheklovlari
 cashSchema.pre('save', function(next) {
+  // initial_balance uchun valyuta cheklovini o'tkazib yuborish
+  if (this.type === 'initial_balance') {
+    return next();
+  }
+  
   // Yog'och sotib olish faqat RUB da
   if (this.expense_type === 'yogoch_sotib_olish' && this.currency !== 'RUB') {
     return next(new Error('Yog\'och sotib olish faqat RUB valyutasida amalga oshirilishi mumkin'));
