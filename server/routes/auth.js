@@ -65,6 +65,43 @@ router.get('/check-admin', async (req, res) => {
     res.status(500).json({ message: 'Server xatosi', error: error.message });
   }
 });
+
+// EMERGENCY: Admin parolini reset qilish (faqat development)
+router.post('/emergency-reset-admin', async (req, res) => {
+  try {
+    // Faqat development muhitida ishlaydi
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ 
+        message: 'Bu endpoint production muhitida ishlamaydi. SSH orqali server/scripts/reset-admin-password.js ishga tushiring.' 
+      });
+    }
+
+    const { username, newPassword, secretKey } = req.body;
+
+    // Secret key tekshirish (qo'shimcha xavfsizlik)
+    if (secretKey !== process.env.EMERGENCY_SECRET) {
+      return res.status(403).json({ message: 'Noto\'g\'ri secret key' });
+    }
+
+    const user = await User.findOne({ username: username || 'admin' });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Foydalanuvchi topilmadi' });
+    }
+
+    // Parolni yangilash
+    user.password = newPassword || 'admin123';
+    await user.save();
+
+    res.json({
+      message: 'Parol muvaffaqiyatli yangilandi',
+      username: user.username,
+      newPassword: newPassword || 'admin123'
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server xatosi', error: error.message });
+  }
+});
 // Ro'yxatdan o'tish (faqat birinchi admin yaratish uchun ishlatiladi)
 router.post('/register', [
   body('username').isLength({ min: 3 }).withMessage('Username kamida 3 ta belgi bo\'lishi kerak'),
