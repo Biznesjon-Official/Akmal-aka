@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
-import Icon from '@/components/Icon';
 
 export function useTranslatedNavigation() {
   const { t } = useLanguage();
@@ -9,49 +8,49 @@ export function useTranslatedNavigation() {
     { 
       name: t.sidebar.cash, 
       href: '/cash', 
-      icon: <Icon name="cash" size="sm" />,
+      icon: 'dollar-sign',
       gradient: 'from-green-500 to-green-600' 
     },
     { 
       name: 'Valyuta O\'tkazish', 
       href: '/currency-transfer', 
-      icon: <Icon name="exchange" size="sm" />,
+      icon: 'repeat',
       gradient: 'from-blue-500 to-blue-600' 
     },
     { 
       name: 'Qarz Daftarcha', 
       href: '/debt', 
-      icon: <Icon name="credit-card" size="sm" />,
+      icon: 'credit-card',
       gradient: 'from-red-500 to-red-600' 
     },
     { 
       name: t.sidebar.expenses, 
       href: '/expenses', 
-      icon: <Icon name="expenses" size="sm" />,
+      icon: 'trending-down',
       gradient: 'from-orange-500 to-orange-600' 
     },
     { 
       name: t.sidebar.warehouse, 
       href: '/warehouse', 
-      icon: <Icon name="warehouse" size="sm" />,
+      icon: 'package',
       gradient: 'from-indigo-500 to-indigo-600' 
     },
     { 
       name: t.sidebar.vagons, 
       href: '/vagon', 
-      icon: <Icon name="vagons" size="sm" />,
+      icon: 'truck',
       gradient: 'from-teal-500 to-teal-600' 
     },
     { 
       name: t.sidebar.clients, 
       href: '/client', 
-      icon: <Icon name="clients" size="sm" />,
+      icon: 'users',
       gradient: 'from-cyan-500 to-cyan-600' 
     },
     { 
       name: t.sidebar.delivery, 
       href: '/delivery', 
-      icon: <Icon name="transport" size="sm" />,
+      icon: 'send',
       gradient: 'from-purple-500 to-purple-600' 
     },
   ], [t]);
