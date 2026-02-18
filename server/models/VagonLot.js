@@ -8,11 +8,12 @@ const vagonLotSchema = new mongoose.Schema({
     required: [true, 'Vagon tanlanishi shart']
   },
   
-  // Yog'och nomi (ixtiyoriy)
+  // Yog'och nomi (ixtiyoriy) - YANGILANDI: Ixtiyoriy qilindi
   name: {
     type: String,
     trim: true,
-    comment: 'Yog\'och nomi, masalan: "Yog\'och 1", "Premium Taxta", va hokazo'
+    required: false, // Ixtiyoriy
+    comment: 'Yog\'och nomi (ixtiyoriy), masalan: "Premium Taxta"'
   },
   
   // O'lcham ma'lumotlari
@@ -33,16 +34,18 @@ const vagonLotSchema = new mongoose.Schema({
     min: [0.001, 'Hajm 0 dan katta bo\'lishi kerak']
   },
   
-  // Xarid ma'lumotlari
+  // Xarid ma'lumotlari - YANGILANDI: Faqat RUB
   purchase_currency: {
     type: String,
-    enum: ['USD', 'RUB'],
+    enum: ['RUB'], // Faqat RUB
+    default: 'RUB',
     required: [true, 'Valyuta tanlanishi shart']
   },
   purchase_amount: {
     type: Number,
-    required: [true, 'Xarid summasi kiritilishi shart'],
-    min: [0, 'Summa 0 dan kichik bo\'lishi mumkin emas']
+    default: 0, // Default 0 - xarajatlar orqali kiritiladi
+    min: [0, 'Summa 0 dan kichik bo\'lishi mumkin emas'],
+    comment: 'Xarid summasi (0 bo\'lsa, xarajatlar orqali kiritiladi)'
   },
   
   // Yo'qotish (brak) - faqat hajm (m³)
@@ -217,8 +220,10 @@ vagonLotSchema.index({ vagon: 1 });
 vagonLotSchema.index({ isDeleted: 1 });
 vagonLotSchema.index({ createdAt: -1 }); // Yangi qo'shildi
 vagonLotSchema.index({ dimensions: 1 }); // Yangi qo'shildi - o'lcham bo'yicha qidiruv
-// Compound index - vagon yog'ochlari uchun
-vagonLotSchema.index({ vagon: 1, createdAt: -1 });
+
+// Compound indexes - vagon yog'ochlari uchun (Performance Optimization)
+vagonLotSchema.index({ vagon: 1, createdAt: -1 }); // Vagon lots by date
+vagonLotSchema.index({ vagon: 1, isDeleted: 1 }); // Active vagon lots
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonLotSchema.pre('save', async function(next) {
@@ -262,12 +267,27 @@ vagonLotSchema.pre('save', async function(next) {
     
     // 5. YANGI MOLIYAVIY HISOBLASHLAR (UNIFIED CURRENCY)
     
-    // Jami sarmoya = Xarid + Taqsimlangan xarajatlar
+    // MUHIM: Yo'g'och xaridi RUB da, lekin tannarx USD da hisoblanishi kerak
     const purchaseAmount = Number(this.purchase_amount) || 0;
     const allocatedExpenses = Number(this.allocated_expenses) || 0;
     const totalRevenue = Number(this.total_revenue) || 0;
     
-    this.total_investment = purchaseAmount + allocatedExpenses;
+    // RUB ni USD ga o'tkazish (agar yo'g'och RUB da sotib olingan bo'lsa)
+    let purchaseAmountInUsd = purchaseAmount;
+    if (this.purchase_currency === 'RUB' && purchaseAmount > 0) {
+      try {
+        const { getActiveExchangeRate } = require('../utils/exchangeRateHelper');
+        const usdToRubRate = await getActiveExchangeRate('USD', 'RUB');
+        purchaseAmountInUsd = purchaseAmount / usdToRubRate;
+        console.log(`💱 Yo'g'och xaridi konvertatsiya: ${purchaseAmount} RUB / ${usdToRubRate} = ${purchaseAmountInUsd.toFixed(2)} USD`);
+      } catch (error) {
+        console.error('⚠️ Valyuta kursi topilmadi, default ishlatiladi (1 USD = 90 RUB)');
+        purchaseAmountInUsd = purchaseAmount / 90; // Default kurs
+      }
+    }
+    
+    // Jami sarmoya USD da = Yo'g'och (USD ga o'tkazilgan) + Qo'shimcha xarajatlar (USD)
+    this.total_investment = purchaseAmountInUsd + allocatedExpenses;
     
     // Tannarx = Jami sarmoya / Umumiy hajm
     if (volume > 0) {

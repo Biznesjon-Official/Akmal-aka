@@ -45,12 +45,32 @@ export const formatInputNumber = (value: string): string => {
 };
 
 /**
- * Valyuta formatlash
+ * Valyuta formatlash (kasr qismini ajratib ko'rsatadi)
  */
 export const formatCurrency = (amount: number | null | undefined, currency: string = 'RUB'): string => {
   // Agar amount null yoki undefined bo'lsa, 0 ni ishlatamiz
   const safeAmount = amount ?? 0;
-  const formatted = formatNumber(safeAmount);
+  
+  // Butun va kasr qismlarini ajratish
+  const isNegative = safeAmount < 0;
+  const absAmount = Math.abs(safeAmount);
+  const integerPart = Math.floor(absAmount);
+  const decimalPart = absAmount - integerPart;
+  
+  // Integer qismini formatlash
+  const formattedInteger = formatNumber(integerPart);
+  
+  // Kasr qismini formatlash (agar mavjud bo'lsa)
+  let formatted = formattedInteger;
+  if (decimalPart > 0) {
+    // Kasr qismini 3 xonagacha ko'rsatish
+    const decimalStr = decimalPart.toFixed(3).substring(2); // "0.523" -> "523"
+    // Oxiridagi nollarni olib tashlash
+    const trimmedDecimal = decimalStr.replace(/0+$/, '');
+    if (trimmedDecimal) {
+      formatted = `${formattedInteger}.${trimmedDecimal}`;
+    }
+  }
   
   const currencySymbols: { [key: string]: string } = {
     'USD': '$',
@@ -58,7 +78,8 @@ export const formatCurrency = (amount: number | null | undefined, currency: stri
   };
   
   const symbol = currencySymbols[currency] || currency;
-  return `${formatted} ${symbol}`;
+  const sign = isNegative ? '-' : '';
+  return `${sign}${formatted} ${symbol}`;
 };
 
 /**

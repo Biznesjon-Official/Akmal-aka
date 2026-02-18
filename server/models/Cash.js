@@ -4,7 +4,7 @@ const cashSchema = new mongoose.Schema({
   // Tranzaksiya turi
   type: {
     type: String,
-    enum: ['client_payment', 'expense', 'initial_balance', 'delivery_payment', 'delivery_expense', 'debt_sale', 'debt_payment', 'vagon_sale'],
+    enum: ['client_payment', 'expense', 'initial_balance', 'delivery_payment', 'delivery_expense', 'debt_sale', 'debt_payment', 'vagon_sale', 'currency_transfer_out', 'currency_transfer_in'],
     required: [true, 'Tranzaksiya turi kiritilishi shart']
   },
   
@@ -32,6 +32,13 @@ const cashSchema = new mongoose.Schema({
   delivery: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Delivery'
+  },
+  
+  // Valyuta o'tkazmasi
+  currencyTransfer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CurrencyTransfer',
+    comment: 'Valyuta o\'tkazmasi (currency_transfer_out/in uchun)'
   },
   
   // Pul ma'lumotlari
@@ -97,6 +104,14 @@ cashSchema.index({ vagon: 1 });
 cashSchema.index({ yogoch: 1 });
 cashSchema.index({ transaction_date: -1 });
 cashSchema.index({ isDeleted: 1 });
+cashSchema.index({ currency: 1 });
+
+// Compound indexes - ko'p ishlatiladigan so'rovlar uchun (Performance Optimization)
+cashSchema.index({ transaction_date: -1, type: 1 }); // Date + type queries
+cashSchema.index({ client: 1, transaction_date: -1 }); // Client transactions
+cashSchema.index({ currency: 1, type: 1 }); // Currency + type for balance calculations
+cashSchema.index({ currency: 1, isDeleted: 1 }); // Currency + deleted filter
+cashSchema.index({ vagon: 1, transaction_date: -1 }); // Vagon transactions
 
 // Pre-save hook: Valyuta cheklovlari
 cashSchema.pre('save', function(next) {
@@ -133,9 +148,9 @@ cashSchema.statics.getBalanceByCurrency = async function() {
       balances[currency] = { income: 0, expense: 0, balance: 0 };
     }
     
-    if (item._id.type === 'client_payment' || item._id.type === 'initial_balance' || item._id.type === 'delivery_payment' || item._id.type === 'debt_sale' || item._id.type === 'vagon_sale' || item._id.type === 'debt_payment') {
+    if (item._id.type === 'client_payment' || item._id.type === 'initial_balance' || item._id.type === 'delivery_payment' || item._id.type === 'debt_sale' || item._id.type === 'vagon_sale' || item._id.type === 'debt_payment' || item._id.type === 'currency_transfer_in') {
       balances[currency].income += item.total;
-    } else if (item._id.type === 'expense' || item._id.type === 'delivery_expense') {
+    } else if (item._id.type === 'expense' || item._id.type === 'delivery_expense' || item._id.type === 'currency_transfer_out') {
       balances[currency].expense += item.total;
     }
     

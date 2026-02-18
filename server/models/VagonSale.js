@@ -200,10 +200,13 @@ vagonSaleSchema.index({ status: 1 });
 vagonSaleSchema.index({ isDeleted: 1 });
 vagonSaleSchema.index({ sale_date: -1 });
 vagonSaleSchema.index({ createdAt: -1 }); // Yangi qo'shildi
-// Compound indexes - ko'p ishlatiladigan so'rovlar uchun
+
+// Compound indexes - ko'p ishlatiladigan so'rovlar uchun (Performance Optimization)
+vagonSaleSchema.index({ sale_date: -1, client: 1 }); // Date + client queries
+vagonSaleSchema.index({ sale_date: -1, status: 1 }); // Date + status queries
 vagonSaleSchema.index({ client: 1, sale_date: -1 }); // Mijoz sotuvlari
 vagonSaleSchema.index({ vagon: 1, createdAt: -1 }); // Vagon sotuvlari
-vagonSaleSchema.index({ status: 1, sale_date: -1 }); // Holat bo'yicha
+vagonSaleSchema.index({ sale_currency: 1, sale_date: -1 }); // Currency + date queries
 
 // Avtomatik hisoblashlar (save dan oldin)
 vagonSaleSchema.pre('save', function(next) {

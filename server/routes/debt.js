@@ -33,6 +33,7 @@ router.get('/', auth, async (req, res) => {
     // Search filter
     let searchFilter = {};
     if (search) {
+      // Search in both permanent clients and one-time clients
       const clients = await Client.find({
         $or: [
           { name: { $regex: search, $options: 'i' } },
@@ -43,19 +44,17 @@ router.get('/', auth, async (req, res) => {
       
       const clientIds = clients.map(c => c._id);
       
-      if (clientIds.length > 0) {
-        searchFilter.client = { $in: clientIds };
-      } else {
-        // Agar mijoz topilmasa, bo'sh natija qaytarish
-        return res.json({
-          debts: [],
-          pagination: {
-            currentPage: parseInt(page),
-            totalPages: 0,
-            totalItems: 0,
-            itemsPerPage: parseInt(limit)
-          }
-        });
+      // Search in both client references and one-time client fields
+      searchFilter.$or = [
+        { client: { $in: clientIds } },
+        { one_time_client_name: { $regex: search, $options: 'i' } },
+        { one_time_client_phone: { $regex: search, $options: 'i' } }
+      ];
+      
+      // If no clients found and search doesn't match one-time fields, return empty
+      if (clientIds.length === 0) {
+        // Still allow search in one-time fields
+        delete searchFilter.$or[0];
       }
     }
     
@@ -70,6 +69,7 @@ router.get('/', auth, async (req, res) => {
     const [total, debts] = await Promise.all([
       Debt.countDocuments(finalFilter),
       Debt.find(finalFilter)
+        .select('client one_time_client_name one_time_client_phone vagon yogoch total_amount paid_amount remaining_amount currency sold_quantity sale_date status payment_history createdAt updatedAt')
         .populate('client', 'name phone email')
         .populate('vagon', 'vagonCode month sending_place receiving_place')
         .populate('yogoch', 'name dimensions quantity volume_m3')
@@ -123,6 +123,7 @@ router.get('/:id', auth, async (req, res) => {
       _id: req.params.id, 
       isDeleted: false 
     })
+      .select('client one_time_client_name one_time_client_phone vagon yogoch total_amount paid_amount remaining_amount currency sold_quantity sale_date status payment_history notes createdAt updatedAt')
       .populate('client', 'name phone email')
       .populate('vagon', 'vagonCode month sending_place receiving_place')
       .populate('yogoch', 'name dimensions quantity volume_m3')
@@ -250,12 +251,6 @@ router.post('/:id/payment', auth, async (req, res) => {
       });
     }
     
-    if (!description || description.trim().length < 3) {
-      return res.status(400).json({ 
-        message: 'Tavsif kamida 3 belgi bo\'lishi kerak' 
-      });
-    }
-    
     const debt = await Debt.findOne({ 
       _id: req.params.id, 
       isDeleted: false 
@@ -279,7 +274,7 @@ router.post('/:id/payment', auth, async (req, res) => {
     debt.payment_history.push({
       amount,
       date: date || new Date(),
-      description: description.trim(),
+      description: description?.trim() || 'To\'lov',
       created_by: req.user.userId
     });
     
@@ -289,6 +284,7 @@ router.post('/:id/payment', auth, async (req, res) => {
     
     // Populate qilib qaytarish
     const updatedDebt = await Debt.findById(debt._id)
+      .select('client one_time_client_name one_time_client_phone vagon yogoch total_amount paid_amount remaining_amount currency sold_quantity sale_date status payment_history notes createdAt updatedAt')
       .populate('client', 'name phone')
       .populate('vagon', 'vagonCode')
       .populate('yogoch', 'name dimensions');
@@ -302,6 +298,53 @@ router.post('/:id/payment', auth, async (req, res) => {
   } catch (error) {
     logger.error('Payment add error:', error);
     res.status(400).json({ message: error.message || 'To\'lov qo\'shishda xatolik' });
+  }
+});
+
+// Qarzni tahrirlash (UPDATE)
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const {
+      notes,
+      sale_date
+    } = req.body;
+    
+    const debt = await Debt.findOne({ 
+      _id: req.params.id, 
+      isDeleted: false 
+    });
+    
+    if (!debt) {
+      return res.status(404).json({ message: 'Qarz topilmadi' });
+    }
+    
+    // Faqat notes va sale_date ni tahrirlash mumkin
+    if (notes !== undefined) {
+      debt.notes = notes.trim();
+    }
+    
+    if (sale_date) {
+      debt.sale_date = new Date(sale_date);
+    }
+    
+    await debt.save();
+    
+    // Populate qilib qaytarish
+    const updatedDebt = await Debt.findById(debt._id)
+      .select('client one_time_client_name one_time_client_phone vagon yogoch total_amount paid_amount remaining_amount currency sold_quantity sale_date status payment_history notes createdAt updatedAt')
+      .populate('client', 'name phone')
+      .populate('vagon', 'vagonCode')
+      .populate('yogoch', 'name dimensions');
+    
+    logger.info(`Qarz tahrirlandi: ${debt._id}`);
+    
+    res.json({
+      message: 'Qarz muvaffaqiyatli tahrirlandi',
+      debt: updatedDebt
+    });
+  } catch (error) {
+    logger.error('Debt update error:', error);
+    res.status(400).json({ message: error.message || 'Qarzni tahrirlashda xatolik' });
   }
 });
 

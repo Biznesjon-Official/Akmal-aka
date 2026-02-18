@@ -8,10 +8,13 @@ import { useDialog } from '@/context/DialogContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import VagonDetailsModal from '@/components/vagon/VagonDetailsModal';
+import VagonExpenseModal from '@/components/vagon/VagonExpenseModal'; // YANGI
+import PriceSettingModal from '@/components/vagon/PriceSettingModal'; // YANGI
 import Pagination from '@/components/ui/Pagination';
 import Icon from '@/components/Icon';
 import { useDebouncedSearch } from '@/hooks/useDebounce';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { showToast } from '@/utils/toast'; // YANGI
 import axios from '@/lib/axios';
 
 // Constants
@@ -65,12 +68,15 @@ interface Vagon {
   rub_total_cost: number;
   rub_total_revenue: number;
   rub_profit: number;
+  usd_cost_per_m3?: number; // YANGI: Tannarx
+  rub_cost_per_m3?: number; // YANGI: Tannarx
+  usd_sale_price_per_m3?: number; // YANGI: Sotuv narxi
+  rub_sale_price_per_m3?: number; // YANGI: Sotuv narxi
   lots: VagonYogoch[];
 }
 
 interface YogochInput {
   _id?: string;
-  name?: string; // Yangi field - yog'och nomi
   thickness: string;
   width: string;
   length: string;
@@ -78,9 +84,9 @@ interface YogochInput {
   loss_volume_m3: string;
   loss_responsible_person: string;
   loss_reason: string;
-  currency: string;
+  currency: string; // Faqat RUB
   purchase_amount: string;
-  recommended_sale_price_per_m3: string; // YANGI: Tavsiya etilgan sotuv narxi
+  recommended_sale_price_per_m3: string;
 }
 
 // VagonCard Component
@@ -90,6 +96,8 @@ interface VagonCardProps {
   onDelete: (id: string, code: string) => void;
   onClose: (id: string, reason: string) => void;
   onViewDetails: (id: string) => void;
+  onAddExpense: (vagonId: string, vagonCode: string) => void; // YANGI
+  onSetPrice: (vagon: Vagon) => void; // YANGI: Narx belgilash
   user: any;
   t: any;
   safeToFixed: (value: any, decimals?: number) => string;
@@ -101,7 +109,9 @@ const VagonCard: React.FC<VagonCardProps> = ({
   onEdit, 
   onDelete, 
   onClose, 
-  onViewDetails, 
+  onViewDetails,
+  onAddExpense, // YANGI
+  onSetPrice, // YANGI: Narx belgilash
   user, 
   t, 
   safeToFixed, 
@@ -265,6 +275,28 @@ const VagonCard: React.FC<VagonCardProps> = ({
             )}
           </div>
           
+          {/* YANGI: Xarajat qo'shish tugmasi */}
+          {vagon.status !== 'closed' && vagon.status !== 'archived' && (
+            <button
+              onClick={() => onAddExpense(vagon._id, vagon.vagonCode)}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 px-4 rounded-2xl hover:from-orange-600 hover:to-red-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
+            >
+              <Icon name="dollar-sign" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+              Xarajat qo'shish
+            </button>
+          )}
+          
+          {/* YANGI: Narx belgilash tugmasi */}
+          {vagon.status !== 'closed' && vagon.status !== 'archived' && (
+            <button
+              onClick={() => onSetPrice(vagon)}
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-3 px-4 rounded-2xl hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
+            >
+              <Icon name="tag" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+              Narx belgilash
+            </button>
+          )}
+          
           {/* Secondary Actions */}
           {(vagon.status === 'active' || (user?.role === 'admin' && (vagon.sold_volume_m3 || 0) === 0)) && (
             <div className="grid grid-cols-2 gap-3">
@@ -307,7 +339,11 @@ export default function VagonPage() {
   
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false); // YANGI
+  const [showPriceModal, setShowPriceModal] = useState(false); // YANGI: Narx belgilash modali
   const [selectedVagonId, setSelectedVagonId] = useState<string | null>(null);
+  const [selectedVagonCode, setSelectedVagonCode] = useState<string>(''); // YANGI
+  const [selectedVagonForPrice, setSelectedVagonForPrice] = useState<Vagon | null>(null); // YANGI
   const [statusFilter, setStatusFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -347,10 +383,13 @@ export default function VagonPage() {
 
   const vagons = vagonData?.vagons || [];
   
-  const [vagonCode, setVagonCode] = useState(''); // Yangi state
+  const [vagonCode, setVagonCode] = useState(''); // 9 ta raqam
   const [month, setMonth] = useState('');
+  const [departureDate, setDepartureDate] = useState(''); // YANGI: Jo'natilgan sanasi
+  const [arrivalDate, setArrivalDate] = useState(''); // YANGI: Yetib kelgan sanasi
   const [sendingPlace, setSendingPlace] = useState('');
   const [receivingPlace, setReceivingPlace] = useState('');
+  const [salePriceInput, setSalePriceInput] = useState<number>(0); // YANGI: Sotuv narxi input
   
   useEffect(() => {
     if (!month) {
@@ -360,13 +399,28 @@ export default function VagonPage() {
       const year = today.getFullYear();
       setMonth(`${day}/${monthNum}/${year}`);
     }
-  }, []);
+    
+    // Default sanalarni o'rnatish (bugungi sana)
+    if (!departureDate) {
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      setDepartureDate(formattedDate);
+    }
+    
+    if (!arrivalDate) {
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      setArrivalDate(formattedDate);
+    }
+  }, [month, departureDate, arrivalDate]);
   
   const [yogochlar, setYogochlar] = useState<YogochInput[]>([]);
   const [currentYogoch, setCurrentYogoch] = useState<YogochInput>({
-    name: '', thickness: '', width: '', length: '', quantity: '', 
+    thickness: '', width: '', length: '', quantity: '', 
     loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
-    currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+    currency: 'RUB', // Backend uchun default
+    purchase_amount: '0', // Default 0 - xarajatlar orqali kiritiladi
+    recommended_sale_price_per_m3: '0' // Default 0
   });
   const [isAddingYogoch, setIsAddingYogoch] = useState(false);
 
@@ -400,19 +454,19 @@ export default function VagonPage() {
   const addYogochRow = useCallback(() => {
     setIsAddingYogoch(true);
     setCurrentYogoch({
-      name: '', thickness: '', width: '', length: '', quantity: '', 
+      thickness: '', width: '', length: '', quantity: '', 
       loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
-      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+      currency: 'RUB', purchase_amount: '0', recommended_sale_price_per_m3: '0'
     });
   }, []);
 
   const saveCurrentYogoch = useCallback(() => {
-    // Validate current yogoch
-    if (!currentYogoch.name?.trim() || !currentYogoch.thickness || !currentYogoch.width || 
-        !currentYogoch.length || !currentYogoch.quantity || !currentYogoch.purchase_amount) {
+    // Validate current yogoch - FAQAT FIZIK MA'LUMOTLAR
+    if (!currentYogoch.thickness || !currentYogoch.width || 
+        !currentYogoch.length || !currentYogoch.quantity) {
       showAlert({
         title: 'Xatolik',
-        message: 'Barcha majburiy maydonlarni to\'ldiring',
+        message: 'Barcha majburiy maydonlarni to\'ldiring (o\'lchamlar va miqdor)',
         type: 'warning'
       });
       return;
@@ -433,9 +487,9 @@ export default function VagonPage() {
     
     // Reset form
     setCurrentYogoch({
-      name: '', thickness: '', width: '', length: '', quantity: '', 
+      thickness: '', width: '', length: '', quantity: '', 
       loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
-      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+      currency: 'RUB', purchase_amount: '0', recommended_sale_price_per_m3: '0'
     });
     setIsAddingYogoch(false);
 
@@ -448,9 +502,9 @@ export default function VagonPage() {
 
   const cancelAddingYogoch = useCallback(() => {
     setCurrentYogoch({
-      name: '', thickness: '', width: '', length: '', quantity: '', 
+      thickness: '', width: '', length: '', quantity: '', 
       loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
-      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+      currency: 'RUB', purchase_amount: '0', recommended_sale_price_per_m3: '0'
     });
     setIsAddingYogoch(false);
   }, []);
@@ -480,11 +534,51 @@ export default function VagonPage() {
       return;
     }
     
-    // Vagon kodi validatsiyasi (faqat yangi vagon uchun)
-    if (!editingVagon && vagonCode.trim() && vagonCode.trim().length < 3) {
+    // Vagon kodi validatsiyasi - IXTIYORIY (bo'sh bo'lsa avtomatik generatsiya)
+    if (vagonCode && vagonCode.trim()) {
+      // Agar kiritilgan bo'lsa, 9 ta raqam bo'lishi kerak
+      if (vagonCode.trim().length !== 9) {
+        showAlert({
+          title: 'Xatolik',
+          message: 'Vagon kodi 9 ta raqamdan iborat bo\'lishi kerak yoki bo\'sh qoldiring (avtomatik generatsiya)',
+          type: 'warning'
+        });
+        return;
+      }
+      
+      if (!/^\d{9}$/.test(vagonCode.trim())) {
+        showAlert({
+          title: 'Xatolik',
+          message: 'Vagon kodi faqat raqamlardan iborat bo\'lishi kerak',
+          type: 'warning'
+        });
+        return;
+      }
+    }
+    
+    // Sanalar validatsiyasi
+    if (!departureDate) {
       showAlert({
         title: 'Xatolik',
-        message: 'Vagon kodi kamida 3 belgi bo\'lishi kerak yoki bo\'sh qoldiring',
+        message: 'Jo\'natilgan sanasi kiritilishi shart',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    if (!arrivalDate) {
+      showAlert({
+        title: 'Xatolik',
+        message: 'Yetib kelgan sanasi kiritilishi shart',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    if (new Date(arrivalDate) < new Date(departureDate)) {
+      showAlert({
+        title: 'Xatolik',
+        message: 'Yetib kelgan sanasi jo\'natilgan sanasidan keyin bo\'lishi kerak',
         type: 'warning'
       });
       return;
@@ -514,7 +608,6 @@ export default function VagonPage() {
           const volume = calculateYogochVolume(yogoch);
           
           const yogochData = {
-            name: yogoch.name || undefined,
             dimensions: `${yogoch.thickness}×${yogoch.width}×${yogoch.length}`,
             quantity: parseInt(yogoch.quantity),
             volume_m3: volume,
@@ -523,8 +616,8 @@ export default function VagonPage() {
             loss_reason: yogoch.loss_reason || null,
             loss_date: parseFloat(yogoch.loss_volume_m3) > 0 ? new Date() : null,
             purchase_currency: yogoch.currency,
-            purchase_amount: parseFloat(yogoch.purchase_amount),
-            recommended_sale_price_per_m3: parseFloat(yogoch.recommended_sale_price_per_m3) || 0 // YANGI
+            purchase_amount: parseFloat(yogoch.purchase_amount) || 0, // Default 0 - xarajatlar orqali
+            recommended_sale_price_per_m3: parseFloat(yogoch.recommended_sale_price_per_m3) || 0 // Default 0
           };
           
           if (yogoch._id) {
@@ -550,11 +643,23 @@ export default function VagonPage() {
       } else {
         // Create new vagon
         const vagonData = {
-          vagonCode: vagonCode.trim() || undefined, // Qo'lda kiritilgan kod yoki undefined
+          vagonCode: vagonCode.trim() || undefined, // Bo'sh bo'lsa undefined (backend avtomatik generatsiya qiladi)
           month,
+          departure_date: departureDate, // YANGI
+          arrival_date: arrivalDate, // YANGI
           sending_place: sendingPlace,
           receiving_place: receivingPlace
         };
+        
+        console.log('📤 Sending vagon data:', vagonData);
+        console.log('📤 State values:', {
+          vagonCode,
+          month,
+          departureDate,
+          arrivalDate,
+          sendingPlace,
+          receivingPlace
+        });
         
         const vagonResponse = await axios.post(
           `/vagon`,
@@ -570,7 +675,7 @@ export default function VagonPage() {
           
           const yogochData = {
             vagon: vagonId,
-            name: yogoch.name || undefined,
+            // name o'chirildi - kerak emas
             dimensions: `${yogoch.thickness}×${yogoch.width}×${yogoch.length}`,
             quantity: parseInt(yogoch.quantity),
             volume_m3: volume,
@@ -579,8 +684,8 @@ export default function VagonPage() {
             loss_reason: yogoch.loss_reason || null,
             loss_date: parseFloat(yogoch.loss_volume_m3) > 0 ? new Date() : null,
             purchase_currency: yogoch.currency,
-            purchase_amount: parseFloat(yogoch.purchase_amount),
-            recommended_sale_price_per_m3: parseFloat(yogoch.recommended_sale_price_per_m3) || 0 // YANGI
+            purchase_amount: parseFloat(yogoch.purchase_amount) || 0, // Default 0 - xarajatlar orqali
+            recommended_sale_price_per_m3: parseFloat(yogoch.recommended_sale_price_per_m3) || 0 // Default 0
           };
           
           await axios.post(
@@ -601,9 +706,23 @@ export default function VagonPage() {
       setShowModal(false);
       resetForm();
     } catch (error: any) {
+      console.error('❌ Vagon creation error:', error);
+      console.error('❌ Error response:', error.response);
+      console.error('❌ Error data:', error.response?.data);
+      console.error('❌ Error message:', error.message);
+      
+      // Agar missing fields bo'lsa, ko'rsatish
+      if (error.response?.data?.missing) {
+        console.error('Missing fields:', error.response.data.missing);
+        const missingFields = Object.entries(error.response.data.missing)
+          .filter(([_, isMissing]) => isMissing)
+          .map(([field]) => field);
+        console.error('Fields that are missing:', missingFields);
+      }
+      
       showAlert({
         title: 'Xatolik',
-        message: error.response?.data?.message || 'Xatolik yuz berdi',
+        message: error.response?.data?.message || error.message || 'Xatolik yuz berdi',
         type: 'error'
       });
     } finally {
@@ -612,18 +731,35 @@ export default function VagonPage() {
   };
 
   const resetForm = () => {
-    setVagonCode(''); // Yangi field reset
-    setMonth('');
+    console.log('🔄 Resetting form...');
+    setVagonCode('');
+    
+    // Default qiymatlarni o'rnatish
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const monthNum = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    const monthValue = `${day}/${monthNum}/${year}`;
+    console.log('📅 Setting month to:', monthValue);
+    setMonth(monthValue);
+    
+    const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+    console.log('📅 Setting dates to:', formattedDate);
+    setDepartureDate(formattedDate);
+    setArrivalDate(formattedDate);
+    
     setSendingPlace('');
     setReceivingPlace('');
     setYogochlar([]);
     setCurrentYogoch({
-      name: '', thickness: '', width: '', length: '', quantity: '', 
+      thickness: '', width: '', length: '', quantity: '', 
       loss_volume_m3: '0', loss_responsible_person: '', loss_reason: '', 
-      currency: 'USD', purchase_amount: '', recommended_sale_price_per_m3: ''
+      currency: 'RUB', purchase_amount: '0', recommended_sale_price_per_m3: '0'
     });
     setIsAddingYogoch(false);
     setEditingVagon(null);
+    
+    console.log('✅ Form reset complete');
   };
 
   const openEditModal = (vagon: Vagon) => {
@@ -637,7 +773,6 @@ export default function VagonPage() {
         const dims = yogoch.dimensions.split('×');
         return {
           _id: yogoch._id,
-          name: yogoch.name || '',
           thickness: dims[0] || '',
           width: dims[1] || '',
           length: dims[2] || '',
@@ -645,7 +780,7 @@ export default function VagonPage() {
           loss_volume_m3: (yogoch.loss_volume_m3 || 0).toString(),
           loss_responsible_person: yogoch.loss_responsible_person || '',
           loss_reason: yogoch.loss_reason || '',
-          currency: yogoch.currency || 'USD',
+          currency: yogoch.currency || 'RUB',
           purchase_amount: (yogoch.purchase_amount || 0).toString(),
           recommended_sale_price_per_m3: (yogoch.recommended_sale_price_per_m3 || 0).toString()
         };
@@ -754,6 +889,20 @@ export default function VagonPage() {
         type: 'error'
       });
     }
+  };
+
+  // YANGI: Xarajat qo'shish
+  const handleAddExpense = (vagonId: string, vagonCode: string) => {
+    setSelectedVagonId(vagonId);
+    setSelectedVagonCode(vagonCode);
+    setShowExpenseModal(true);
+  };
+
+  // YANGI: Narx belgilash
+  const handleSetPrice = (vagon: Vagon) => {
+    setSelectedVagonForPrice(vagon);
+    setSalePriceInput(vagon.usd_sale_price_per_m3 || 0);
+    setShowPriceModal(true);
   };
 
   if (authLoading || isLoading) {
@@ -959,6 +1108,8 @@ export default function VagonPage() {
                       setSelectedVagonId(id);
                       setShowDetailsModal(true);
                     }}
+                    onAddExpense={handleAddExpense} // YANGI
+                    onSetPrice={handleSetPrice} // YANGI: Narx belgilash
                     user={user}
                     t={t}
                     safeToFixed={safeToFixed}
@@ -999,6 +1150,37 @@ export default function VagonPage() {
           onVagonUpdated={() => {
             refetch();
           }}
+        />
+      )}
+
+      {/* YANGI: Expense Modal */}
+      {showExpenseModal && selectedVagonId && (
+        <VagonExpenseModal
+          isOpen={showExpenseModal}
+          onClose={() => {
+            setShowExpenseModal(false);
+            setSelectedVagonId(null);
+            setSelectedVagonCode('');
+          }}
+          vagonId={selectedVagonId}
+          vagonCode={selectedVagonCode}
+        />
+      )}
+
+      {/* YANGI: Price Setting Modal */}
+      {showPriceModal && selectedVagonForPrice && (
+        <PriceSettingModal
+          vagon={selectedVagonForPrice}
+          isOpen={showPriceModal}
+          onClose={() => {
+            setShowPriceModal(false);
+            setSelectedVagonForPrice(null);
+            setSalePriceInput(0);
+          }}
+          onSuccess={() => {
+            refetch();
+          }}
+          safeToFixed={safeToFixed}
         />
       )}
 
@@ -1065,50 +1247,60 @@ export default function VagonPage() {
                           type="text"
                           value={vagonCode}
                           onChange={(e) => {
-                            const value = e.target.value.toUpperCase();
-                            // Faqat harf, raqam, tire va pastki chiziq ruxsat etiladi
-                            const cleanValue = value.replace(/[^A-Z0-9\-_]/g, '');
-                            setVagonCode(cleanValue);
+                            const value = e.target.value.replace(/\D/g, ''); // Faqat raqamlar
+                            if (value.length <= 9) {
+                              setVagonCode(value);
+                            }
                           }}
-                          placeholder="Masalan: VAG-2025-MAXSUS yoki bo'sh qoldiring"
+                          placeholder="123456789"
                           className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
-                          maxLength={20}
+                          maxLength={9}
+                          required
                         />
                       )}
                       {!editingVagon && (
                         <div className="text-xs mt-1">
                           {vagonCode.length > 0 ? (
-                            vagonCode.length < 3 ? (
-                              <p className="text-red-500">Kamida 3 belgi bo'lishi kerak</p>
+                            vagonCode.length === 9 ? (
+                              <p className="text-green-600">✓ To'g'ri format (9 ta raqam)</p>
                             ) : (
-                              <p className="text-green-600">✓ To'g'ri format</p>
+                              <p className="text-red-500">9 ta raqam bo'lishi kerak ({vagonCode.length}/9)</p>
                             )
                           ) : (
-                            <p className="text-gray-500">Bo'sh qoldirsangiz avtomatik yaratiladi (VAG-2026-XXX)</p>
+                            <p className="text-gray-500">9 ta raqam kiriting (majburiy)</p>
                           )}
                         </div>
                       )}
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Sana</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Jo'natilgan sanasi *
+                      </label>
                       <input
                         type="date"
-                        value={month ? new Date(month.split('/').reverse().join('-')).toISOString().split('T')[0] : ''}
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            const date = new Date(e.target.value);
-                            const day = String(date.getDate()).padStart(2, '0');
-                            const monthNum = String(date.getMonth() + 1).padStart(2, '0');
-                            const year = date.getFullYear();
-                            setMonth(`${day}/${monthNum}/${year}`);
-                          } else {
-                            setMonth('');
-                          }
-                        }}
+                        value={departureDate}
+                        onChange={(e) => setDepartureDate(e.target.value)}
                         className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
                         required
                       />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Yetib kelgan sanasi *
+                      </label>
+                      <input
+                        type="date"
+                        value={arrivalDate}
+                        onChange={(e) => setArrivalDate(e.target.value)}
+                        min={departureDate} // Jo'natilgan sanadan keyin
+                        className="w-full px-4 py-3 text-sm border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Debug: month={month}, departure={departureDate}, arrival={arrivalDate}
+                      </p>
                     </div>
                     
                     <div>
@@ -1162,13 +1354,11 @@ export default function VagonPage() {
                       {yogochlar.map((yogoch, index) => (
                         <div key={index} className="bg-white/80 rounded-xl p-3 border border-purple-200 flex justify-between items-center">
                           <div className="flex-1">
-                            <div className="font-semibold text-purple-900">{yogoch.name}</div>
-                            <div className="text-xs text-gray-600">
-                              {yogoch.thickness}×{yogoch.width}×{yogoch.length} mm/m × {yogoch.quantity} dona
-                              = {safeToFixed(calculateYogochVolume(yogoch), 3)} m³
+                            <div className="font-semibold text-purple-900">
+                              {yogoch.thickness}×{yogoch.width}×{yogoch.length} mm/m
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {yogoch.purchase_amount} {yogoch.currency}
+                            <div className="text-xs text-gray-600">
+                              {yogoch.quantity} dona = {safeToFixed(calculateYogochVolume(yogoch), 3)} m³
                             </div>
                           </div>
                           <button
@@ -1199,18 +1389,6 @@ export default function VagonPage() {
                       
                       {/* Compact Yogoch Form */}
                       <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">Yog'och nomi *</label>
-                          <input
-                            type="text"
-                            value={currentYogoch.name || ''}
-                            onChange={(e) => updateCurrentYogoch('name', e.target.value)}
-                            placeholder="Premium yog'och"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                            required
-                          />
-                        </div>
-                        
                         <div className="grid grid-cols-4 gap-2">
                           <div>
                             <label className="block text-xs font-semibold text-gray-700 mb-1">Qalinlik (mm)</label>
@@ -1261,71 +1439,16 @@ export default function VagonPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Valyuta</label>
-                            <select
-                              value={currentYogoch.currency}
-                              onChange={(e) => updateCurrentYogoch('currency', e.target.value)}
-                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                            >
-                              <option value="USD">USD</option>
-                              <option value="RUB">RUB</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Tannarx</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={currentYogoch.purchase_amount}
-                              onChange={(e) => updateCurrentYogoch('purchase_amount', e.target.value)}
-                              placeholder="1000"
-                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">Hajm</label>
-                            <div className="w-full px-2 py-2 bg-purple-100 border border-purple-200 rounded-lg text-sm font-bold text-purple-800">
+                        {/* Hajm ko'rsatish */}
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-semibold text-purple-900">Hisoblangan hajm:</span>
+                            <span className="text-lg font-bold text-purple-900">
                               {safeToFixed(calculateYogochVolume(currentYogoch), 3)} m³
-                            </div>
+                            </span>
                           </div>
-                        </div>
-
-                        {/* YANGI: Sotuv narxi */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">
-                              Sotuv narxi (m³ uchun) <span className="text-gray-500">(ixtiyoriy)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={currentYogoch.recommended_sale_price_per_m3}
-                              onChange={(e) => updateCurrentYogoch('recommended_sale_price_per_m3', e.target.value)}
-                              placeholder="Masalan: 150"
-                              className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">
-                              Kutilayotgan foyda
-                            </label>
-                            <div className="w-full px-2 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-bold text-green-700">
-                              {(() => {
-                                const volume = calculateYogochVolume(currentYogoch);
-                                const cost = parseFloat(currentYogoch.purchase_amount) || 0;
-                                const salePrice = parseFloat(currentYogoch.recommended_sale_price_per_m3) || 0;
-                                const costPerM3 = volume > 0 ? cost / volume : 0;
-                                const profitPerM3 = salePrice - costPerM3;
-                                const totalProfit = profitPerM3 * volume;
-                                const margin = salePrice > 0 ? ((profitPerM3 / salePrice) * 100).toFixed(1) : '0';
-                                return totalProfit > 0 
-                                  ? `${safeToFixed(totalProfit, 2)} ${currentYogoch.currency} (${margin}%)`
-                                  : '—';
-                              })()}
-                            </div>
+                          <div className="text-xs text-purple-700 mt-1">
+                            💡 Moliyaviy ma'lumotlar "Xarajat qo'shish" tugmasi orqali kiritiladi
                           </div>
                         </div>
 

@@ -26,26 +26,36 @@ app.use(helmet({
 // Rate Limiting - DDoS himoyasi
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 daqiqa
-  max: 100, // Har bir IP uchun 100 ta request
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Development da ko'proq ruxsat
   message: 'Juda ko\'p so\'rov yuborildi, iltimos keyinroq urinib ko\'ring',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === 'development' && req.ip === '::1' // Localhost uchun skip
 });
 
 // Login uchun maxsus rate limiter
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 daqiqa
-  max: 5, // 5 ta urinish
+  max: process.env.NODE_ENV === 'production' ? 5 : 50, // Development da ko'proq ruxsat
   message: 'Juda ko\'p login urinishi, 15 daqiqadan keyin qayta urinib ko\'ring',
   skipSuccessfulRequests: true
 });
 
-app.use('/api/', limiter);
-app.use('/api/auth/login', loginLimiter);
+// Faqat production da rate limiting
+if (process.env.NODE_ENV === 'production') {
+  app.use('/api/', limiter);
+  app.use('/api/auth/login', loginLimiter);
+} else {
+  console.log('⚠️  Rate limiting disabled in development mode');
+}
 
 // Performance monitoring middleware
 // const { performanceMonitor } = require('./middleware/autoOptimization'); // Temporarily disabled
 // app.use(performanceMonitor);
+
+// Query performance monitoring
+const queryMonitor = require('./middleware/queryMonitor');
+app.use(queryMonitor.requestMonitorMiddleware());
 
 // Compression - Response hajmini kichraytirish
 app.use(compression());
@@ -103,7 +113,8 @@ app.use('/api/vagon-sale', require('./routes/vagonSale'));
 app.use('/api/business-logic', require('./routes/businessLogic'));
 app.use('/api/cash', require('./routes/cash'));
 app.use('/api/reports', require('./routes/reports'));
-app.use('/api/exchange-rate', require('./routes/exchangeRate'));
+app.use('/api/exchange-rate', require('./routes/exchangeRate')); // ✅ YANGI
+app.use('/api/currency-transfer', require('./routes/currencyTransfer')); // ✅ YANGI
 
 // ❌ HALI IMPLEMENTATSIYA QILINMAGAN - Kelajakda qo'shiladi
 // app.use('/api/expense-advanced', require('./routes/expenseAdvanced')); // TODO: Kengaytirilgan xarajatlar
@@ -111,7 +122,7 @@ app.use('/api/exchange-rate', require('./routes/exchangeRate'));
 // app.use('/api/expense-allocation', require('./routes/expenseAllocation')); // TODO: Xarajat taqsimoti
 // app.use('/api/system-settings', require('./routes/systemSettings')); // TODO: Tizim sozlamalari
 // app.use('/api/delivery', require('./routes/delivery')); // TODO: Yetkazib berish logistika
-// app.use('/api/monitoring', require('./routes/monitoring')); // TODO: System monitoring
+app.use('/api/monitoring', require('./routes/monitoring')); // ✅ System monitoring
 // app.use('/api/backup', require('./routes/backup')); // TODO: Backup tizimi
 
 // Global error handler
@@ -150,6 +161,14 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/wood_syst
   .then(() => {
     console.log('✅ MongoDB ga muvaffaqiyatli ulandi');
     console.log('📊 Database:', mongoose.connection.name);
+    
+    // Initialize query performance monitoring
+    queryMonitor.initialize();
+    
+    // Enable MongoDB profiling for slow queries
+    queryMonitor.constructor.enableMongoDBProfiling().catch(err => {
+      logger.warn('MongoDB profiling could not be enabled:', err.message);
+    });
   })
   .catch(err => {
     logger.error('❌ MongoDB ulanish xatosi:', err.message);

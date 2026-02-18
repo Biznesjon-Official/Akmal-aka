@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const { getCacheStats } = require('../utils/cacheManager');
 const { memoryMonitor, dbConnectionMonitor } = require('../middleware/autoOptimization');
+const queryMonitor = require('../middleware/queryMonitor');
 
 // System monitoring endpoint
 router.get('/system', auth, async (req, res) => {
@@ -66,7 +67,8 @@ router.get('/performance', auth, async (req, res) => {
       },
       collections: collectionStats,
       cache: getCacheStats(),
-      memory: memoryMonitor()
+      memory: memoryMonitor(),
+      queries: queryMonitor.getMetrics() // Add query performance metrics
     };
     
     res.json(performanceMetrics);
@@ -200,6 +202,54 @@ router.get('/optimization-suggestions', auth, async (req, res) => {
   } catch (error) {
     console.error('Optimization suggestions error:', error);
     res.status(500).json({ message: 'Optimization suggestions xatosi' });
+  }
+});
+
+// Query performance metrics endpoint
+router.get('/query-performance', auth, async (req, res) => {
+  try {
+    const metrics = queryMonitor.getMetrics();
+    
+    res.json({
+      ...metrics,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Query performance error:', error);
+    res.status(500).json({ message: 'Query performance metrics xatosi' });
+  }
+});
+
+// Slow query log endpoint
+router.get('/slow-queries', auth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const slowQueries = queryMonitor.getSlowQueryLog(limit);
+    
+    res.json({
+      slowQueries,
+      count: slowQueries.length,
+      threshold: '500ms',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Slow queries error:', error);
+    res.status(500).json({ message: 'Slow queries xatosi' });
+  }
+});
+
+// Reset query metrics endpoint (for testing/debugging)
+router.post('/query-performance/reset', auth, async (req, res) => {
+  try {
+    queryMonitor.resetMetrics();
+    
+    res.json({
+      message: 'Query performance metrics reset successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Reset metrics error:', error);
+    res.status(500).json({ message: 'Metrics reset xatosi' });
   }
 });
 

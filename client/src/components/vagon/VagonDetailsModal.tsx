@@ -91,16 +91,11 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
 
   const fetchVagonExpenses = async () => {
     try {
-      // Vagon bilan bog'liq xarajatlarni olish - faqat chiqim kategoriyasi
-      const response = await axios.get(`/expense-advanced?vagon=${vagonId}&limit=100`);
-      const allExpenses = response.data?.expenses || [];
+      // Vagon bilan bog'liq xarajatlarni olish
+      const response = await axios.get(`/vagon-expense?vagon=${vagonId}`);
+      const allExpenses = response.data || [];
       
-      // Faqat chiqim kategoriyasidagi xarajatlarni filtrlash
-      // (transport_kz, transport_uz, transport_kelish, bojxona_nds, yuklash_tushirish, saqlanish, ishchilar)
-      const chiqimTypes = ['transport_kz', 'transport_uz', 'transport_kelish', 'bojxona_nds', 'yuklash_tushirish', 'saqlanish', 'ishchilar'];
-      const filteredExpenses = allExpenses.filter((exp: any) => chiqimTypes.includes(exp.xarajatTuri));
-      
-      setExpenses(filteredExpenses);
+      setExpenses(allExpenses);
     } catch (error: any) {
       console.error('Error fetching vagon expenses:', error);
       // Xarajatlar yuklanmasa ham modal ochilsin

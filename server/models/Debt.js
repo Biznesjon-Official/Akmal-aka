@@ -28,7 +28,18 @@ const debtSchema = new mongoose.Schema({
   client: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Client',
-    required: true
+    required: false // Bir martalik mijozlar uchun ixtiyoriy
+  },
+  // Bir martalik mijoz ma'lumotlari
+  one_time_client_name: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  one_time_client_phone: {
+    type: String,
+    trim: true,
+    required: false
   },
   vagon: {
     type: mongoose.Schema.Types.ObjectId,
@@ -39,6 +50,12 @@ const debtSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'VagonLot',
     required: true
+  },
+  // VagonSale reference (qaysi sotuvdan yaratilgan)
+  vagonSale: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'VagonSale',
+    required: false
   },
   // Sotish ma'lumotlari
   total_amount: {
@@ -105,6 +122,7 @@ const debtSchema = new mongoose.Schema({
 debtSchema.index({ client: 1, status: 1 });
 debtSchema.index({ vagon: 1 });
 debtSchema.index({ yogoch: 1 });
+debtSchema.index({ vagonSale: 1 });
 debtSchema.index({ status: 1, sale_date: -1 });
 debtSchema.index({ isDeleted: 1 });
 

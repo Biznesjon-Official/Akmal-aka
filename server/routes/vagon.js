@@ -45,7 +45,7 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
     const [total, vagons] = await Promise.all([
       Vagon.countDocuments(filter),
       Vagon.find(filter)
-        .select('vagonCode month sending_place receiving_place status total_volume_m3 total_loss_m3 available_volume_m3 sold_volume_m3 remaining_volume_m3 usd_total_cost usd_total_revenue usd_profit rub_total_cost rub_total_revenue rub_profit closure_date closure_reason closure_notes createdAt')
+        .select('vagonCode month sending_place receiving_place status total_volume_m3 total_loss_m3 available_volume_m3 sold_volume_m3 remaining_volume_m3 usd_total_cost usd_total_revenue usd_profit rub_total_cost rub_total_revenue rub_profit usd_cost_per_m3 rub_cost_per_m3 usd_sale_price_per_m3 rub_sale_price_per_m3 closure_date closure_reason closure_notes createdAt')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -126,13 +126,14 @@ router.get('/:id', auth, async (req, res) => {
       vagon: req.params.id, 
       isDeleted: false 
     })
-    .select('dimensions quantity volume_m3 loss_volume_m3 loss_responsible_person loss_reason loss_date warehouse_available_volume_m3 warehouse_dispatched_volume_m3 warehouse_remaining_volume_m3 purchase_currency purchase_amount total_investment realized_profit unrealized_value break_even_price_per_m3 remaining_quantity remaining_volume_m3')
+    .select('dimensions quantity volume_m3 loss_volume_m3 loss_responsible_person loss_reason loss_date warehouse_available_volume_m3 warehouse_dispatched_volume_m3 warehouse_remaining_volume_m3 purchase_currency purchase_amount total_investment realized_profit unrealized_value break_even_price_per_m3 remaining_quantity')
     .lean();
     
-    // Lotlarni vagon obyektiga qo'shish va backward compatibility uchun currency maydonini qo'shish
+    // Lotlarni vagon obyektiga qo'shish va backward compatibility uchun currency va remaining_volume_m3 maydonlarini qo'shish
     vagon.lots = lots.map(lot => ({
       ...lot,
-      currency: lot.purchase_currency // Backward compatibility
+      currency: lot.purchase_currency, // Backward compatibility
+      remaining_volume_m3: lot.warehouse_remaining_volume_m3 // Backward compatibility
     }));
     
     res.json(vagon);
@@ -224,15 +225,40 @@ router.post('/', auth, async (req, res) => {
       const {
         vagonCode, // Yangi field - qo'lda kiritish uchun
         month,
+        departure_date, // YANGI: Jo'natilgan sanasi
+        arrival_date, // YANGI: Yetib kelgan sanasi
         sending_place,
         receiving_place,
         notes
       } = req.body;
       
       // Validatsiya
-      if (!month || !sending_place || !receiving_place) {
+      if (!month || !sending_place || !receiving_place || !departure_date || !arrival_date) {
+        logger.error('Vagon validation failed:', {
+          month: !!month,
+          sending_place: !!sending_place,
+          receiving_place: !!receiving_place,
+          departure_date: !!departure_date,
+          arrival_date: !!arrival_date,
+          receivedData: req.body
+        });
+        
+        const missingFields = [];
+        if (!month) missingFields.push('month (oy)');
+        if (!sending_place) missingFields.push('sending_place (jo\'natish joyi)');
+        if (!receiving_place) missingFields.push('receiving_place (qabul qilish joyi)');
+        if (!departure_date) missingFields.push('departure_date (jo\'natilgan sanasi)');
+        if (!arrival_date) missingFields.push('arrival_date (yetib kelgan sanasi)');
+        
         return res.status(400).json({ 
-          message: 'Barcha majburiy maydonlar to\'ldirilishi shart' 
+          message: `Quyidagi maydonlar to'ldirilishi shart: ${missingFields.join(', ')}`,
+          missing: {
+            month: !month,
+            sending_place: !sending_place,
+            receiving_place: !receiving_place,
+            departure_date: !departure_date,
+            arrival_date: !arrival_date
+          }
         });
       }
       
@@ -281,15 +307,44 @@ router.post('/', auth, async (req, res) => {
           });
         }
       } else {
-        // Avtomatik generatsiya
+        // Avtomatik generatsiya - retry bilan
         const year = new Date().getFullYear();
-        finalVagonCode = await Vagon.generateVagonCode(year);
+        let codeGenerated = false;
+        let retryCount = 0;
+        const maxCodeRetries = 10;
+        
+        while (!codeGenerated && retryCount < maxCodeRetries) {
+          finalVagonCode = await Vagon.generateVagonCode(year);
+          
+          // Generatsiya qilingan kodning mavjudligini tekshirish
+          const existingVagon = await Vagon.findOne({ 
+            vagonCode: finalVagonCode, 
+            isDeleted: false 
+          });
+          
+          if (!existingVagon) {
+            codeGenerated = true;
+            console.log(`✅ Unique vagon kodi topildi: ${finalVagonCode} (${retryCount + 1} urinishda)`);
+          } else {
+            retryCount++;
+            console.log(`⚠️ Vagon kodi ${finalVagonCode} mavjud, qayta generatsiya qilinmoqda... (${retryCount}/${maxCodeRetries})`);
+            await new Promise(resolve => setTimeout(resolve, 50)); // Kichik kutish
+          }
+        }
+        
+        if (!codeGenerated) {
+          return res.status(500).json({ 
+            message: 'Unique vagon kodi yaratib bo\'lmadi. Iltimos, qaytadan urinib ko\'ring.' 
+          });
+        }
       }
       
       // Yangi vagon yaratish (lotlar keyinroq qo'shiladi)
       const vagon = new Vagon({
         vagonCode: finalVagonCode,
         month,
+        departure_date: new Date(departure_date), // YANGI
+        arrival_date: new Date(arrival_date), // YANGI
         sending_place,
         receiving_place,
         notes,
@@ -314,15 +369,28 @@ router.post('/', auth, async (req, res) => {
       
       // Boshqa xatolar yoki maksimal urinishlar tugagan
       logger.error('Vagon create error:', error);
+      logger.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       
       if (error.code === 11000) {
+        // Duplicate key error - qaysi maydon duplicate ekanligini aniqlash
+        const duplicateField = error.message.match(/index: (\w+)/)?.[1] || 'unknown';
+        logger.error('Duplicate field:', duplicateField);
+        
         return res.status(400).json({ 
-          message: 'Vagon yaratishda xatolik. Iltimos, qaytadan urinib ko\'ring.' 
+          message: `Vagon yaratishda xatolik: ${duplicateField} maydoni allaqachon mavjud. Iltimos, qaytadan urinib ko'ring.`,
+          error: 'DUPLICATE_KEY',
+          field: duplicateField
         });
       }
       
       return res.status(400).json({ 
-        message: error.message || 'Vagon yaratishda xatolik' 
+        message: error.message || 'Vagon yaratishda xatolik',
+        error: error.name || 'UNKNOWN_ERROR'
       });
     }
   }
@@ -351,7 +419,9 @@ router.put('/:id', auth, async (req, res) => {
       'sending_place',
       'receiving_place',
       'notes',
-      'status'
+      'status',
+      'usd_sale_price_per_m3', // YANGI
+      'rub_sale_price_per_m3'  // YANGI
     ];
     
     allowedUpdates.forEach(field => {
@@ -366,6 +436,52 @@ router.put('/:id', auth, async (req, res) => {
   } catch (error) {
     logger.error('Vagon update error:', error);
     res.status(400).json({ message: error.message });
+  }
+});
+
+// YANGI: Sotuv narxini yangilash
+router.patch('/:id/sale-price', auth, async (req, res) => {
+  try {
+    const { usd_sale_price_per_m3, rub_sale_price_per_m3 } = req.body;
+    
+    const vagon = await Vagon.findOne({ 
+      _id: req.params.id, 
+      isDeleted: false 
+    });
+    
+    if (!vagon) {
+      return res.status(404).json({ message: 'Vagon topilmadi' });
+    }
+    
+    // Sotuv narxini yangilash
+    if (usd_sale_price_per_m3 !== undefined) {
+      vagon.usd_sale_price_per_m3 = parseFloat(usd_sale_price_per_m3) || 0;
+    }
+    
+    if (rub_sale_price_per_m3 !== undefined) {
+      vagon.rub_sale_price_per_m3 = parseFloat(rub_sale_price_per_m3) || 0;
+    }
+    
+    await vagon.save();
+    
+    logger.info(`✅ Vagon sotuv narxi yangilandi: ${vagon.vagonCode}`);
+    logger.info(`   USD: ${vagon.usd_sale_price_per_m3} USD/m³`);
+    logger.info(`   RUB: ${vagon.rub_sale_price_per_m3} RUB/m³`);
+    
+    res.json({
+      message: 'Sotuv narxi yangilandi',
+      vagon: {
+        _id: vagon._id,
+        vagonCode: vagon.vagonCode,
+        usd_cost_per_m3: vagon.usd_cost_per_m3,
+        rub_cost_per_m3: vagon.rub_cost_per_m3,
+        usd_sale_price_per_m3: vagon.usd_sale_price_per_m3,
+        rub_sale_price_per_m3: vagon.rub_sale_price_per_m3
+      }
+    });
+  } catch (error) {
+    logger.error('Sale price update error:', error);
+    res.status(500).json({ message: 'Sotuv narxini yangilashda xatolik' });
   }
 });
 
@@ -400,9 +516,9 @@ router.delete('/:id', auth, async (req, res) => {
           { session }
         );
         
-        // Vagonni o'chirish
+        // CRITICAL FIX: Vagonni o'chirish - validatsiyasiz (eski vagonlar uchun)
         vagon.isDeleted = true;
-        await vagon.save({ session });
+        await vagon.save({ session, validateBeforeSave: false });
       });
       
       // CRITICAL FIX: Cache invalidation qo'shish

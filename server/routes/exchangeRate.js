@@ -1,165 +1,153 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
-const ExchangeRate = require('../models/ExchangeRate');
-const exchangeRateService = require('../services/exchangeRateService');
-const auth = require('../middleware/auth');
-
 const router = express.Router();
+const auth = require('../middleware/auth');
+const { 
+  getActiveExchangeRate, 
+  setExchangeRate, 
+  getAllActiveRates, 
+  getRateHistory 
+} = require('../utils/exchangeRateHelper');
 
-// Barcha valyuta kurslarini olish (database + real-time)
-router.get('/', auth, async (req, res) => {
+/**
+ * @route   GET /api/exchange-rate/current
+ * @desc    Joriy faol kurslarni olish
+ * @access  Private
+ */
+router.get('/current', auth, async (req, res) => {
   try {
-    const rates = await exchangeRateService.getCurrentRates();
+    const rates = await getAllActiveRates();
     
     res.json({
-      database: rates.database,
-      realTime: rates.realTime,
-      lastFetch: rates.lastFetch
+      success: true,
+      data: rates
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
+    console.error('Kurslarni olishda xatolik:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Kurslarni olishda xatolik yuz berdi',
+      error: error.message
+    });
   }
 });
 
-// Real-time kurslarni yangilash (faqat admin)
-router.post('/update-realtime', [auth, auth.adminOnly], async (req, res) => {
+/**
+ * @route   GET /api/exchange-rate/rate
+ * @desc    Muayyan valyuta juftligi uchun kursni olish
+ * @access  Private
+ */
+router.get('/rate', auth, async (req, res) => {
   try {
-    const realTimeRates = await exchangeRateService.fetchRealTimeRates();
+    const { from_currency, to_currency } = req.query;
     
-    if (!realTimeRates) {
-      return res.status(503).json({ 
-        message: 'Real-time API dan ma\'lumot olib bo\'lmadi' 
+    if (!from_currency || !to_currency) {
+      return res.status(400).json({
+        success: false,
+        message: 'from_currency va to_currency parametrlari kiritilishi shart'
       });
     }
-
-    const success = await exchangeRateService.updateDatabaseRates(
-      realTimeRates, 
-      req.user.userId
-    );
-
-    if (success) {
-      const updatedRates = await ExchangeRate.find()
-        .populate('updatedBy', 'username')
-        .sort({ currency: 1 });
-
-      res.json({
-        message: 'Real-time kurslar muvaffaqiyatli yangilandi',
-        rates: updatedRates,
-        realTimeData: realTimeRates
-      });
-    } else {
-      res.status(500).json({ message: 'Kurslarni yangilashda xatolik' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
-  }
-});
-
-// Avtomatik yangilashni yoqish/o'chirish (faqat admin)
-router.post('/auto-update', [auth, auth.adminOnly], async (req, res) => {
-  try {
-    const { enable } = req.body;
-
-    if (enable) {
-      exchangeRateService.startAutoUpdate(req.user.userId);
-      res.json({ message: 'Avtomatik yangilash yoqildi' });
-    } else {
-      exchangeRateService.stopAutoUpdate();
-      res.json({ message: 'Avtomatik yangilash o\'chirildi' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
-  }
-});
-
-// Faqat real-time kurslarni olish
-router.get('/realtime', auth, async (req, res) => {
-  try {
-    const realTimeRates = await exchangeRateService.fetchRealTimeRates();
     
-    if (!realTimeRates) {
-      return res.status(503).json({ 
-        message: 'Real-time API dan ma\'lumot olib bo\'lmadi' 
-      });
-    }
-
-    res.json(realTimeRates);
-  } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
-  }
-});
-// Valyuta kursini qo'lda yangilash yoki yaratish (faqat admin)
-router.post('/', [auth, auth.adminOnly, [
-  body('currency').isIn(['USD', 'RUB', 'UZS']).withMessage('Noto\'g\'ri valyuta'),
-  body('rate').isNumeric().withMessage('Kurs raqam bo\'lishi kerak').isFloat({ min: 0 }).withMessage('Kurs musbat bo\'lishi kerak')
-]], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { currency, rate } = req.body;
-
-    // Mavjud kursni yangilash yoki yangi yaratish (qo'lda)
-    const exchangeRate = await ExchangeRate.findOneAndUpdate(
-      { currency },
-      { 
-        rate, 
-        lastUpdated: new Date(),
-        updatedBy: req.user.userId,
-        isRealTime: false,
-        source: 'manual'
-      },
-      { 
-        new: true, 
-        upsert: true,
-        runValidators: true 
+    const rate = await getActiveExchangeRate(from_currency, to_currency);
+    
+    res.json({
+      success: true,
+      data: {
+        from_currency,
+        to_currency,
+        rate
       }
-    ).populate('updatedBy', 'username');
-
-    res.json(exchangeRate);
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
+    console.error('Kursni olishda xatolik:', error);
+    res.status(404).json({
+      success: false,
+      message: error.message
+    });
   }
 });
 
-// Bitta valyuta kursini olish
-router.get('/:currency', auth, async (req, res) => {
+/**
+ * @route   POST /api/exchange-rate
+ * @desc    Yangi valyuta kursini o'rnatish
+ * @access  Private (Admin only)
+ */
+router.post('/', auth, async (req, res) => {
   try {
-    const { currency } = req.params;
-    
-    if (!['USD', 'RUB', 'UZS'].includes(currency.toUpperCase())) {
-      return res.status(400).json({ message: 'Noto\'g\'ri valyuta' });
-    }
-
-    const rate = await ExchangeRate.findOne({ currency: currency.toUpperCase() })
-      .populate('updatedBy', 'username');
-    
-    if (!rate) {
-      return res.status(404).json({ message: 'Valyuta kursi topilmadi' });
+    // Admin tekshirish
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Faqat admin valyuta kursini o\'rnatishi mumkin'
+      });
     }
     
-    res.json(rate);
+    const { from_currency, to_currency, rate, notes } = req.body;
+    
+    if (!from_currency || !to_currency || !rate) {
+      return res.status(400).json({
+        success: false,
+        message: 'from_currency, to_currency va rate kiritilishi shart'
+      });
+    }
+    
+    // Rate'ni number'ga o'tkazish
+    const rateNumber = typeof rate === 'string' ? parseFloat(rate) : rate;
+    
+    if (isNaN(rateNumber) || rateNumber <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Kurs 0 dan katta bo\'lishi kerak'
+      });
+    }
+    
+    const newRate = await setExchangeRate(
+      from_currency, 
+      to_currency, 
+      rateNumber, 
+      req.user.userId || req.user._id, // JWT'da userId sifatida saqlanadi
+      notes
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: 'Valyuta kursi muvaffaqiyatli o\'rnatildi',
+      data: newRate
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
+    console.error('Kursni o\'rnatishda xatolik:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
   }
 });
 
-// Valyuta kursini o'chirish (faqat admin)
-router.delete('/:currency', [auth, auth.adminOnly], async (req, res) => {
+/**
+ * @route   GET /api/exchange-rate/history
+ * @desc    Kurs tarixini olish
+ * @access  Private
+ */
+router.get('/history', auth, async (req, res) => {
   try {
-    const { currency } = req.params;
+    const { from_currency, to_currency, limit } = req.query;
     
-    const rate = await ExchangeRate.findOneAndDelete({ currency: currency.toUpperCase() });
+    const history = await getRateHistory(
+      from_currency, 
+      to_currency, 
+      limit ? parseInt(limit) : 50
+    );
     
-    if (!rate) {
-      return res.status(404).json({ message: 'Valyuta kursi topilmadi' });
-    }
-    
-    res.json({ message: 'Valyuta kursi o\'chirildi' });
+    res.json({
+      success: true,
+      data: history
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server xatosi', error: error.message });
+    console.error('Kurs tarixini olishda xatolik:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Kurs tarixini olishda xatolik yuz berdi',
+      error: error.message
+    });
   }
 });
 

@@ -13,6 +13,12 @@ export function useTranslatedNavigation() {
       gradient: 'from-green-500 to-green-600' 
     },
     { 
+      name: 'Valyuta O\'tkazish', 
+      href: '/currency-transfer', 
+      icon: <Icon name="exchange" size="sm" />,
+      gradient: 'from-blue-500 to-blue-600' 
+    },
+    { 
       name: 'Qarz Daftarcha', 
       href: '/debt', 
       icon: <Icon name="credit-card" size="sm" />,

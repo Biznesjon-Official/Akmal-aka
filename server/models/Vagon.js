@@ -6,11 +6,29 @@ const vagonSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Vagon kodi kiritilishi shart'],
     unique: true,
-    trim: true
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return /^\d{9}$/.test(v); // Faqat 9 ta raqam
+      },
+      message: 'Vagon kodi 9 ta raqamdan iborat bo\'lishi kerak'
+    }
   },
   month: {
     type: String,  // Format: "2024-01"
     required: [true, 'Oy kiritilishi shart']
+  },
+  // YANGI: Jo'natilgan sanasi
+  departure_date: {
+    type: Date,
+    required: [true, 'Jo\'natilgan sanasi kiritilishi shart'],
+    comment: 'Vagon jo\'natilgan sana'
+  },
+  // YANGI: Yetib kelgan sanasi
+  arrival_date: {
+    type: Date,
+    required: [true, 'Yetib kelgan sanasi kiritilishi shart'],
+    comment: 'Vagon yetib kelgan sana'
   },
   sending_place: {
     type: String,
@@ -92,6 +110,32 @@ const vagonSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     comment: 'RUB da foyda'
+  },
+  
+  // YANGI: Tannarx va sotuv narxi (m³ uchun)
+  usd_cost_per_m3: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'USD da tannarx (1 m³ uchun) = Jami xarajat / Jami hajm'
+  },
+  rub_cost_per_m3: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'RUB da tannarx (1 m³ uchun) = Jami xarajat / Jami hajm'
+  },
+  usd_sale_price_per_m3: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'USD da sotuv narxi (1 m³ uchun) - foydalanuvchi kiritadi'
+  },
+  rub_sale_price_per_m3: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'RUB da sotuv narxi (1 m³ uchun) - foydalanuvchi kiritadi'
   },
   
   // Holat (YANGI MEXANIZM)

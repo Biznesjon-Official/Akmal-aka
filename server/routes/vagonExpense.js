@@ -103,10 +103,11 @@ router.post('/', auth, async (req, res) => {
     });
 
     let expense;
+    let isNewExpense = false;
     
     if (existingExpense) {
-      // Mavjud xarajatni yangilash - summani qo'shish
-      existingExpense.amount += amount;
+      // Mavjud xarajatni yangilash - summani ALMASHTIRISH (qo'shish emas!)
+      existingExpense.amount = amount; // TUZATILDI: += emas, = ishlatiladi
       if (description) {
         existingExpense.description = description;
       }
@@ -128,16 +129,50 @@ router.post('/', auth, async (req, res) => {
       });
       
       await expense.save();
+      isNewExpense = true;
       console.log(`✅ Yangi xarajat yaratildi: ${expense_type} - ${currency} ${amount}`);
     }
+    
+    // YANGI: Cash (Kassa) ga xarajatni yozish
+    const Cash = require('../models/Cash');
+    
+    // Xarajat turini Cash uchun moslashtirish
+    let cashExpenseType = 'firma_xarajatlari'; // Default
+    if (expense_type === 'wood_purchase' || expense_type === 'yogoch_xaridi') {
+      cashExpenseType = 'yogoch_sotib_olish';
+    } else if (expense_type === 'uz_customs' || expense_type === 'uz_bojxona') {
+      cashExpenseType = 'bojxona_nds';
+    } else if (expense_type === 'kz_customs' || expense_type === 'kz_bojxona') {
+      cashExpenseType = 'bojxona_nds';
+    } else if (expense_type === 'transport') {
+      cashExpenseType = 'transport_kz';
+    } else if (expense_type === 'other' || expense_type === 'boshqa') {
+      cashExpenseType = 'firma_xarajatlari';
+    }
+    
+    const cashEntry = new Cash({
+      type: 'expense',
+      vagon: vagon,
+      yogoch: lot || null,
+      currency: currency,
+      amount: amount,
+      expense_type: cashExpenseType,
+      description: description || `Vagon xarajati: ${expense_type}`,
+      transaction_date: expense_date || Date.now(),
+      createdBy: req.user.userId
+    });
+    
+    await cashEntry.save();
+    console.log(`💰 Cash ga xarajat yozildi: ${currency} ${amount}`);
     
     // Lot xarajatini yangilash
     if (lot) {
       await updateLotExpenses(lot);
     }
     
-    // Vagon jami ma'lumotlarini yangilash
-    await updateVagonTotals(vagon);
+    // YANGI: Vagon jami ma'lumotlarini yangilash (tannarx bilan)
+    const { recalculateVagonTotals } = require('../utils/vagonTotalsSync');
+    await recalculateVagonTotals(vagon);
     
     // Populate qilib qaytarish
     await expense.populate('vagon', 'vagonCode month');
@@ -164,6 +199,11 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Xarajat topilmadi' });
     }
     
+    // Eski qiymatlarni saqlash (Cash yangilash uchun)
+    const oldAmount = expense.amount;
+    const oldCurrency = expense.currency;
+    const oldDate = expense.expense_date;
+    
     // Yangilanishi mumkin bo'lgan maydonlar
     const allowedUpdates = [
       'expense_type',
@@ -180,11 +220,49 @@ router.put('/:id', auth, async (req, res) => {
     
     await expense.save();
     
+    // YANGI: Cash ni ham yangilash
+    const Cash = require('../models/Cash');
+    
+    // Eski Cash entry ni topish - vagon va expense_type bo'yicha
+    const cashEntry = await Cash.findOne({
+      type: 'expense',
+      vagon: expense.vagon,
+      currency: oldCurrency,
+      amount: oldAmount,
+      isDeleted: false
+    }).sort({ createdAt: -1 }); // Eng oxirgi yozuvni olish
+    
+    if (cashEntry) {
+      // Cash entry ni yangilash
+      cashEntry.amount = expense.amount;
+      cashEntry.currency = expense.currency;
+      cashEntry.description = expense.description || cashEntry.description;
+      cashEntry.transaction_date = expense.expense_date;
+      await cashEntry.save();
+      console.log(`💰 Cash yangilandi: ${oldCurrency} ${oldAmount} → ${expense.currency} ${expense.amount}`);
+    } else {
+      console.warn(`⚠️ Cash entry topilmadi, yangi yaratilmoqda`);
+      // Agar topilmasa, yangi yaratish
+      const newCashEntry = new Cash({
+        type: 'expense',
+        vagon: expense.vagon,
+        yogoch: expense.lot || null,
+        currency: expense.currency,
+        amount: expense.amount,
+        expense_type: 'firma_xarajatlari',
+        description: expense.description || `Vagon xarajati: ${expense.expense_type}`,
+        transaction_date: expense.expense_date,
+        createdBy: req.user.userId
+      });
+      await newCashEntry.save();
+    }
+    
     // Lot va vagonni yangilash
     if (expense.lot) {
       await updateLotExpenses(expense.lot);
     }
-    await updateVagonTotals(expense.vagon);
+    const { recalculateVagonTotals } = require('../utils/vagonTotalsSync');
+    await recalculateVagonTotals(expense.vagon);
     
     res.json(expense);
   } catch (error) {
@@ -208,11 +286,35 @@ router.delete('/:id', auth, async (req, res) => {
     expense.isDeleted = true;
     await expense.save();
     
+    // YANGI: Cash dan ham o'chirish (soft delete)
+    const Cash = require('../models/Cash');
+    
+    // Bu xarajatga mos Cash entry ni topish va o'chirish
+    // Vagon, currency, amount va sana bo'yicha qidirish
+    const cashEntry = await Cash.findOne({
+      type: 'expense',
+      vagon: expense.vagon,
+      currency: expense.currency,
+      amount: expense.amount,
+      isDeleted: false,
+      transaction_date: {
+        $gte: new Date(expense.expense_date.getTime() - 1000), // 1 sekund oldin
+        $lte: new Date(expense.expense_date.getTime() + 1000)  // 1 sekund keyin
+      }
+    });
+    
+    if (cashEntry) {
+      cashEntry.isDeleted = true;
+      await cashEntry.save();
+      console.log(`💰 Cash dan xarajat o'chirildi: ${expense.currency} ${expense.amount}`);
+    }
+    
     // Lot va vagonni yangilash
     if (expense.lot) {
       await updateLotExpenses(expense.lot);
     }
-    await updateVagonTotals(expense.vagon);
+    const { recalculateVagonTotals } = require('../utils/vagonTotalsSync');
+    await recalculateVagonTotals(expense.vagon);
     
     res.json({ message: 'Xarajat o\'chirildi' });
   } catch (error) {
@@ -231,15 +333,35 @@ async function updateLotExpenses(lotId) {
     isDeleted: false 
   });
   
-  const totalExpenses = expenses.reduce((sum, exp) => {
-    if (exp.currency === lot.purchase_currency) {
-      return sum + exp.amount;
-    }
-    return sum;
-  }, 0);
+  // YANGI: Xarajatlarni valyuta bo'yicha ajratish
+  let usdExpenses = 0;
+  let rubExpenses = 0;
   
-  lot.total_expenses = lot.purchase_amount + totalExpenses;
+  expenses.forEach(exp => {
+    if (exp.currency === 'USD') {
+      usdExpenses += exp.amount;
+    } else if (exp.currency === 'RUB') {
+      rubExpenses += exp.amount;
+    }
+  });
+  
+  // MUHIM: Yo'g'och xaridi RUB da, qo'shimcha xarajatlar USD da
+  // allocated_expenses - faqat USD xarajatlar
+  lot.allocated_expenses = usdExpenses;
+  
+  // Agar RUB xarajatlar bo'lsa, ularni purchase_amount ga qo'shish
+  if (rubExpenses > 0) {
+    lot.purchase_amount = (lot.purchase_amount || 0) + rubExpenses;
+  }
+  
+  // Backward compatibility
+  lot.total_expenses = lot.purchase_amount + usdExpenses;
+  
   await lot.save();
+  
+  console.log(`✅ Lot xarajatlari yangilandi: ${lot.dimensions}`);
+  console.log(`   Yo'g'och (RUB): ${lot.purchase_amount} RUB`);
+  console.log(`   Qo'shimcha (USD): ${usdExpenses} USD`);
 }
 
 // Helper function: Vagon jami ma'lumotlarini yangilash

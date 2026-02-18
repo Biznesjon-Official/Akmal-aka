@@ -15,8 +15,29 @@ import Modal, { ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import FormattedInput from '@/components/FormattedInput';
 import ClientAutocomplete from '@/components/ui/ClientAutocomplete';
+import VagonCheckboxSelector from '@/components/cash/VagonCheckboxSelector';
+import { Wallet, TrendingUp, TrendingDown, DollarSign, List, Inbox } from 'lucide-react';
 
 // Types
+interface SelectedYogochCheckbox {
+  yogoch_id: string;
+  yogoch_name: string;
+  available_volume_m3: number;
+  available_quantity: number; // Mavjud dona soni
+  selected_quantity: string; // Foydalanuvchi kiritadigan YAGONA maydon
+  price_per_m3: number; // Oldindan belgilangan m³ narxi (o'zgarmas)
+  volume_per_piece: number; // Bir dona hajmi
+  calculated_volume_m3: number; // Avtomatik hisoblangan m³
+  total_price: number;
+}
+
+interface SelectedVagonCheckbox {
+  vagon_id: string;
+  vagon_code: string;
+  selected: boolean;
+  yogochlar: SelectedYogochCheckbox[];
+}
+
 interface IncomeFormData {
   income_source: 'yogoch_tolovi' | 'qarz_daftarcha' | 'yetkazib_berish';
   amount: string;
@@ -24,16 +45,18 @@ interface IncomeFormData {
   description: string;
   client_id: string;
   date: string;
+  // Yetkazib berish uchun
   vagon_id: string;
-  yogoch_id: string;
   // Bir martalik mijoz uchun
   one_time_client_name: string;
   one_time_client_phone: string;
-  client_type: 'existing' | 'one_time'; // Mijoz turi
+  client_type: 'existing' | 'one_time';
   // Yogoch tolovi uchun qo'shimcha
-  total_price: string; // Jami narx (qarz)
+  total_price: string; // Jami narx (avtomatik hisoblanadi)
   paid_amount: string; // Hozir to'lanayotgan summa
-  sold_quantity: string; // Sotilgan miqdor (dona)
+  // Checkbox tanlash
+  use_checkbox_selection: boolean;
+  selected_vagons_checkbox: SelectedVagonCheckbox[];
 }
 
 interface ExpenseFormData {
@@ -66,13 +89,13 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
     client_id: '',
     date: new Date().toISOString().split('T')[0],
     vagon_id: '',
-    yogoch_id: '',
     one_time_client_name: '',
     one_time_client_phone: '',
     client_type: 'existing',
     total_price: '',
     paid_amount: '',
-    sold_quantity: ''
+    use_checkbox_selection: false,
+    selected_vagons_checkbox: []
   });
   const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,17 +110,17 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
     enabled: isOpen // Modal ochilganda yuklanadi
   });
 
-  // Vagonlar ro'yxati (faqat yogoch_tolovi va yetkazib_berish uchun)
+  // Vagonlar ro'yxati (faqat yetkazib_berish uchun - yogoch_tolovi checkbox ishlatadi)
   const { data: vagons = [], isLoading: vagonsLoading } = useQuery({
     queryKey: ['vagons-for-income'],
     queryFn: async () => {
       const response = await axios.get('/vagon?limit=100&status=active');
       return response.data.vagons || [];
     },
-    enabled: isOpen && (formData.income_source === 'yogoch_tolovi' || formData.income_source === 'yetkazib_berish')
+    enabled: isOpen && formData.income_source === 'yetkazib_berish'
   });
 
-  // Yog'ochlar ro'yxati (vagon tanlanganida, yogoch_tolovi va yetkazib_berish uchun)
+  // Yog'ochlar ro'yxati (faqat yetkazib_berish uchun - yogoch_tolovi checkbox ishlatadi)
   const { data: yogochlar = [] } = useQuery({
     queryKey: ['yogochlar-for-income', formData.vagon_id],
     queryFn: async () => {
@@ -105,7 +128,7 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
       const response = await axios.get(`/vagon-lot?vagon=${formData.vagon_id}`);
       return response.data || [];
     },
-    enabled: !!formData.vagon_id && (formData.income_source === 'yogoch_tolovi' || formData.income_source === 'yetkazib_berish')
+    enabled: !!formData.vagon_id && formData.income_source === 'yetkazib_berish'
   });
 
   const saveMutation = useMutation({
@@ -116,13 +139,43 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
       }
       setIsSubmitting(true);
       
-      // Yogoch tolovi uchun amount va currency ni paid_amount dan olish
-      const finalAmount = data.income_source === 'yogoch_tolovi' 
-        ? parseFloat(data.paid_amount) 
-        : parseFloat(data.amount);
-      const finalCurrency = data.income_source === 'yogoch_tolovi' 
-        ? 'USD' 
-        : data.currency;
+      // Checkbox bilan ko'p vagonli sotuv
+      if (data.income_source === 'yogoch_tolovi' && data.use_checkbox_selection) {
+        // Checkbox'dan sale_items yaratish
+        const saleItems: any[] = [];
+        data.selected_vagons_checkbox.forEach(vagon => {
+          vagon.yogochlar.forEach(yogoch => {
+            if (yogoch.selected_quantity && parseFloat(yogoch.selected_quantity) > 0) {
+              saleItems.push({
+                vagon_id: vagon.vagon_id,
+                yogoch_id: yogoch.yogoch_id,
+                sale_unit: 'pieces',
+                sent_quantity: parseFloat(yogoch.selected_quantity),
+                volume_m3: yogoch.calculated_volume_m3,
+                price_per_m3: yogoch.price_per_m3
+              });
+            }
+          });
+        });
+        
+        return await axios.post('/cash/income', {
+          income_source: data.income_source,
+          is_multi_sale: true,
+          sale_items: saleItems,
+          paid_amount: data.paid_amount ? parseFloat(data.paid_amount) : 0,
+          description: data.description.trim(),
+          client_id: data.client_id || null,
+          client_type: data.client_type,
+          one_time_client_name: data.one_time_client_name?.trim() || null,
+          one_time_client_phone: data.one_time_client_phone?.trim() || null,
+          date: data.date,
+          currency: 'USD'
+        });
+      }
+      
+      // Boshqa daromad turlari (qarz daftarcha, yetkazib berish)
+      const finalAmount = parseFloat(data.amount);
+      const finalCurrency = data.currency;
       
       return await axios.post('/cash/income', {
         income_source: data.income_source,
@@ -131,15 +184,7 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
         description: data.description.trim(),
         client_id: data.client_id || null,
         date: data.date,
-        vagon_id: data.vagon_id || null,
-        yogoch_id: data.yogoch_id || null,
-        client_type: data.client_type,
-        one_time_client_name: data.one_time_client_name?.trim() || null,
-        one_time_client_phone: data.one_time_client_phone?.trim() || null,
-        // Yogoch tolovi uchun qo'shimcha
-        total_price: data.total_price ? parseFloat(data.total_price) : null,
-        paid_amount: data.paid_amount ? parseFloat(data.paid_amount) : null,
-        sold_quantity: data.sold_quantity ? parseInt(data.sold_quantity) : null
+        vagon_id: data.vagon_id || null // Yetkazib berish uchun
       });
     },
     onSuccess: () => {
@@ -174,13 +219,13 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
       client_id: '',
       date: new Date().toISOString().split('T')[0],
       vagon_id: '',
-      yogoch_id: '',
       one_time_client_name: '',
       one_time_client_phone: '',
       client_type: 'existing',
       total_price: '',
       paid_amount: '',
-      sold_quantity: ''
+      use_checkbox_selection: false,
+      selected_vagons_checkbox: []
     });
     setErrors([]);
   };
@@ -211,7 +256,7 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
       newErrors.push('Qarz daftarcha uchun mijoz tanlanishi shart');
     }
     
-    // Yogoch tolovi uchun mijoz majburiy (ClientAutocomplete o'zi validation qiladi)
+    // Yogoch tolovi uchun mijoz majburiy
     if (formData.income_source === 'yogoch_tolovi') {
       if (!formData.client_id && !formData.one_time_client_name) {
         newErrors.push('Yogoch tolovi uchun mijoz tanlanishi shart');
@@ -220,31 +265,56 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
         newErrors.push('Bir martalik mijoz uchun telefon raqami kiritilishi shart');
       }
       
-      // Yogoch tolovi uchun qo'shimcha validatsiya
-      if (!formData.sold_quantity || parseInt(formData.sold_quantity) <= 0) {
-        newErrors.push('Sotilgan miqdor 0 dan katta bo\'lishi shart');
+      // Checkbox bilan ko'p vagonli sotuv validatsiyasi
+      if (formData.use_checkbox_selection) {
+        let selectedCount = 0;
+        formData.selected_vagons_checkbox.forEach(vagon => {
+          vagon.yogochlar.forEach(yogoch => {
+            if (yogoch.selected_quantity && parseFloat(yogoch.selected_quantity) > 0) {
+              selectedCount++;
+              
+              const quantity = parseFloat(yogoch.selected_quantity);
+              
+              if (quantity > yogoch.available_quantity) {
+                newErrors.push(
+                  `${vagon.vagon_code} - ${yogoch.yogoch_name}: ` +
+                  `Mavjud dona (${yogoch.available_quantity}) yetarli emas`
+                );
+              }
+              
+              if (yogoch.price_per_m3 <= 0) {
+                newErrors.push(
+                  `${vagon.vagon_code} - ${yogoch.yogoch_name}: ` +
+                  `Sotuv narxi belgilanmagan`
+                );
+              }
+            }
+          });
+        });
+        
+        if (selectedCount === 0) {
+          newErrors.push('Kamida 1 ta yog\'och tanlang va dona sonini kiriting');
+        }
+        
+        const totalPrice = formData.selected_vagons_checkbox.reduce((sum, vagon) => {
+          return sum + vagon.yogochlar.reduce((vSum, yogoch) => {
+            return vSum + (yogoch.total_price || 0);
+          }, 0);
+        }, 0);
+        
+        const paidAmount = parseFloat(formData.paid_amount) || 0;
+        
+        if (paidAmount < 0) {
+          newErrors.push('To\'lov summasi 0 dan kichik bo\'lmasin');
+        }
+        
+        if (paidAmount > totalPrice) {
+          newErrors.push('To\'lov summasi jami narxdan katta bo\'lmasin');
+        }
+      } else {
+        // Agar checkbox ishlatilmasa, xabar berish
+        newErrors.push('Yogoch sotish uchun "Ko\'p vagondan bir nechta yog\'och sotish" checkboxini belgilang');
       }
-      
-      if (!formData.total_price || parseFloat(formData.total_price) <= 0) {
-        newErrors.push('Jami narx 0 dan katta bo\'lishi shart');
-      }
-      
-      if (!formData.paid_amount || parseFloat(formData.paid_amount) < 0) {
-        newErrors.push('To\'lov summasi 0 dan kichik bo\'lmasin');
-      }
-      
-      if (formData.total_price && formData.paid_amount && parseFloat(formData.paid_amount) > parseFloat(formData.total_price)) {
-        newErrors.push('To\'lov summasi jami narxdan katta bo\'lmasin');
-      }
-    }
-    
-    // Yogoch tolovi uchun vagon va yogoch majburiy
-    if (formData.income_source === 'yogoch_tolovi' && !formData.vagon_id) {
-      newErrors.push('Yogoch tolovi uchun vagon tanlanishi shart');
-    }
-    
-    if (formData.income_source === 'yogoch_tolovi' && formData.vagon_id && !formData.yogoch_id) {
-      newErrors.push('Yogoch tolovi uchun yog\'och tanlanishi shart');
     }
     
     // Yetkazib berish uchun faqat vagon majburiy (yogoch ixtiyoriy)
@@ -335,126 +405,96 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
               </div>
             </div>
 
-            {/* Vagon tanlash (yogoch_tolovi va yetkazib_berish uchun) */}
-            {(formData.income_source === 'yogoch_tolovi' || formData.income_source === 'yetkazib_berish') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Vagon *
-                </label>
-                <select
-                  value={formData.vagon_id}
-                  onChange={(e) => {
-                    setFormData({...formData, vagon_id: e.target.value, yogoch_id: ''});
-                  }}
-                  className="input-field"
-                  required
-                >
-                  <option value="">Vagonni tanlang</option>
-                  {vagons.map((vagon: any) => (
-                    <option key={vagon._id} value={vagon._id}>
-                      {vagon.vagonCode} - {vagon.sending_place} → {vagon.receiving_place}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Yog'och tanlash (vagon tanlanganida) */}
-            {(formData.income_source === 'yogoch_tolovi' || formData.income_source === 'yetkazib_berish') && formData.vagon_id && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Yog'och {formData.income_source === 'yogoch_tolovi' ? '*' : '(ixtiyoriy)'}
-                </label>
-                <select
-                  value={formData.yogoch_id}
-                  onChange={(e) => setFormData({...formData, yogoch_id: e.target.value})}
-                  className="input-field"
-                  required={formData.income_source === 'yogoch_tolovi'}
-                >
-                  <option value="">Yog'ochni tanlang</option>
-                  {yogochlar.map((yogoch: any) => (
-                    <option key={yogoch._id} value={yogoch._id}>
-                      {yogoch.name || yogoch.dimensions} - {yogoch.quantity} dona ({yogoch.volume_m3.toFixed(2)} m³)
-                    </option>
-                  ))}
-                </select>
-                {yogochlar.length === 0 && formData.vagon_id && (
-                  <p className="text-sm text-gray-500 mt-1">Bu vagonda yog'ochlar mavjud emas</p>
-                )}
-              </div>
-            )}
-
-            {/* Yog'och sotuvlari uchun qo'shimcha maydonlar */}
-            {formData.income_source === 'yogoch_tolovi' && formData.yogoch_id && (
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
-                <h4 className="text-sm font-semibold text-blue-900 flex items-center">
-                  <Icon name="package" className="h-4 w-4 mr-2" />
-                  Yog'och sotuvlari ma'lumotlari
-                </h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Sotilgan miqdor (dona) *
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={formData.sold_quantity || ''}
-                      onChange={(e) => setFormData({...formData, sold_quantity: e.target.value})}
-                      placeholder="10"
-                      className="input-field"
-                      required
-                    />
+            {/* Ko'p vagonli sotuv checkbox toggle (faqat yogoch_tolovi uchun) */}
+            {formData.income_source === 'yogoch_tolovi' && (
+              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.use_checkbox_selection}
+                    onChange={(e) => {
+                      const useCheckbox = e.target.checked;
+                      setFormData({
+                        ...formData, 
+                        use_checkbox_selection: useCheckbox,
+                        // Checkbox tanlanganda barcha maydonlarni tozalash
+                        selected_vagons_checkbox: useCheckbox ? formData.selected_vagons_checkbox : []
+                      });
+                    }}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <div className="ml-3">
+                    <span className="text-sm font-semibold text-gray-900">
+                      Ko'p vagondan bir nechta yog'och sotish
+                    </span>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Checkbox bilan vagon va yog'ochlarni tanlash (m³ da)
+                    </p>
                   </div>
-                  
-                  <div>
+                </label>
+              </div>
+            )}
+
+            {/* YANGI: Checkbox selector */}
+            {formData.income_source === 'yogoch_tolovi' && formData.use_checkbox_selection && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Vagon va yog'ochlarni tanlang *
+                </label>
+                <VagonCheckboxSelector
+                  selectedVagons={formData.selected_vagons_checkbox}
+                  onChange={(vagons) => {
+                    // Jami narxni hisoblash
+                    const total = vagons.reduce((sum, vagon) => {
+                      return sum + vagon.yogochlar.reduce((vSum, yogoch) => {
+                        return vSum + (yogoch.total_price || 0);
+                      }, 0);
+                    }, 0);
+                    setFormData({
+                      ...formData,
+                      selected_vagons_checkbox: vagons,
+                      total_price: total.toString()
+                    });
+                  }}
+                  currency="USD"
+                />
+                
+                {/* To'lov summasi (checkbox tanlanganda) */}
+                {formData.selected_vagons_checkbox.length > 0 && (
+                  <div className="mt-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Jami narx (USD) *
+                      Hozir to'lanayotgan summa (USD) *
                     </label>
                     <FormattedInput
-                      value={formData.total_price}
-                      onChange={(value) => setFormData({...formData, total_price: value})}
-                      placeholder="5000.00"
+                      value={formData.paid_amount}
+                      onChange={(value) => setFormData({...formData, paid_amount: value})}
+                      placeholder="0.00"
                       required
                     />
+                    {formData.total_price && formData.paid_amount && (
+                      <div className="mt-2 text-sm">
+                        {parseFloat(formData.paid_amount || '0') < parseFloat(formData.total_price || '0') ? (
+                          <div className="text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                            <Icon name="alert-triangle" className="h-4 w-4 inline mr-1" />
+                            Qarz: {formatCurrency(parseFloat(formData.total_price) - parseFloat(formData.paid_amount), 'USD')}
+                            <br />
+                            <span className="text-xs">Bu mijoz avtomatik qarz daftarchaga qo'shiladi</span>
+                          </div>
+                        ) : parseFloat(formData.paid_amount || '0') === parseFloat(formData.total_price || '0') ? (
+                          <div className="text-green-600 bg-green-50 p-2 rounded border border-green-200">
+                            <Icon name="check-circle" className="h-4 w-4 inline mr-1" />
+                            To'liq to'landi
+                          </div>
+                        ) : (
+                          <div className="text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                            <Icon name="x-circle" className="h-4 w-4 inline mr-1" />
+                            To'lov summasi jami narxdan katta
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hozir to'lanayotgan summa (USD) *
-                  </label>
-                  <FormattedInput
-                    value={formData.paid_amount}
-                    onChange={(value) => setFormData({...formData, paid_amount: value})}
-                    placeholder="3000.00"
-                    required
-                  />
-                  {formData.total_price && formData.paid_amount && (
-                    <div className="mt-2 text-sm">
-                      {parseFloat(formData.paid_amount || '0') < parseFloat(formData.total_price || '0') ? (
-                        <div className="text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                          <Icon name="alert-triangle" className="h-4 w-4 inline mr-1" />
-                          Qarz: {formatCurrency(parseFloat(formData.total_price) - parseFloat(formData.paid_amount), 'USD')}
-                          <br />
-                          <span className="text-xs">Bu mijoz avtomatik qarz daftarchaga qo'shiladi</span>
-                        </div>
-                      ) : parseFloat(formData.paid_amount || '0') === parseFloat(formData.total_price || '0') ? (
-                        <div className="text-green-600 bg-green-50 p-2 rounded border border-green-200">
-                          <Icon name="check-circle" className="h-4 w-4 inline mr-1" />
-                          To'liq to'landi
-                        </div>
-                      ) : (
-                        <div className="text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                          <Icon name="x-circle" className="h-4 w-4 inline mr-1" />
-                          To'lov summasi jami narxdan katta
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             )}
 
@@ -501,6 +541,28 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
                     required
                   />
                 )}
+              </div>
+            )}
+
+            {/* Vagon tanlash (yetkazib_berish uchun) */}
+            {formData.income_source === 'yetkazib_berish' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vagon *
+                </label>
+                <select
+                  value={formData.vagon_id}
+                  onChange={(e) => setFormData({...formData, vagon_id: e.target.value})}
+                  className="input-field"
+                  required
+                >
+                  <option value="">Vagonni tanlang</option>
+                  {vagons.map((vagon: any) => (
+                    <option key={vagon._id} value={vagon._id}>
+                      {vagon.vagonCode} - {vagon.sending_place} → {vagon.receiving_place}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -1017,6 +1079,11 @@ export default function CashPage() {
   
   const [incomeModalOpen, setIncomeModalOpen] = useState(false);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  
+  // YANGI: Statistika modal uchun state
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
+  const [statsModalType, setStatsModalType] = useState<'income' | 'expense' | 'profit' | null>(null);
+  const [statsModalCurrency, setStatsModalCurrency] = useState<'USD' | 'RUB' | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -1024,6 +1091,43 @@ export default function CashPage() {
     }
   }, [user, authLoading]);
 
+  // YANGI: Statistika modal uchun lazy loading query
+  const { data: statsTransactions, isLoading: statsLoading } = useQuery({
+    queryKey: ['stats-transactions', statsModalType, statsModalCurrency],
+    queryFn: async () => {
+      if (!statsModalType || !statsModalCurrency) return [];
+      
+      const params = new URLSearchParams({
+        currency: statsModalCurrency,
+        limit: '100' // Oxirgi 100 ta tranzaksiya
+      });
+      
+      if (statsModalType === 'income') {
+        params.append('type', 'income');
+      } else if (statsModalType === 'expense') {
+        params.append('type', 'expense');
+      }
+      // profit uchun barcha tranzaksiyalar kerak
+      
+      const response = await axios.get(`/cash/transactions?${params}`);
+      return response.data.transactions || [];
+    },
+    enabled: statsModalOpen && !!statsModalType && !!statsModalCurrency,
+    staleTime: 30000 // 30 soniya
+  });
+  
+  const openStatsModal = (type: 'income' | 'expense' | 'profit', currency: 'USD' | 'RUB') => {
+    setStatsModalType(type);
+    setStatsModalCurrency(currency);
+    setStatsModalOpen(true);
+  };
+  
+  const closeStatsModal = () => {
+    setStatsModalOpen(false);
+    setStatsModalType(null);
+    setStatsModalCurrency(null);
+  };
+  
   // Parallel so'rovlar - balans va tranzaksiyalar
   const { data: balanceData, refetch: refetchBalance, error: balanceError } = useQuery({
     queryKey: ['cash-balance'],
@@ -1102,164 +1206,142 @@ export default function CashPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        {/* Hero Header */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 text-white">
-          <div className="absolute inset-0 bg-black/10"></div>
-          <div className="relative px-6 py-12">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30">
+        {/* iOS Style Header */}
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500"></div>
+          <div className="absolute inset-0 bg-black/5"></div>
+          <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+          
+          <div className="relative px-4 sm:px-6 py-8 sm:py-12">
             <div className="max-w-7xl mx-auto">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                <div className="mb-8 lg:mb-0">
-                  <h1 className="text-4xl lg:text-5xl font-bold mb-4 flex items-center">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
-                      <Icon name="dollar-sign" className="h-7 w-7" />
+              {/* Flex Container - Left and Right */}
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+                
+                {/* Left Side - Title and Balance Summary */}
+                <div className="flex-1 max-w-md">
+                  {/* Title Section */}
+                  <div className="mb-6">
+                    <div className="flex items-center mb-3">
+                      <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-lg mr-3">
+                        <DollarSign className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white">
+                          Kassa
+                        </h1>
+                        <p className="text-white/80 text-xs sm:text-sm">
+                          Moliyaviy operatsiyalar
+                        </p>
+                      </div>
                     </div>
-                    Kassa Boshqaruvi
-                  </h1>
-                  <p className="text-xl opacity-90 mb-2">
-                    Daromad va xarajatlar markazi
-                  </p>
-                  <p className="text-sm opacity-75">
-                    Barcha kirim va chiqimlarni manbalar bo'yicha boshqaring
-                  </p>
+                  </div>
+                  
+                  {/* Minimalistic Balance Summary */}
+                  {formattedBalanceData.length > 0 && (
+                    <div className="space-y-3">
+                      {formattedBalanceData.map((balance: any) => {
+                        const profit = (balance.sof || 0);
+                        const isPositive = profit >= 0;
+                        const isRUB = balance._id === 'RUB';
+                        const currentBalance = balance.balance || 0;
+                        
+                        return (
+                          <div key={balance._id} className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="text-white/70 text-sm font-medium">{balance._id}</div>
+                              <div className="text-white font-bold text-base flex items-center gap-2">
+                                <Wallet className="h-4 w-4" />
+                                {formatCurrency(currentBalance, balance._id).replace(/\s/g, '')}
+                              </div>
+                            </div>
+                            
+                            {isRUB ? (
+                              // RUB uchun faqat xarajat
+                              <div className="flex justify-center">
+                                <div className="cursor-pointer hover:bg-white/10 rounded-xl p-3 transition-all flex-1 text-center" onClick={() => openStatsModal('expense', balance._id)}>
+                                  <div className="text-white/60 text-xs mb-1 flex items-center justify-center gap-1">
+                                    <TrendingDown className="h-3 w-3" />
+                                    Xarajat
+                                  </div>
+                                  <div className="text-white font-bold text-lg">
+                                    {formatCurrency(balance.xarajatlar || 0, balance._id).replace(/\s/g, '')}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              // USD uchun barcha ma'lumotlar
+                              <div className="grid grid-cols-3 gap-2">
+                                {/* Daromad */}
+                                <div className="cursor-pointer hover:bg-white/10 rounded-xl p-2 transition-all" onClick={() => openStatsModal('income', balance._id)}>
+                                  <div className="text-white/60 text-xs mb-1 flex items-center gap-1">
+                                    <TrendingUp className="h-3 w-3" />
+                                    Kirim
+                                  </div>
+                                  <div className="text-white font-bold text-base">
+                                    {formatCurrency(balance.jamiKirim || 0, balance._id).replace(/\s/g, '')}
+                                  </div>
+                                </div>
+                                {/* Xarajat */}
+                                <div className="cursor-pointer hover:bg-white/10 rounded-xl p-2 transition-all" onClick={() => openStatsModal('expense', balance._id)}>
+                                  <div className="text-white/60 text-xs mb-1 flex items-center gap-1">
+                                    <TrendingDown className="h-3 w-3" />
+                                    Chiqim
+                                  </div>
+                                  <div className="text-white font-bold text-base">
+                                    {formatCurrency(balance.xarajatlar || 0, balance._id).replace(/\s/g, '')}
+                                  </div>
+                                </div>
+                                {/* Foyda */}
+                                <div className="cursor-pointer hover:bg-white/10 rounded-xl p-2 transition-all">
+                                  <div className="text-white/60 text-xs mb-1 flex items-center gap-1">
+                                    <DollarSign className="h-3 w-3" />
+                                    Foyda
+                                  </div>
+                                  <div className={`font-bold text-base ${isPositive ? 'text-white' : 'text-red-200'}`}>
+                                    {formatCurrency(profit, balance._id).replace(/\s/g, '')}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 
-                {/* Asosiy 2 ta tugma */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <button
-                    onClick={() => setIncomeModalOpen(true)}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-2xl hover:from-green-600 hover:to-emerald-700 flex items-center shadow-lg transition-all duration-200 font-semibold text-lg"
-                  >
-                    <Icon name="trending-up" className="mr-3 h-6 w-6" />
-                    Daromad
-                  </button>
-                  <button
-                    onClick={() => setExpenseModalOpen(true)}
-                    className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-4 rounded-2xl hover:from-red-600 hover:to-rose-700 flex items-center shadow-lg transition-all duration-200 font-semibold text-lg"
-                  >
-                    <Icon name="trending-down" className="mr-3 h-6 w-6" />
-                    Xarajat
-                  </button>
+                {/* Right Side - Action Buttons */}
+                <div className="lg:pt-16">
+                  <div className="flex flex-col gap-4">
+                    <button
+                      onClick={() => setIncomeModalOpen(true)}
+                      className="group bg-white/95 backdrop-blur-xl text-green-600 px-8 py-4 rounded-2xl hover:bg-white transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center font-bold text-lg min-w-[180px]"
+                    >
+                      <TrendingUp className="mr-3 h-6 w-6" />
+                      Daromad
+                    </button>
+                    <button
+                      onClick={() => setExpenseModalOpen(true)}
+                      className="group bg-white/95 backdrop-blur-xl text-red-600 px-8 py-4 rounded-2xl hover:bg-white transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center font-bold text-lg min-w-[180px]"
+                    >
+                      <TrendingDown className="mr-3 h-6 w-6" />
+                      Xarajat
+                    </button>
+                  </div>
                 </div>
+                
               </div>
             </div>
           </div>
-          
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
         </div>
 
-        <div className="px-6 py-8 max-w-7xl mx-auto">
-          {/* Asosiy Moliyaviy Statistika */}
-          {formattedBalanceData.length > 0 ? (
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                <Icon name="bar-chart" className="mr-3 h-6 w-6 text-blue-600" />
-                Moliyaviy Xulasa
-              </h2>
-              
-              {/* Asosiy 3 ta karta: Jami Daromad, Jami Xarajat, Sof Foyda */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {/* Jami Daromad */}
-                <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Icon name="trending-up" className="h-7 w-7 text-white" />
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Jami Daromad</div>
-                      <div className="text-xs text-green-600 font-semibold mt-1">💰 Barcha kirimlar</div>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {formattedBalanceData.map((balance: any) => (
-                      <div key={balance._id} className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-600">{balance._id}:</span>
-                        <span className="text-2xl font-bold text-green-600">
-                          {formatCurrency(balance.jamiKirim || 0, balance._id)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                {/* Jami Xarajat */}
-                <Card className="p-6 bg-gradient-to-br from-red-50 to-rose-50 border-red-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 bg-gradient-to-r from-red-500 to-rose-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Icon name="trending-down" className="h-7 w-7 text-white" />
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Jami Xarajat</div>
-                      <div className="text-xs text-red-600 font-semibold mt-1">💸 Barcha chiqimlar</div>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {formattedBalanceData.map((balance: any) => (
-                      <div key={balance._id} className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-600">{balance._id}:</span>
-                        <span className="text-2xl font-bold text-red-600">
-                          {formatCurrency(balance.xarajatlar || 0, balance._id)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                {/* Sof Foyda */}
-                <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Icon name="dollar-sign" className="h-7 w-7 text-white" />
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Sof Foyda</div>
-                      <div className="text-xs text-blue-600 font-semibold mt-1">💎 Daromad - Xarajat</div>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {formattedBalanceData.map((balance: any) => {
-                      const profit = (balance.sof || 0);
-                      const isPositive = profit >= 0;
-                      return (
-                        <div key={balance._id} className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-600">{balance._id}:</span>
-                          <span className={`text-2xl font-bold ${isPositive ? 'text-blue-600' : 'text-yellow-600'}`}>
-                            {formatCurrency(profit, balance._id)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-8">
-              <Card className="p-12 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Icon name="dollar-sign" className="h-8 w-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Hozircha tranzaksiya yo'q</h3>
-                <p className="text-gray-500 mb-6">Birinchi daromad yoki xarajatni qo'shing</p>
-                <div className="flex justify-center gap-4">
-                  <Button onClick={() => setIncomeModalOpen(true)} variant="primary">
-                    <Icon name="plus" className="mr-2 h-4 w-4" />
-                    Daromad qo'shish
-                  </Button>
-                  <Button onClick={() => setExpenseModalOpen(true)} variant="secondary">
-                    <Icon name="minus" className="mr-2 h-4 w-4" />
-                    Xarajat qo'shish
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          )}
-
+        <div className="px-4 sm:px-6 py-6 max-w-7xl mx-auto">
           {/* So'nggi Tranzaksiyalar */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-              <Icon name="list" className="mr-3 h-6 w-6 text-indigo-600" />
+              <List className="mr-3 h-6 w-6 text-indigo-600" />
               So'nggi Tranzaksiyalar
             </h2>
             
@@ -1270,11 +1352,14 @@ export default function CashPage() {
                     <div key={transaction._id} className="flex items-center justify-between p-4 border-2 border-gray-100 rounded-xl hover:border-gray-200 hover:shadow-md transition-all duration-200">
                       <div className="flex items-center space-x-4">
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white ${
-                          transaction.type === 'expense' || transaction.type === 'delivery_expense'
+                          transaction.type === 'expense' || transaction.type === 'delivery_expense' || transaction.type === 'currency_transfer_out'
                             ? 'bg-gradient-to-r from-red-500 to-rose-600' 
                             : 'bg-gradient-to-r from-green-500 to-emerald-600'
                         }`}>
-                          {transaction.type === 'expense' || transaction.type === 'delivery_expense' ? '💸' : '💰'}
+                          {transaction.type === 'expense' || transaction.type === 'delivery_expense' || transaction.type === 'currency_transfer_out' 
+                            ? <TrendingDown className="h-6 w-6" />
+                            : <TrendingUp className="h-6 w-6" />
+                          }
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900 text-lg">
@@ -1288,11 +1373,11 @@ export default function CashPage() {
                       </div>
                       <div className="text-right">
                         <p className={`font-bold text-xl ${
-                          transaction.type === 'expense' || transaction.type === 'delivery_expense'
+                          transaction.type === 'expense' || transaction.type === 'delivery_expense' || transaction.type === 'currency_transfer_out'
                             ? 'text-red-600' 
                             : 'text-green-600'
                         }`}>
-                          {transaction.type === 'expense' || transaction.type === 'delivery_expense' ? '-' : '+'}
+                          {transaction.type === 'expense' || transaction.type === 'delivery_expense' || transaction.type === 'currency_transfer_out' ? '-' : '+'}
                           {formatCurrency(transaction.amount, transaction.currency)}
                         </p>
                         <p className="text-sm text-gray-500 font-medium">
@@ -1305,7 +1390,7 @@ export default function CashPage() {
               ) : (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Icon name="inbox" className="h-8 w-8 text-gray-400" />
+                    <Inbox className="h-8 w-8 text-gray-400" />
                   </div>
                   <p className="text-gray-500 text-lg">Hozircha tranzaksiya yo'q</p>
                 </div>
@@ -1327,6 +1412,108 @@ export default function CashPage() {
           onSuccess={handleModalSuccess}
         />
       </div>
+      
+      {/* YANGI: Statistika Modal */}
+      <Modal
+        isOpen={statsModalOpen}
+        onClose={closeStatsModal}
+        title={
+          statsModalType === 'income' 
+            ? `Daromadlar Tarixi (${statsModalCurrency})`
+            : statsModalType === 'expense'
+            ? `Xarajatlar Tarixi (${statsModalCurrency})`
+            : `Barcha Tranzaksiyalar (${statsModalCurrency})`
+        }
+        size="xl"
+      >
+        <ModalBody>
+          {statsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">Yuklanmoqda...</span>
+            </div>
+          ) : statsTransactions && statsTransactions.length > 0 ? (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {statsTransactions.map((transaction: any) => (
+                <div 
+                  key={transaction._id} 
+                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                    transaction.type === 'expense' || transaction.type === 'delivery_expense'
+                      ? 'border-red-100 bg-red-50 hover:border-red-200'
+                      : 'border-green-100 bg-green-50 hover:border-green-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${
+                        transaction.type === 'expense' || transaction.type === 'delivery_expense'
+                          ? 'bg-gradient-to-r from-red-500 to-rose-600'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-600'
+                      }`}>
+                        {transaction.type === 'expense' || transaction.type === 'delivery_expense' ? (
+                          <TrendingDown className="h-5 w-5" />
+                        ) : (
+                          <TrendingUp className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {transaction.description || 'Tavsif yo\'q'}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {formatDate(transaction.date)}
+                          {transaction.client_name && ` • ${transaction.client_name}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-xl font-bold ${
+                        transaction.type === 'expense' || transaction.type === 'delivery_expense'
+                          ? 'text-red-600'
+                          : 'text-green-600'
+                      }`}>
+                        {transaction.type === 'expense' || transaction.type === 'delivery_expense' ? '-' : '+'}
+                        {formatCurrency(transaction.amount, transaction.currency)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {transaction.type === 'income' ? 'Daromad' : 
+                         transaction.type === 'expense' ? 'Xarajat' : 
+                         transaction.type === 'delivery_expense' ? 'Yetkazib berish xarajati' : 
+                         transaction.type}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Inbox className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-gray-500">Hozircha tranzaksiya yo'q</p>
+            </div>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button onClick={closeStatsModal} variant="secondary">
+            Yopish
+          </Button>
+        </ModalFooter>
+      </Modal>
+      
+      {/* Modals */}
+      <IncomeModal
+        isOpen={incomeModalOpen}
+        onClose={() => setIncomeModalOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
+      
+      <ExpenseModal
+        isOpen={expenseModalOpen}
+        onClose={() => setExpenseModalOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
     </Layout>
   );
 }

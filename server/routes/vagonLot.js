@@ -71,9 +71,26 @@ router.post('/', auth, async (req, res) => {
     } = req.body;
     
     // Validatsiya
-    if (!vagon || !dimensions || !quantity || !volume_m3 || !purchase_currency || !purchase_amount) {
+    if (!vagon || !dimensions || !quantity || !volume_m3 || !purchase_currency || purchase_amount === undefined || purchase_amount === null) {
+      logger.error('VagonLot validation failed:', {
+        vagon: !!vagon,
+        dimensions: !!dimensions,
+        quantity: !!quantity,
+        volume_m3: !!volume_m3,
+        purchase_currency: !!purchase_currency,
+        purchase_amount: purchase_amount !== undefined && purchase_amount !== null,
+        receivedData: req.body
+      });
       return res.status(400).json({ 
-        message: 'Barcha majburiy maydonlar to\'ldirilishi shart' 
+        message: 'Barcha majburiy maydonlar to\'ldirilishi shart',
+        missing: {
+          vagon: !vagon,
+          dimensions: !dimensions,
+          quantity: !quantity,
+          volume_m3: !volume_m3,
+          purchase_currency: !purchase_currency,
+          purchase_amount: purchase_amount === undefined || purchase_amount === null
+        }
       });
     }
     
