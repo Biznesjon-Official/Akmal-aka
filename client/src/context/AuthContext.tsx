@@ -76,9 +76,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchUser = async () => {
     try {
+      // Token'dan user ma'lumotlarini olish
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      // JWT tokenni decode qilish
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        
+        // Agar hardcoded admin bo'lsa, server'ga so'rov yubormaslik
+        if (payload.userId === 'hardcoded-admin-id') {
+          setUser({
+            id: 'hardcoded-admin-id',
+            username: 'admin',
+            role: 'admin'
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (decodeError) {
+        console.error('Token decode xatosi:', decodeError);
+      }
+
+      // Oddiy user uchun server'dan ma'lumot olish
       const response = await axios.get('/auth/me');
       setUser(response.data);
     } catch (error) {
+      console.error('fetchUser xatosi:', error);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
       }

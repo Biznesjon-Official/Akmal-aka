@@ -183,7 +183,22 @@ router.post('/login', [
 // Foydalanuvchi ma'lumotlarini olish
 router.get('/me', auth, async (req, res) => {
   try {
+    // Hardcoded admin uchun
+    if (req.user.userId === 'hardcoded-admin-id') {
+      return res.json({
+        _id: 'hardcoded-admin-id',
+        id: 'hardcoded-admin-id',
+        username: 'admin',
+        role: 'admin',
+        isActive: true
+      });
+    }
+
+    // Database'dan foydalanuvchini olish
     const user = await User.findById(req.user.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'Foydalanuvchi topilmadi' });
+    }
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Server xatosi', error: error.message });
