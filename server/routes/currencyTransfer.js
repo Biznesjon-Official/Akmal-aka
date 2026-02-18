@@ -7,6 +7,7 @@ const {
   getAllBalances, 
   getTransferHistory 
 } = require('../utils/currencyTransferHelper');
+const { getCreatedById } = require('../utils/userHelper');
 
 /**
  * @route   POST /api/currency-transfer
@@ -155,18 +156,26 @@ router.post('/deposit', auth, async (req, res) => {
     
     // Kassa yozuvini yaratish
     console.log('Creating cash entry...');
-    const cashEntry = await Cash.create([{
+    
+    const cashData = {
       type: 'initial_balance',
       amount: amountNumber,
       currency: currency,
       description: notes || 'Dastlabki balans',
-      createdBy: req.user.userId || req.user._id,
       transaction_date: new Date()
-    }], { session });
+    };
+    
+    // createdBy ni to'g'ri handle qilish (hardcoded admin uchun null)
+    const createdById = getCreatedById(req.user);
+    if (createdById) {
+      cashData.createdBy = createdById;
+    }
+    
+    const cashEntry = await Cash.create([cashData], { session });
     
     await session.commitTransaction();
     console.log('Deposit successful:', cashEntry[0]);
-    console.log('=== DEPOSIT REQUEST END ===');
+    console.log('=== DEPOSIT REQUEST END ===');;;
     
     res.status(201).json({
       success: true,

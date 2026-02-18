@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const CurrencyTransfer = require('../models/CurrencyTransfer');
 const Cash = require('../models/Cash');
 const ExchangeRate = require('../models/ExchangeRate');
+const { getCreatedById } = require('./userHelper');
 
 /**
  * Valyuta o'tkazish
@@ -53,39 +54,50 @@ async function transferCurrency({
     }
     
     // 5. CurrencyTransfer yaratish
-    const transfer = await CurrencyTransfer.create([{
+    const transferData = {
       from_currency,
       to_currency,
       from_amount,
       to_amount,
       exchange_rate: rate,
       notes,
-      created_by: user_id,
       status: 'completed'
-    }], { session });
+    };
+    
+    // createdBy ni handle qilish
+    const createdById = user_id === 'hardcoded-admin-id' ? null : user_id;
+    if (createdById) {
+      transferData.created_by = createdById;
+    }
+    
+    const transfer = await CurrencyTransfer.create([transferData], { session });
     
     // 6. Cash yozuvlarini yaratish
     // Chiqim (from_currency)
-    const cashOut = await Cash.create([{
+    const cashOutData = {
       type: 'currency_transfer_out',
       amount: from_amount,
       currency: from_currency,
       description: `Valyuta o'tkazmasi: ${from_currency} -> ${to_currency}`,
       currencyTransfer: transfer[0]._id,
-      transaction_date: new Date(),
-      createdBy: user_id
-    }], { session });
+      transaction_date: new Date()
+    };
+    if (createdById) cashOutData.createdBy = createdById;
+    
+    const cashOut = await Cash.create([cashOutData], { session });
     
     // Kirim (to_currency)
-    const cashIn = await Cash.create([{
+    const cashInData = {
       type: 'currency_transfer_in',
       amount: to_amount,
       currency: to_currency,
       description: `Valyuta o'tkazmasi: ${from_currency} -> ${to_currency}`,
       currencyTransfer: transfer[0]._id,
-      transaction_date: new Date(),
-      createdBy: user_id
-    }], { session });
+      transaction_date: new Date()
+    };
+    if (createdById) cashInData.createdBy = createdById;
+    
+    const cashIn = await Cash.create([cashInData], { session });
     
     // 7. CurrencyTransfer'ga Cash ID'larni qo'shish
     transfer[0].cash_out_id = cashOut[0]._id;

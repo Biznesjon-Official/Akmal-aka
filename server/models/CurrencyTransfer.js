@@ -53,7 +53,7 @@ const currencyTransferSchema = new mongoose.Schema({
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false // Hardcoded admin uchun optional
   },
   
   // Cash yozuvlari (chiqim va kirim)

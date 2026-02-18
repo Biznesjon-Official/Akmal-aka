@@ -192,13 +192,13 @@ const deliverySchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false // Hardcoded admin uchun optional
   },
   
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false // Hardcoded admin uchun optional
   }
 }, {
   timestamps: true

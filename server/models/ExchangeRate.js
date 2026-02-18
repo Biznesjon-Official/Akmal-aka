@@ -34,7 +34,8 @@ const exchangeRateSchema = new mongoose.Schema({
   // Yangilagan admin
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    required: false // Hardcoded admin uchun optional
   },
   
   // Faolmi

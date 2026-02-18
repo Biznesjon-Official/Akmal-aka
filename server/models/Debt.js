@@ -49,7 +49,7 @@ const debtSchema = new mongoose.Schema({
   yogoch: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'VagonLot',
-    required: true
+    required: false // Ba'zi hollarda yogoch bo'lmasligi mumkin
   },
   // VagonSale reference (qaysi sotuvdan yaratilgan)
   vagonSale: {
@@ -80,8 +80,8 @@ const debtSchema = new mongoose.Schema({
   },
   sold_quantity: {
     type: Number,
-    required: true,
-    min: 1
+    required: false, // Ba'zi hollarda miqdor bo'lmasligi mumkin
+    min: 0
   },
   sale_date: {
     type: Date,

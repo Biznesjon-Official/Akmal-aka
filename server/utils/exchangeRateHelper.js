@@ -56,15 +56,21 @@ async function setExchangeRate(from_currency, to_currency, rate, user_id, notes 
   );
   
   // Yangi kurs yaratish
-  const newRate = await ExchangeRate.create({
+  const rateData = {
     from_currency,
     to_currency,
     rate,
-    created_by: user_id,
     is_active: true,
     source: 'manual',
     notes
-  });
+  };
+  
+  // Hardcoded admin uchun created_by ni handle qilish
+  if (user_id && user_id !== 'hardcoded-admin-id') {
+    rateData.created_by = user_id;
+  }
+  
+  const newRate = await ExchangeRate.create(rateData);
   
   return newRate;
 }

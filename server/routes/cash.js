@@ -7,6 +7,7 @@ const Debt = require('../models/Debt');
 const auth = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { ClientNotFoundError, InvalidCurrencyError, handleCustomError } = require('../utils/customErrors');
+const { getCreatedById } = require('../utils/userHelper');
 
 // Double submit prevention middleware
 const preventDoubleSubmit = (req, res, next) => {
@@ -298,16 +299,20 @@ router.post('/multi-vagon-purchase', auth, preventDoubleSubmit, async (req, res)
         currency = item.currency || 'USD';
         
         // Cash yozuvini yaratish
-        const cash = new Cash({
+        const cashData = {
           type: 'expense', // Yog'och sotib olish - chiqim
           vagon: item.vagon_id,
           amount: itemTotal,
           currency: currency,
           description: `${description} - ${vagon.vagonCode} (${item.volume_m3} m³ × ${salePrice} ${currency}/m³)`,
           transaction_date: new Date(date),
-          createdBy: req.user.userId,
           expense_type: 'yogoch_sotib_olish'
-        });
+        };
+        
+        const createdById = getCreatedById(req.user);
+        if (createdById) cashData.createdBy = createdById;
+        
+        const cash = new Cash(cashData);
         
         await cash.save({ session });
         cashRecords.push(cash);
@@ -346,6 +351,10 @@ router.post('/multi-vagon-purchase', auth, preventDoubleSubmit, async (req, res)
 
 // YANGI FEATURE: Daromad qo'shish
 router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
+  console.log('=== INCOME REQUEST START ===');
+  console.log('User:', req.user);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const { 
       income_source, amount, currency, description, client_id, date, 
@@ -762,8 +771,14 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
       }
       
       // YANGI: Qarz daftarchaga qo'shish (agar qarz bo'lsa)
-      if (debt > 0) {
-        const debtRecord = new Debt({
+      // MUHIM: Hardcoded admin uchun Debt yaratmaslik (chunki payment_history muammosi bor)
+      const createdById = getCreatedById(req.user);
+      console.log('🔍 Debt check - createdById:', createdById, 'debt:', debt, 'condition:', (debt > 0 && createdById));
+      
+      if (debt > 0 && createdById) {
+        console.log('✅ Creating Debt for regular user');
+        // Faqat oddiy user uchun Debt yaratish
+        const debtData = {
           client: client_id || null,
           one_time_client_name: one_time_client_name?.trim() || null,
           one_time_client_phone: one_time_client_phone?.trim() || null,
@@ -778,8 +793,10 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
           status: status === 'paid' ? 'paid' : 'active',
           description: description.trim(),
           vagonSale: vagonSaleId,
-          createdBy: req.user.userId
-        });
+          createdBy: createdById
+        };
+        
+        const debtRecord = new Debt(debtData);
         
         // Agar dastlabki to'lov bo'lsa, payment history'ga qo'shish
         if (paidAmount > 0) {
@@ -787,11 +804,17 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
             amount: paidAmount,
             date: new Date(),
             description: 'Dastlabki to\'lov',
-            created_by: req.user.userId
+            created_by: createdById
           });
         }
         
         await debtRecord.save();
+        console.log('✅ Debt saved successfully');
+      } else if (debt > 0 && !createdById) {
+        // Hardcoded admin uchun warning
+        console.warn('⚠️  Hardcoded admin: Debt yaratilmadi (payment_history muammosi)');
+      } else {
+        console.log('ℹ️  No debt to create (debt:', debt, ')');
       }
     }
     
@@ -800,7 +823,7 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
     if (income_source !== 'yogoch_tolovi' || (income_source === 'yogoch_tolovi' && paid_amount > 0)) {
       const cashAmount = income_source === 'yogoch_tolovi' ? parseFloat(paid_amount) : parseFloat(amount);
       
-      cash = new Cash({
+      const cashData = {
         type,
         client: client_id || null,
         vagon: vagon_id || null,
@@ -810,11 +833,15 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
         currency,
         description: description.trim(),
         transaction_date: new Date(date),
-        createdBy: req.user.userId,
         // Bir martalik mijoz ma'lumotlari
         one_time_client_name: one_time_client_name?.trim() || null,
         one_time_client_phone: one_time_client_phone?.trim() || null
-      });
+      };
+      
+      const createdById = getCreatedById(req.user);
+      if (createdById) cashData.createdBy = createdById;
+      
+      cash = new Cash(cashData);
       
       await cash.save();
     }
@@ -826,7 +853,12 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
       cash,
       vagonSale: vagonSaleId ? { _id: vagonSaleId } : null
     });
+    
+    console.log('=== INCOME REQUEST SUCCESS ===');
   } catch (error) {
+    console.error('=== INCOME REQUEST ERROR ===');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
     return handleCustomError(error, res);
   }
 });

@@ -44,7 +44,8 @@ const vagonExpenseSchema = new mongoose.Schema({
   // Kim qo'shdi
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    required: false // Hardcoded admin uchun optional
   },
   
   // Soft delete

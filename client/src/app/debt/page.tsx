@@ -710,9 +710,9 @@ export default function DebtPage() {
                     {/* Product Info */}
                     <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                       <div className="text-sm text-gray-600 mb-1">Mahsulot</div>
-                      <div className="font-medium">{debt.vagon.vagonCode}</div>
+                      <div className="font-medium">{debt.vagon?.vagonCode || 'N/A'}</div>
                       <div className="text-sm text-gray-600">
-                        {debt.yogoch.name || debt.yogoch.dimensions} - {debt.sold_quantity} dona
+                        {debt.yogoch?.name || debt.yogoch?.dimensions || 'N/A'} - {debt.sold_quantity || 0} dona
                       </div>
                     </div>
 

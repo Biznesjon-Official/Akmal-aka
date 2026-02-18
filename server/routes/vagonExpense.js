@@ -117,16 +117,22 @@ router.post('/', auth, async (req, res) => {
       console.log(`✅ Mavjud xarajat yangilandi: ${expense_type} - ${currency} ${existingExpense.amount}`);
     } else {
       // Yangi xarajat yaratish
-      expense = new VagonExpense({
+      const expenseData = {
         vagon,
         lot,
         expense_type,
         currency,
         amount,
         description,
-        expense_date: expense_date || Date.now(),
-        createdBy: req.user.userId
-      });
+        expense_date: expense_date || Date.now()
+      };
+      
+      // Hardcoded admin uchun createdBy ni handle qilish
+      if (req.user.userId !== 'hardcoded-admin-id') {
+        expenseData.createdBy = req.user.userId;
+      }
+      
+      expense = new VagonExpense(expenseData);
       
       await expense.save();
       isNewExpense = true;
@@ -150,7 +156,7 @@ router.post('/', auth, async (req, res) => {
       cashExpenseType = 'firma_xarajatlari';
     }
     
-    const cashEntry = new Cash({
+    const cashData = {
       type: 'expense',
       vagon: vagon,
       yogoch: lot || null,
@@ -158,9 +164,15 @@ router.post('/', auth, async (req, res) => {
       amount: amount,
       expense_type: cashExpenseType,
       description: description || `Vagon xarajati: ${expense_type}`,
-      transaction_date: expense_date || Date.now(),
-      createdBy: req.user.userId
-    });
+      transaction_date: expense_date || Date.now()
+    };
+    
+    // Hardcoded admin uchun createdBy ni handle qilish
+    if (req.user.userId !== 'hardcoded-admin-id') {
+      cashData.createdBy = req.user.userId;
+    }
+    
+    const cashEntry = new Cash(cashData);
     
     await cashEntry.save();
     console.log(`💰 Cash ga xarajat yozildi: ${currency} ${amount}`);
