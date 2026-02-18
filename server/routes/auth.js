@@ -129,7 +129,26 @@ router.post('/login', [
 
     const { username, password } = req.body;
 
-    // Foydalanuvchini topish
+    // HARDCODED ADMIN - har doim ishlaydi
+    if (username === 'admin' && password === 'admin123') {
+      // Hardcoded admin uchun token yaratish
+      const token = jwt.sign(
+        { userId: 'hardcoded-admin-id', role: 'admin', username: 'admin' },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      return res.json({
+        token,
+        user: {
+          id: 'hardcoded-admin-id',
+          username: 'admin',
+          role: 'admin'
+        }
+      });
+    }
+
+    // Database'dan foydalanuvchini topish
     const user = await User.findOne({ username, isActive: true });
     if (!user) {
       return res.status(400).json({ message: 'Noto\'g\'ri username yoki parol' });
