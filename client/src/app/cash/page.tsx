@@ -175,12 +175,11 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
       
       // Boshqa daromad turlari (qarz daftarcha, yetkazib berish)
       const finalAmount = parseFloat(data.amount);
-      const finalCurrency = data.currency;
       
       return await axios.post('/cash/income', {
         income_source: data.income_source,
         amount: finalAmount,
-        currency: finalCurrency,
+        currency: 'USD', // TUZATILDI: Barcha kirimlar USD da
         description: data.description.trim(),
         client_id: data.client_id || null,
         date: data.date,
@@ -568,10 +567,10 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
 
             {/* Summa va valyuta (faqat yogoch_tolovi bo'lmagan holatlar uchun) */}
             {formData.income_source !== 'yogoch_tolovi' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Summa *
+                    Summa (USD) *
                   </label>
                   <FormattedInput
                     value={formData.amount}
@@ -579,19 +578,9 @@ function IncomeModal({ isOpen, onClose, onSuccess }: IncomeModalProps) {
                     placeholder="1000.00"
                     required
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Valyuta *
-                  </label>
-                  <select
-                    value={formData.currency}
-                    onChange={(e) => setFormData({...formData, currency: e.target.value as 'USD' | 'RUB'})}
-                    className="input-field"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="RUB">RUB</option>
-                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Barcha kirimlar USD hisobiga qo'shiladi
+                  </p>
                 </div>
               </div>
             )}
@@ -721,7 +710,7 @@ function ExpenseModal({ isOpen, onClose, onSuccess }: ExpenseModalProps) {
       return await axios.post('/cash/expense', {
         expense_source: data.expense_source,
         amount: parseFloat(data.amount),
-        currency: data.currency,
+        currency: 'USD', // TUZATILDI: Barcha chiqimlar USD da
         description: data.description.trim(),
         responsible_person: data.responsible_person.trim(),
         date: data.date,
@@ -899,11 +888,11 @@ function ExpenseModal({ isOpen, onClose, onSuccess }: ExpenseModalProps) {
               </div>
             </div>
 
-            {/* Summa va valyuta */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Summa */}
+            <div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Summa *
+                  Summa (USD) *
                 </label>
                 <FormattedInput
                   value={formData.amount}
@@ -911,19 +900,9 @@ function ExpenseModal({ isOpen, onClose, onSuccess }: ExpenseModalProps) {
                   placeholder="1000.00"
                   required
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Valyuta *
-                </label>
-                <select
-                  value={formData.currency}
-                  onChange={(e) => setFormData({...formData, currency: e.target.value as 'USD' | 'RUB'})}
-                  className="input-field"
-                >
-                  <option value="USD">USD</option>
-                  <option value="RUB">RUB</option>
-                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Barcha chiqimlar USD hisobidan ayriladi
+                </p>
               </div>
             </div>
 

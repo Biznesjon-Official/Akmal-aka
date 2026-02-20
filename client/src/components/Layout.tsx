@@ -6,6 +6,8 @@ import { LanguageProvider } from '@/context/LanguageContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import ToastProvider from './ToastProvider';
+import Calculator from './Calculator';
+import DraggableCalculatorButton from './DraggableCalculatorButton';
 
 interface LayoutProps {
   children: ReactNode;
@@ -13,6 +15,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const { user } = useAuth();
 
   return (
@@ -37,6 +40,14 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </main>
         </div>
+
+        {/* Draggable Calculator Button */}
+        {user && (
+          <>
+            <DraggableCalculatorButton onClick={() => setCalculatorOpen(true)} />
+            <Calculator isOpen={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
+          </>
+        )}
       </div>
     </LanguageProvider>
   );

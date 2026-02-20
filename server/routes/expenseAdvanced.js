@@ -123,7 +123,7 @@ router.post('/', [auth, [
       const cashEntry = new Cash({
         type: 'expense',
         amount: summa,
-        currency: valyuta,
+        currency: 'USD', // TUZATILDI: Barcha chiqimlar USD da
         description: `${getExpenseTypeLabel(xarajatTuri)} - ${tavsif}`,
         vagon: vagon || null,
         client: client || null,

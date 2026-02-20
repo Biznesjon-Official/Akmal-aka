@@ -296,15 +296,14 @@ router.post('/multi-vagon-purchase', auth, preventDoubleSubmit, async (req, res)
         // Narxni hisoblash
         const itemTotal = item.volume_m3 * salePrice;
         totalAmount += itemTotal;
-        currency = item.currency || 'USD';
         
         // Cash yozuvini yaratish
         const cashData = {
           type: 'expense', // Yog'och sotib olish - chiqim
           vagon: item.vagon_id,
           amount: itemTotal,
-          currency: currency,
-          description: `${description} - ${vagon.vagonCode} (${item.volume_m3} m³ × ${salePrice} ${currency}/m³)`,
+          currency: 'USD', // TUZATILDI: Barcha chiqimlar USD da
+          description: `${description} - ${vagon.vagonCode} (${item.volume_m3} m³ × ${salePrice} USD/m³)`,
           transaction_date: new Date(date),
           expense_type: 'yogoch_sotib_olish'
         };
@@ -826,7 +825,7 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
         yogoch: yogoch_id || null,
         vagonSale: vagonSaleId || null,
         amount: cashAmount,
-        currency,
+        currency: 'USD', // TUZATILDI: Barcha kirimlar USD da
         description: description.trim(),
         transaction_date: new Date(date),
         // Bir martalik mijoz ma'lumotlari

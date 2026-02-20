@@ -52,6 +52,38 @@ router.get('/', auth, cacheMiddleware(180), async (req, res) => {
         .lean() // Use lean for better performance
     ]);
     
+    // Xarajatlar borligini tekshirish (ixtiyoriy - frontend'da ham tekshiriladi)
+    if (vagons.length > 0) {
+      const VagonExpense = require('../models/VagonExpense');
+      const vagonIds = vagons.map(v => v._id);
+      
+      // Har bir vagon uchun xarajatlar sonini olish
+      const expenseCounts = await VagonExpense.aggregate([
+        { 
+          $match: { 
+            vagon: { $in: vagonIds },
+            isDeleted: false 
+          } 
+        },
+        { 
+          $group: { 
+            _id: '$vagon', 
+            count: { $sum: 1 } 
+          } 
+        }
+      ]);
+      
+      // Xarajatlar sonini vagonlarga qo'shish
+      const expenseCountMap = expenseCounts.reduce((acc, item) => {
+        acc[item._id.toString()] = item.count;
+        return acc;
+      }, {});
+      
+      vagons.forEach(vagon => {
+        vagon.has_expenses = (expenseCountMap[vagon._id.toString()] || 0) > 0;
+      });
+    }
+    
     // Conditionally load lots (only if requested)
     if (includeLots === 'true' && vagons.length > 0) {
       const VagonLot = require('../models/VagonLot');
@@ -517,6 +549,8 @@ router.delete('/:id', auth, async (req, res) => {
         );
         
         // CRITICAL FIX: Vagonni o'chirish - validatsiyasiz (eski vagonlar uchun)
+        // Unique index muammodan qochish: vagonCode ni o'zgartirish
+        vagon.vagonCode = `DEL_${vagon.vagonCode}_${Date.now()}`;
         vagon.isDeleted = true;
         await vagon.save({ session, validateBeforeSave: false });
       });

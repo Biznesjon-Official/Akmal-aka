@@ -29,6 +29,10 @@ const cashSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Expense'
   },
+  vagonExpense: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'VagonExpense'
+  },
   delivery: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Delivery'

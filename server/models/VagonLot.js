@@ -70,6 +70,29 @@ const vagonLotSchema = new mongoose.Schema({
     comment: 'Yo\'qotish sanasi'
   },
   
+  // Sifatsiz mahsulotlar (birka) - dona va hajm
+  reject_quantity: {
+    type: Number,
+    default: 0,
+    min: [0, 'Sifatsiz dona soni 0 dan kichik bo\'lishi mumkin emas'],
+    comment: 'Sifatsiz mahsulotlar soni (dona)'
+  },
+  reject_volume_m3: {
+    type: Number,
+    default: 0,
+    min: [0, 'Sifatsiz hajm 0 dan kichik bo\'lishi mumkin emas'],
+    comment: 'Sifatsiz mahsulotlar hajmi (m³)'
+  },
+  reject_reason: {
+    type: String,
+    trim: true,
+    comment: 'Sifatsiz deb belgilash sababi'
+  },
+  reject_date: {
+    type: Date,
+    comment: 'Sifatsiz deb belgilangan sana'
+  },
+  
   // ANIQ HAJM HISOBI (Yangi terminologiya)
   warehouse_available_volume_m3: {
     type: Number,
@@ -238,12 +261,13 @@ vagonLotSchema.pre('save', async function(next) {
       this.name = `Yog'och ${existingCount + 1}`;
     }
     
-    // 1. Omborda mavjud hajm = Umumiy hajm - Brak
+    // 1. Omborda mavjud hajm = Umumiy hajm - Brak - Sifatsiz
     const volume = Number(this.volume_m3) || 0;
     const lossVolume = Number(this.loss_volume_m3) || 0;
+    const rejectVolume = Number(this.reject_volume_m3) || 0;
     const dispatchedVolume = Number(this.warehouse_dispatched_volume_m3) || 0;
     
-    this.warehouse_available_volume_m3 = Math.max(0, volume - lossVolume);
+    this.warehouse_available_volume_m3 = Math.max(0, volume - lossVolume - rejectVolume);
     
     // 2. Omborda qolgan hajm = Mavjud - Jo'natilgan
     this.warehouse_remaining_volume_m3 = Math.max(0, this.warehouse_available_volume_m3 - dispatchedVolume);

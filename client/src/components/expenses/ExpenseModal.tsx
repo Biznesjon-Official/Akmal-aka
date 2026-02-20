@@ -88,6 +88,7 @@ export default function ExpenseModal({ expense, onClose }: ExpenseModalProps) {
     const submitData = {
       ...formData,
       amount: parseFloat(formData.amount),
+      currency: 'USD', // TUZATILDI: Barcha chiqimlar USD da
       payment_date: formData.payment_date || null
     };
 
@@ -153,10 +154,10 @@ export default function ExpenseModal({ expense, onClose }: ExpenseModalProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Summa *
+                  Summa (USD) *
                 </label>
                 <FormattedInput
                   value={formData.amount}
@@ -164,20 +165,9 @@ export default function ExpenseModal({ expense, onClose }: ExpenseModalProps) {
                   placeholder="1000.00"
                   required
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Valyuta
-                </label>
-                <select
-                  value={formData.currency}
-                  onChange={(e) => setFormData({...formData, currency: e.target.value})}
-                  className="input-field"
-                >
-                  <option value="USD">USD</option>
-                  <option value="RUB">RUB</option>
-                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Barcha chiqimlar USD hisobidan ayriladi
+                </p>
               </div>
             </div>
 

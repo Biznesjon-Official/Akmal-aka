@@ -396,8 +396,9 @@ export default function VagonExpenseModal({ isOpen, onClose, vagonId, vagonCode 
                   <div className="text-sm text-blue-900">
                     <p className="font-semibold mb-1">💡 Eslatma:</p>
                     <ul className="list-disc list-inside space-y-1 text-blue-700">
-                      <li>Yog'och xaridi RUB da (qo'shimcha kiritish mumkin)</li>
-                      <li>Bojxona va boshqa xarajatlar USD da</li>
+                      <li>Yog'och xaridi RUB da kiritiladi (qo'shimcha kiritish mumkin)</li>
+                      <li>Bojxona va boshqa xarajatlar USD da kiritiladi</li>
+                      <li>Barcha xarajatlar USD hisobidan ayriladi</li>
                       <li>Kamida bitta xarajat kiritilishi kerak</li>
                     </ul>
                   </div>

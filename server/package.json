@@ -14,7 +14,9 @@
     "seed:demo": "node scripts/seed-database.js --demo",
     "seed:help": "node scripts/seed-database.js --help",
     "check-admins": "node scripts/check-admins.js",
-    "create-admin": "node scripts/create-admin.js"
+    "create-admin": "node scripts/create-admin.js",
+    "db:reset": "node scripts/db-reset-auto.js",
+    "db:reset-interactive": "node scripts/db-reset-and-create-admin.js"
   },
   "dependencies": {
     "axios": "^1.13.3",

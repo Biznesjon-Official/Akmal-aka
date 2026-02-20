@@ -6,6 +6,7 @@ import { useDialog } from '@/context/DialogContext';
 import Icon from '@/components/Icon';
 import axios from '@/lib/axios';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import BirakModal from './BirakModal';
 
 interface VagonLot {
   _id: string;
@@ -67,6 +68,8 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [birakModalOpen, setBirakModalOpen] = useState(false);
+  const [selectedLot, setSelectedLot] = useState<VagonLot | null>(null);
 
   // Scroll lock
   useScrollLock(true);
@@ -376,7 +379,7 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
                         </div>
                       </div>
                       <div className="text-right ml-4">
-                        <div className="bg-white px-6 py-3 rounded-xl shadow-sm border-2 border-green-200">
+                        <div className="bg-white px-6 py-3 rounded-xl shadow-sm border-2 border-green-200 mb-3">
                           <div className="font-bold text-2xl text-green-600">
                             {(lot.purchase_amount || 0).toLocaleString()}
                           </div>
@@ -384,6 +387,21 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
                             {getCurrencySymbol(lot.currency)} {lot.currency}
                           </div>
                         </div>
+                        
+                        {/* Birak tugmasi */}
+                        {(lot.warehouse_remaining_volume_m3 || lot.remaining_volume_m3 || 0) > 0 && (
+                          <button
+                            onClick={() => {
+                              setSelectedLot(lot);
+                              setBirakModalOpen(true);
+                            }}
+                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center text-sm font-semibold"
+                            title="Sifatsiz mahsulot belgilash"
+                          >
+                            <Icon name="alert-triangle" className="h-4 w-4 mr-1" />
+                            Birak
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -425,6 +443,36 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
                         </div>
                       </div>
                     )}
+                    
+                    {/* Birak (sifatsiz) ma'lumotlari */}
+                    {((lot as any).reject_volume_m3 || 0) > 0 && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300 rounded-xl">
+                        <div className="flex items-center gap-2 font-bold text-orange-700 mb-3 text-lg">
+                          <Icon name="alert-triangle" className="h-5 w-5" />
+                          Birak (sifatsiz): {(lot as any).reject_quantity || 0} dona, {safeToFixed((lot as any).reject_volume_m3)} m³
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {(lot as any).reject_reason && (
+                            <div className="flex items-center gap-2 text-orange-600 text-sm bg-white p-2 rounded-lg">
+                              <Icon name="info" className="h-4 w-4" />
+                              <div>
+                                <div className="text-xs text-gray-500">Sabab:</div>
+                                <div className="font-semibold">{(lot as any).reject_reason}</div>
+                              </div>
+                            </div>
+                          )}
+                          {(lot as any).reject_date && (
+                            <div className="flex items-center gap-2 text-orange-600 text-sm bg-white p-2 rounded-lg">
+                              <Icon name="calendar" className="h-4 w-4" />
+                              <div>
+                                <div className="text-xs text-gray-500">Sana:</div>
+                                <div className="font-semibold">{new Date((lot as any).reject_date).toLocaleDateString('uz-UZ')}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -450,46 +498,41 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="font-semibold text-gray-800">
-                          {expense.tavsif}
+                          {expense.description}
                         </div>
                         <div className="text-sm text-gray-600 mt-1">
                           <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs mr-2">
-                            {expense.xarajatTuri}
+                            {expense.expense_type}
                           </span>
                           <span className="text-gray-500">
-                            {new Date(expense.createdAt).toLocaleDateString('uz-UZ')}
+                            {new Date(expense.expense_date || expense.createdAt).toLocaleDateString('uz-UZ')}
                           </span>
                         </div>
-                        {expense.yaratuvchi && (
+                        {expense.createdBy && (
                           <div className="text-xs text-gray-500 mt-1">
-                            Yaratuvchi: {expense.yaratuvchi.username}
+                            Yaratuvchi: {expense.createdBy.username}
                           </div>
                         )}
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg text-red-600">
-                          {expense.summa.toLocaleString()} {expense.valyuta}
+                          {(expense.amount || 0).toLocaleString()} {expense.currency}
                         </div>
-                        {expense.valyuta !== 'RUB' && expense.summaRUB && (
-                          <div className="text-sm text-gray-600">
-                            ≈ {expense.summaRUB.toLocaleString()} RUB
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
                 ))}
-                
+
                 {/* Jami xarajatlar */}
                 <div className="border-t-2 border-red-300 pt-3 mt-4">
                   <div className="flex justify-between items-center bg-red-100 p-3 rounded-lg">
                     <span className="font-semibold text-gray-800">Jami xarajatlar:</span>
                     <div className="text-right">
                       <div className="font-bold text-xl text-red-600">
-                        {expenses.reduce((sum: number, exp: any) => sum + (exp.valyuta === 'USD' ? exp.summa : 0), 0).toLocaleString()} USD
+                        {expenses.reduce((sum: number, exp: any) => sum + (exp.currency === 'USD' ? (exp.amount || 0) : 0), 0).toLocaleString()} USD
                       </div>
                       <div className="font-semibold text-lg text-red-600">
-                        {expenses.reduce((sum: number, exp: any) => sum + (exp.valyuta === 'RUB' ? exp.summa : 0), 0).toLocaleString()} RUB
+                        {expenses.reduce((sum: number, exp: any) => sum + (exp.currency === 'RUB' ? (exp.amount || 0) : 0), 0).toLocaleString()} RUB
                       </div>
                     </div>
                   </div>
@@ -668,6 +711,24 @@ export default function VagonDetailsModal({ vagonId, onClose, onVagonUpdated }: 
           </div>
         </div>
       </div>
+      
+      {/* Birak Modal */}
+      {selectedLot && (
+        <BirakModal
+          isOpen={birakModalOpen}
+          onClose={() => {
+            setBirakModalOpen(false);
+            setSelectedLot(null);
+          }}
+          lot={selectedLot}
+          onSuccess={() => {
+            fetchVagonDetails();
+            if (onVagonUpdated) {
+              onVagonUpdated();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

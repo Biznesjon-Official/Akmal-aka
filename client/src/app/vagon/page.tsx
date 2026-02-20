@@ -68,10 +68,11 @@ interface Vagon {
   rub_total_cost: number;
   rub_total_revenue: number;
   rub_profit: number;
-  usd_cost_per_m3?: number; // YANGI: Tannarx
-  rub_cost_per_m3?: number; // YANGI: Tannarx
-  usd_sale_price_per_m3?: number; // YANGI: Sotuv narxi
-  rub_sale_price_per_m3?: number; // YANGI: Sotuv narxi
+  usd_cost_per_m3?: number;
+  rub_cost_per_m3?: number;
+  usd_sale_price_per_m3?: number;
+  rub_sale_price_per_m3?: number;
+  has_expenses?: boolean; // YANGI: Backend'dan keladi
   lots: VagonYogoch[];
 }
 
@@ -96,8 +97,9 @@ interface VagonCardProps {
   onDelete: (id: string, code: string) => void;
   onClose: (id: string, reason: string) => void;
   onViewDetails: (id: string) => void;
-  onAddExpense: (vagonId: string, vagonCode: string) => void; // YANGI
-  onSetPrice: (vagon: Vagon) => void; // YANGI: Narx belgilash
+  onAddExpense: (vagonId: string, vagonCode: string) => void;
+  onSetPrice: (vagon: Vagon) => void;
+  hasExpenses?: boolean; // YANGI: Xarajatlar borligini ko'rsatish
   user: any;
   t: any;
   safeToFixed: (value: any, decimals?: number) => string;
@@ -110,8 +112,9 @@ const VagonCard: React.FC<VagonCardProps> = ({
   onDelete, 
   onClose, 
   onViewDetails,
-  onAddExpense, // YANGI
-  onSetPrice, // YANGI: Narx belgilash
+  onAddExpense,
+  onSetPrice,
+  hasExpenses = false, // YANGI
   user, 
   t, 
   safeToFixed, 
@@ -275,15 +278,31 @@ const VagonCard: React.FC<VagonCardProps> = ({
             )}
           </div>
           
-          {/* YANGI: Xarajat qo'shish tugmasi */}
+          {/* YANGI: Xarajat qo'shish/tahrirlash tugmasi */}
           {vagon.status !== 'closed' && vagon.status !== 'archived' && (
-            <button
-              onClick={() => onAddExpense(vagon._id, vagon.vagonCode)}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 px-4 rounded-2xl hover:from-orange-600 hover:to-red-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
-            >
-              <Icon name="dollar-sign" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
-              Xarajat qo'shish
-            </button>
+            <>
+              {/* Xarajat YO'Q — "Qo'shish" tugmasi */}
+              {!hasExpenses && (
+                <button
+                  onClick={() => onAddExpense(vagon._id, vagon.vagonCode)}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 px-4 rounded-2xl hover:from-orange-600 hover:to-red-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
+                >
+                  <Icon name="dollar-sign" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                  Xarajat qo'shish
+                </button>
+              )}
+
+              {/* Xarajat BOR — "Tahrirlash" tugmasi (ko'k rang, boshqa icon) */}
+              {hasExpenses && (
+                <button
+                  onClick={() => onAddExpense(vagon._id, vagon.vagonCode)}
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-4 rounded-2xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 text-sm font-semibold flex items-center justify-center group"
+                >
+                  <Icon name="edit" className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                  Xarajatlarni tahrirlash
+                </button>
+              )}
+            </>
           )}
           
           {/* YANGI: Narx belgilash tugmasi */}
@@ -298,28 +317,14 @@ const VagonCard: React.FC<VagonCardProps> = ({
           )}
           
           {/* Secondary Actions */}
-          {(vagon.status === 'active' || (user?.role === 'admin' && (vagon.sold_volume_m3 || 0) === 0)) && (
-            <div className="grid grid-cols-2 gap-3">
-              {vagon.status === 'active' && (
-                <button
-                  onClick={() => onClose(vagon._id, 'manual_closure')}
-                  className="bg-gradient-to-r from-amber-500 to-orange-600 text-white py-2 px-3 rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all duration-300 text-xs font-semibold flex items-center justify-center"
-                >
-                  <Icon name="x-circle" className="mr-1 h-3 w-3" />
-                  Yopish
-                </button>
-              )}
-              
-              {user?.role === 'admin' && vagon.status !== 'closed' && (vagon.sold_volume_m3 || 0) === 0 && (
-                <button
-                  onClick={() => onDelete(vagon._id, vagon.vagonCode)}
-                  className="bg-gradient-to-r from-red-500 to-red-600 text-white py-2 px-3 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 text-xs font-semibold flex items-center justify-center"
-                >
-                  <Icon name="trash" className="mr-1 h-3 w-3" />
-                  O'chirish
-                </button>
-              )}
-            </div>
+          {user?.role === 'admin' && vagon.status !== 'closed' && (vagon.sold_volume_m3 || 0) === 0 && (
+            <button
+              onClick={() => onDelete(vagon._id, vagon.vagonCode)}
+              className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-2 px-3 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 text-xs font-semibold flex items-center justify-center"
+            >
+              <Icon name="trash" className="mr-1 h-3 w-3" />
+              O'chirish
+            </button>
           )}
         </div>
       </div>
@@ -1097,25 +1102,32 @@ export default function VagonPage() {
             <>
               {/* Vagon Cards Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
-                {vagons.map((vagon: Vagon) => (
-                  <VagonCard 
-                    key={vagon._id} 
-                    vagon={vagon} 
-                    onEdit={openEditModal}
-                    onDelete={deleteVagon}
-                    onClose={closeVagon}
-                    onViewDetails={(id) => {
-                      setSelectedVagonId(id);
-                      setShowDetailsModal(true);
-                    }}
-                    onAddExpense={handleAddExpense} // YANGI
-                    onSetPrice={handleSetPrice} // YANGI: Narx belgilash
-                    user={user}
-                    t={t}
-                    safeToFixed={safeToFixed}
-                    calculatePercentage={calculatePercentage}
-                  />
-                ))}
+                {vagons.map((vagon: Vagon) => {
+                  // Xarajatlar borligini tekshirish - oddiy usul
+                  // Agar USD yoki RUB xarajatlari bo'lsa, "Xarajatni tahrirlash" ko'rsatish
+                  const hasExpenses = (vagon.usd_total_cost || 0) > 0 || (vagon.rub_total_cost || 0) > 0;
+                  
+                  return (
+                    <VagonCard 
+                      key={vagon._id} 
+                      vagon={vagon} 
+                      onEdit={openEditModal}
+                      onDelete={deleteVagon}
+                      onClose={closeVagon}
+                      onViewDetails={(id) => {
+                        setSelectedVagonId(id);
+                        setShowDetailsModal(true);
+                      }}
+                      onAddExpense={handleAddExpense}
+                      onSetPrice={handleSetPrice}
+                      hasExpenses={hasExpenses}
+                      user={user}
+                      t={t}
+                      safeToFixed={safeToFixed}
+                      calculatePercentage={calculatePercentage}
+                    />
+                  );
+                })}
               </div>
 
               {/* Pagination */}
@@ -1161,6 +1173,7 @@ export default function VagonPage() {
             setShowExpenseModal(false);
             setSelectedVagonId(null);
             setSelectedVagonCode('');
+            refetch();
           }}
           vagonId={selectedVagonId}
           vagonCode={selectedVagonCode}

@@ -12,10 +12,10 @@ async function createAdmin() {
     await User.deleteMany({ username: 'admin' });
     console.log('🗑️  Eski admin o\'chirildi\n');
 
-    // Yangi admin yaratish
+    // Yangi admin yaratish (Model avtomatik hash qiladi)
     const admin = new User({
       username: 'admin',
-      password: 'admin123', // Model'da avtomatik hash qilinadi
+      password: 'admin123', // Model pre-save hook'da hash qiladi
       role: 'admin',
       isActive: true
     });

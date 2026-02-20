@@ -416,4 +416,83 @@ async function updateVagonTotals(vagonId, session = null) {
   console.log(`✅ Vagon ${vagon.vagonCode} jami ma'lumotlari yangilandi`);
 }
 
+// Birak (sifatsiz mahsulot) belgilash
+router.put('/:id/birak', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      birak_quantity, 
+      birak_volume_m3, 
+      birak_reason 
+    } = req.body;
+    
+    // Validatsiya
+    if (!birak_quantity || !birak_volume_m3) {
+      return res.status(400).json({ 
+        message: 'Birak dona soni va hajmi kiritilishi shart' 
+      });
+    }
+    
+    if (birak_quantity <= 0 || birak_volume_m3 <= 0) {
+      return res.status(400).json({ 
+        message: 'Birak qiymatlari 0 dan katta bo\'lishi kerak' 
+      });
+    }
+    
+    const lot = await VagonLot.findOne({ _id: id, isDeleted: false });
+    
+    if (!lot) {
+      throw new VagonLotNotFoundError(id);
+    }
+    
+    // Mavjud miqdordan oshib ketmasligini tekshirish
+    const currentRemainingQty = lot.quantity - (lot.reject_quantity || 0);
+    const currentRemainingVol = lot.volume_m3 - (lot.loss_volume_m3 || 0) - (lot.reject_volume_m3 || 0);
+    
+    if (birak_quantity > currentRemainingQty) {
+      return res.status(400).json({ 
+        message: `Birak dona soni mavjud miqdordan oshib ketdi (mavjud: ${currentRemainingQty})` 
+      });
+    }
+    
+    if (birak_volume_m3 > currentRemainingVol) {
+      return res.status(400).json({ 
+        message: `Birak hajmi mavjud hajmdan oshib ketdi (mavjud: ${currentRemainingVol.toFixed(3)} m³)` 
+      });
+    }
+    
+    // Birak ma'lumotlarini qo'shish
+    lot.reject_quantity = (lot.reject_quantity || 0) + birak_quantity;
+    lot.reject_volume_m3 = (lot.reject_volume_m3 || 0) + birak_volume_m3;
+    lot.reject_reason = birak_reason || lot.reject_reason;
+    lot.reject_date = new Date();
+
+    await lot.save();
+
+    // Vagon totals'ni yangilash
+    await updateVagonTotals(lot.vagon);
+
+    // Cache invalidation
+    SmartInvalidation.onVagonChange(lot.vagon);
+
+    const result = lot;
+    
+    logger.info('Birak belgilandi', {
+      lotId: id,
+      quantity: birak_quantity,
+      volume: birak_volume_m3,
+      reason: birak_reason,
+      user: req.user.userId
+    });
+    
+    res.json({
+      message: 'Birak muvaffaqiyatli belgilandi',
+      lot: result
+    });
+    
+  } catch (error) {
+    return handleCustomError(error, res);
+  }
+});
+
 module.exports = router;

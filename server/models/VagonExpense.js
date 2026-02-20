@@ -48,6 +48,12 @@ const vagonExpenseSchema = new mongoose.Schema({
     required: false // Hardcoded admin uchun optional
   },
   
+  // Cash bog'lanish (duplicate yaratmaslik uchun)
+  cash_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Cash'
+  },
+
   // Soft delete
   isDeleted: {
     type: Boolean,
