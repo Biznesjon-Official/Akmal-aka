@@ -5,13 +5,6 @@
  */
 function getCreatedById(user) {
   if (!user) return null;
-  
-  // Hardcoded admin uchun null qaytarish
-  if (user.userId === 'hardcoded-admin-id') {
-    return null;
-  }
-  
-  // Oddiy user uchun userId yoki _id qaytarish
   return user.userId || user._id || null;
 }
 

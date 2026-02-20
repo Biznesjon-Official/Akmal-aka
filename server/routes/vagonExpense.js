@@ -127,10 +127,7 @@ router.post('/', auth, async (req, res) => {
         expense_date: expense_date || Date.now()
       };
       
-      // Hardcoded admin uchun createdBy ni handle qilish
-      if (req.user.userId !== 'hardcoded-admin-id') {
-        expenseData.createdBy = req.user.userId;
-      }
+      expenseData.createdBy = req.user.userId;
       
       expense = new VagonExpense(expenseData);
       
@@ -167,10 +164,7 @@ router.post('/', auth, async (req, res) => {
       transaction_date: expense_date || Date.now()
     };
     
-    // Hardcoded admin uchun createdBy ni handle qilish
-    if (req.user.userId !== 'hardcoded-admin-id') {
-      cashData.createdBy = req.user.userId;
-    }
+    cashData.createdBy = req.user.userId;
     
     const cashEntry = new Cash(cashData);
     

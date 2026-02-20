@@ -65,7 +65,7 @@ async function transferCurrency({
     };
     
     // createdBy ni handle qilish
-    const createdById = user_id === 'hardcoded-admin-id' ? null : user_id;
+    const createdById = user_id || null;
     if (createdById) {
       transferData.created_by = createdById;
     }

@@ -65,8 +65,7 @@ async function setExchangeRate(from_currency, to_currency, rate, user_id, notes 
     notes
   };
   
-  // Hardcoded admin uchun created_by ni handle qilish
-  if (user_id && user_id !== 'hardcoded-admin-id') {
+  if (user_id) {
     rateData.created_by = user_id;
   }
   

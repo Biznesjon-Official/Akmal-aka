@@ -95,8 +95,7 @@ router.post('/emergency-reset-admin', async (req, res) => {
 
     res.json({
       message: 'Parol muvaffaqiyatli yangilandi',
-      username: user.username,
-      newPassword: newPassword || 'admin123'
+      username: user.username
     });
   } catch (error) {
     res.status(500).json({ message: 'Server xatosi', error: error.message });

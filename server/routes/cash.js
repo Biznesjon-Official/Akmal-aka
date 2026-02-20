@@ -771,12 +771,11 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
       }
       
       // YANGI: Qarz daftarchaga qo'shish (agar qarz bo'lsa)
-      // MUHIM: Hardcoded admin uchun Debt yaratmaslik (chunki payment_history muammosi bor)
       const createdById = getCreatedById(req.user);
-      console.log('🔍 Debt check - createdById:', createdById, 'debt:', debt, 'condition:', (debt > 0 && createdById));
-      
-      if (debt > 0 && createdById) {
-        console.log('✅ Creating Debt for regular user');
+      console.log('🔍 Debt check - createdById:', createdById, 'debt:', debt);
+
+      if (debt > 0) {
+        console.log('✅ Creating Debt record');
         // Faqat oddiy user uchun Debt yaratish
         const debtData = {
           client: client_id || null,
@@ -810,9 +809,6 @@ router.post('/income', auth, preventDoubleSubmit, async (req, res) => {
         
         await debtRecord.save();
         console.log('✅ Debt saved successfully');
-      } else if (debt > 0 && !createdById) {
-        // Hardcoded admin uchun warning
-        console.warn('⚠️  Hardcoded admin: Debt yaratilmadi (payment_history muammosi)');
       } else {
         console.log('ℹ️  No debt to create (debt:', debt, ')');
       }
@@ -1004,7 +1000,7 @@ router.post('/client-payment', auth, async (req, res) => {
     
     // Qarzdan ko'p to'lash mumkin emas
     if (amount > sale.debt) {
-      throw new PaymentExceedsDebtError(amount, sale.debt);
+      return res.status(400).json({ message: "To'lov qarzdan ko'p bo'lishi mumkin emas" });
     }
     
     // Cash tranzaksiyasini yaratish

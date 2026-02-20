@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Client = require('../models/Client');
+const VagonSale = require('../models/VagonSale');
+const Cash = require('../models/Cash');
 const auth = require('../middleware/auth');
 const logger = require('../utils/logger');
 
@@ -420,72 +422,66 @@ router.post('/:id/debt', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
 // Mijozning batafsil ma'lumotlari (sotuvlar, to'lovlar, qarzlar)
 router.get('/:id/details', auth, async (req, res) => {
   try {
-    // const Sale = require('../models/Sale'); // DEPRECATED - using VagonSale
-    const Cash = require('../models/Cash');
-    
-    const client = await Client.findOne({ 
-      _id: req.params.id, 
-      isDeleted: false 
+    const client = await Client.findOne({
+      _id: req.params.id,
+      isDeleted: false
     });
-    
+
     if (!client) {
       return res.status(404).json({ message: 'Mijoz topilmadi' });
     }
 
     // Mijozning sotuvlari
-    const sales = await Sale.find({
-      xaridor: client.name,
+    const sales = await VagonSale.find({
+      client: client._id,
       isDeleted: false
     })
-    .populate('woodLot', 'lotCode kubHajmi qalinlik eni uzunlik')
-    .sort({ sotuvSanasi: -1 });
+    .populate('lot', 'lotCode client_received_volume_m3 thickness width length')
+    .sort({ sale_date: -1 });
 
     // Sotuvlar statistikasi (valyuta bo'yicha)
-    const salesStats = await Sale.aggregate([
+    const salesStats = await VagonSale.aggregate([
       {
         $match: {
-          xaridor: client.name,
+          client: client._id,
           isDeleted: false
         }
       },
       {
         $group: {
-          _id: '$valyuta',
-          totalSales: { $sum: '$jamiSumma' },
-          totalVolume: { $sum: { $multiply: ['$kubHajmi', '$soni'] } },
+          _id: '$sale_currency',
+          totalSales: { $sum: '$total_price' },
+          totalVolume: { $sum: '$client_received_volume_m3' },
           count: { $sum: 1 },
-          avgPrice: { $avg: '$birlikNarxi' }
+          avgPrice: { $avg: '$price_per_m3' }
         }
       }
     ]);
 
-    // To'lov tarixi (kassa dan)
-    const payments = await Kassa.find({
-      $or: [
-        { tavsif: { $regex: client.name, $options: 'i' } },
-        { tavsif: { $regex: client.phone, $options: 'i' } }
-      ],
-      turi: 'klent_prixod'
-    }).sort({ createdAt: -1 });
+    // To'lov tarixi (Cash dan)
+    const payments = await Cash.find({
+      client: client._id,
+      type: 'client_payment',
+      isDeleted: false
+    }).sort({ transaction_date: -1 });
 
     // Qarz holati (valyuta bo'yicha)
-    const debtByCurrency = await Sale.aggregate([
+    const debtByCurrency = await VagonSale.aggregate([
       {
         $match: {
-          xaridor: client.name,
+          client: client._id,
           isDeleted: false
         }
       },
       {
         $group: {
-          _id: '$valyuta',
-          totalDebt: { $sum: '$jamiSumma' },
-          totalPaid: { $sum: '$tolangan' },
-          remainingDebt: { $sum: { $subtract: ['$jamiSumma', '$tolangan'] } }
+          _id: '$sale_currency',
+          totalDebt: { $sum: '$total_price' },
+          totalPaid: { $sum: '$paid_amount' },
+          remainingDebt: { $sum: { $subtract: ['$total_price', '$paid_amount'] } }
         }
       }
     ]);
@@ -493,24 +489,24 @@ router.get('/:id/details', auth, async (req, res) => {
     // Oxirgi 6 oylik sotuv dinamikasi
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    
-    const monthlySales = await Sale.aggregate([
+
+    const monthlySales = await VagonSale.aggregate([
       {
         $match: {
-          xaridor: client.name,
-          sotuvSanasi: { $gte: sixMonthsAgo },
+          client: client._id,
+          sale_date: { $gte: sixMonthsAgo },
           isDeleted: false
         }
       },
       {
         $group: {
           _id: {
-            year: { $year: '$sotuvSanasi' },
-            month: { $month: '$sotuvSanasi' },
-            valyuta: '$valyuta'
+            year: { $year: '$sale_date' },
+            month: { $month: '$sale_date' },
+            currency: '$sale_currency'
           },
-          totalSales: { $sum: '$jamiSumma' },
-          totalVolume: { $sum: { $multiply: ['$kubHajmi', '$soni'] } },
+          totalSales: { $sum: '$total_price' },
+          totalVolume: { $sum: '$client_received_volume_m3' },
           count: { $sum: 1 }
         }
       },
@@ -522,13 +518,13 @@ router.get('/:id/details', auth, async (req, res) => {
       sales,
       salesStats,
       payments,
-      debtByurrency,
+      debtByCurrency,
       monthlySales,
       summary: {
         totalSales: sales.length,
-        totalVolume: sales.reduce((sum, sale) => sum + (sale.kubHajmi * sale.soni), 0),
+        totalVolume: sales.reduce((sum, sale) => sum + (sale.client_received_volume_m3 || 0), 0),
         totalValue: salesStats.reduce((sum, stat) => sum + stat.totalSales, 0),
-        lastSaleDate: sales.length > 0 ? sales[0].sotuvSanasi : null
+        lastSaleDate: sales.length > 0 ? sales[0].sale_date : null
       }
     });
   } catch (error) {
@@ -540,48 +536,43 @@ router.get('/:id/details', auth, async (req, res) => {
 // Mijozning sotib olgan lotlari
 router.get('/:id/lots', auth, async (req, res) => {
   try {
-    // const Sale = require('../models/Sale'); // DEPRECATED - using VagonSale
-    // const Wood = require('../models/Wood'); // DEPRECATED - using Vagon system
-    
-    const client = await Client.findOne({ 
-      _id: req.params.id, 
-      isDeleted: false 
+    const client = await Client.findOne({
+      _id: req.params.id,
+      isDeleted: false
     });
-    
+
     if (!client) {
       return res.status(404).json({ message: 'Mijoz topilmadi' });
     }
 
     // Mijoz sotib olgan lotlar
-    const purchasedLots = await Sale.find({
-      xaridor: client.name,
+    const purchasedLots = await VagonSale.find({
+      client: client._id,
       isDeleted: false
     })
     .populate({
-      path: 'woodLot',
-      select: 'lotCode qalinlik eni uzunlik kubHajmi status jami_xarid jami_sotuv jami_xarajat'
+      path: 'lot',
+      select: 'lotCode thickness width length client_received_volume_m3 status'
     })
-    .sort({ sotuvSanasi: -1 });
+    .sort({ sale_date: -1 });
 
     // Lot statistikasi
     const lotStats = purchasedLots.reduce((acc, sale) => {
-      const lot = sale.woodLot;
+      const lot = sale.lot;
       if (!lot) return acc;
 
       const existing = acc.find(item => item.lotCode === lot.lotCode);
       if (existing) {
-        existing.totalPurchased += sale.soni;
-        existing.totalVolume += (sale.kubHajmi * sale.soni);
-        existing.totalAmount += sale.jamiSumma;
+        existing.totalVolume += (sale.client_received_volume_m3 || 0);
+        existing.totalAmount += (sale.total_price || 0);
         existing.sales.push(sale);
       } else {
         acc.push({
           lotCode: lot.lotCode,
-          dimensions: `${lot.qalinlik}×${lot.eni}×${lot.uzunlik}`,
-          totalPurchased: sale.soni,
-          totalVolume: sale.kubHajmi * sale.soni,
-          totalAmount: sale.jamiSumma,
-          currency: sale.valyuta,
+          dimensions: `${lot.thickness}×${lot.width}×${lot.length}`,
+          totalVolume: sale.client_received_volume_m3 || 0,
+          totalAmount: sale.total_price || 0,
+          currency: sale.sale_currency,
           status: lot.status,
           sales: [sale]
         });
@@ -595,7 +586,6 @@ router.get('/:id/lots', auth, async (req, res) => {
       lotStats,
       summary: {
         uniqueLots: lotStats.length,
-        totalPieces: lotStats.reduce((sum, lot) => sum + lot.totalPurchased, 0),
         totalVolume: lotStats.reduce((sum, lot) => sum + lot.totalVolume, 0)
       }
     });
@@ -608,70 +598,64 @@ router.get('/:id/lots', auth, async (req, res) => {
 // Mijozning to'lov tarixi
 router.get('/:id/payments', auth, async (req, res) => {
   try {
-    const Cash = require('../models/Cash');
-    
-    const client = await Client.findOne({ 
-      _id: req.params.id, 
-      isDeleted: false 
+    const client = await Client.findOne({
+      _id: req.params.id,
+      isDeleted: false
     });
-    
+
     if (!client) {
       return res.status(404).json({ message: 'Mijoz topilmadi' });
     }
 
-    // To'lovlarni qidirish (ism yoki telefon bo'yicha)
-    const payments = await Kassa.find({
-      $or: [
-        { tavsif: { $regex: client.name, $options: 'i' } },
-        { tavsif: { $regex: client.phone, $options: 'i' } }
-      ],
-      turi: 'klent_prixod'
-    }).sort({ createdAt: -1 });
+    // To'lovlarni qidirish (client ID bo'yicha)
+    const payments = await Cash.find({
+      client: client._id,
+      type: 'client_payment',
+      isDeleted: false
+    }).sort({ transaction_date: -1 });
 
     // To'lovlar statistikasi
     const paymentStats = payments.reduce((acc, payment) => {
-      if (!acc[payment.valyuta]) {
-        acc[payment.valyuta] = {
+      if (!acc[payment.currency]) {
+        acc[payment.currency] = {
           totalAmount: 0,
           count: 0,
           lastPayment: null
         };
       }
-      
-      acc[payment.valyuta].totalAmount += payment.summa;
-      acc[payment.valyuta].count += 1;
-      
-      if (!acc[payment.valyuta].lastPayment || 
-          payment.createdAt > acc[payment.valyuta].lastPayment) {
-        acc[payment.valyuta].lastPayment = payment.createdAt;
+
+      acc[payment.currency].totalAmount += payment.amount;
+      acc[payment.currency].count += 1;
+
+      if (!acc[payment.currency].lastPayment ||
+          payment.transaction_date > acc[payment.currency].lastPayment) {
+        acc[payment.currency].lastPayment = payment.transaction_date;
       }
-      
+
       return acc;
     }, {});
 
     // Oylik to'lovlar (oxirgi 12 oy)
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-    
-    const monthlyPayments = await Kassa.aggregate([
+
+    const monthlyPayments = await Cash.aggregate([
       {
         $match: {
-          $or: [
-            { tavsif: { $regex: client.name, $options: 'i' } },
-            { tavsif: { $regex: client.phone, $options: 'i' } }
-          ],
-          turi: 'klent_prixod',
-          createdAt: { $gte: twelveMonthsAgo }
+          client: client._id,
+          type: 'client_payment',
+          isDeleted: false,
+          transaction_date: { $gte: twelveMonthsAgo }
         }
       },
       {
         $group: {
           _id: {
-            year: { $year: '$createdAt' },
-            month: { $month: '$createdAt' },
-            valyuta: '$valyuta'
+            year: { $year: '$transaction_date' },
+            month: { $month: '$transaction_date' },
+            currency: '$currency'
           },
-          totalAmount: { $sum: '$summa' },
+          totalAmount: { $sum: '$amount' },
           count: { $sum: 1 }
         }
       },
@@ -686,7 +670,7 @@ router.get('/:id/payments', auth, async (req, res) => {
       summary: {
         totalPayments: payments.length,
         totalAmount: Object.values(paymentStats).reduce((sum, stat) => sum + stat.totalAmount, 0),
-        lastPaymentDate: payments.length > 0 ? payments[0].createdAt : null
+        lastPaymentDate: payments.length > 0 ? payments[0].transaction_date : null
       }
     });
   } catch (error) {
@@ -694,3 +678,5 @@ router.get('/:id/payments', auth, async (req, res) => {
     res.status(500).json({ message: 'To\'lov tarixini olishda xatolik' });
   }
 });
+
+module.exports = router;
