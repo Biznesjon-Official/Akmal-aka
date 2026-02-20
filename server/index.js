@@ -2,7 +2,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
@@ -23,31 +22,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// Rate Limiting - DDoS himoyasi
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 daqiqa
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Development da ko'proq ruxsat
-  message: 'Juda ko\'p so\'rov yuborildi, iltimos keyinroq urinib ko\'ring',
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'development' && req.ip === '::1' // Localhost uchun skip
-});
-
-// Login uchun maxsus rate limiter
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 daqiqa
-  max: process.env.NODE_ENV === 'production' ? 5 : 50, // Development da ko'proq ruxsat
-  message: 'Juda ko\'p login urinishi, 15 daqiqadan keyin qayta urinib ko\'ring',
-  skipSuccessfulRequests: true
-});
-
-// Faqat production da rate limiting
-if (process.env.NODE_ENV === 'production') {
-  app.use('/api/', limiter);
-  app.use('/api/auth/login', loginLimiter);
-} else {
-  console.log('⚠️  Rate limiting disabled in development mode');
-}
 
 // Performance monitoring middleware
 // const { performanceMonitor } = require('./middleware/autoOptimization'); // Temporarily disabled
